@@ -1,0 +1,9 @@
+window.MAGIC_DATA={
+  COLORS:{mana:'#7de7ff',spell:'#c6a4ff',rule:'#e6b66d',material:'#7ed4a7',tool:'#8db7ff',technique:'#f29fc3',principle:'#f0d36c'},
+  CLASS_COLORS:['#c6a4ff','#8ab8ff','#81d7b0','#ffadca','#f0c56f','#9fe2e8','#d8a7ff','#ffa88a'],
+  MANUAL_COLORS:{
+    direct:'#cfd7ff',dependency:'#89b8ff',influence:'#d39cff',similarity:'#c6a4ff',composition:'#7ed4a7',
+    restriction:'#ffad7a',opposition:'#ff7f93',flow:'#79e5ff',reference:'#aab4c7',creation:'#f3d76d',
+    transformation:'#d49cff',containment:'#72d1b7',amplification:'#ffbf73',cancellation:'#ff8b8b'
+  }
+};

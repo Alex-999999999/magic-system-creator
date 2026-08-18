@@ -1,0 +1,4806 @@
+.class-filters{display:flex;gap:5px;flex-wrap:wrap;margin:11px 0}
+.class-chip,.tab{border:1px solid #263147;background:#0b1018;color:#9da9bc;border-radius:999px;padding:5px 8px;font-size:10px}
+.class-chip.active,.tab.active{border-color:#526a9a;background:#17233a;color:#e6edff}
+.library-list{display:flex;flex-direction:column;gap:7px}
+.library-item{border:1px solid #202a3b;background:#0a0f17;border-radius:11px;padding:9px;cursor:pointer;transition:.15s ease}
+.library-item:hover{border-color:#425579;background:#0e1622;transform:translateY(-1px)}
+.library-item.selected{border-color:#7089bf;background:#101a2b}
+.library-item strong{display:block;font-size:12px}.library-item small{display:block;margin-top:3px;color:var(--muted)}
+.tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}.tag{font-size:9px;border:1px solid #29364c;border-radius:999px;padding:2px 6px;color:#aab6cc}
+.tabs{display:flex;gap:5px;margin:12px 0}.tab{border-radius:8px;flex:1}
+.toolbar{
+  position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;align-items:center;gap:9px;z-index:20;
+  padding:8px 10px;border:1px solid #2d3c56;border-radius:16px;background:rgba(8,12,18,.95);
+  box-shadow:0 18px 50px rgba(0,0,0,.42);backdrop-filter:blur(16px)
+}
+.toolgroup{display:flex;gap:5px}.toolbtn{
+  height:42px;border:1px solid #2b3951;background:#111827;color:var(--text);border-radius:10px;padding:6px 9px;display:flex;gap:6px;align-items:center
+}
+.toolbtn span{font-size:10px;color:#aeb8ca}.toolbtn:hover{border-color:#526c9d;background:#172237}
+.toolbtn.strong{border-color:#5771a8;background:#1b2945}.toolbtn.pulse{height:48px;border-color:#5e77ad;background:#202e4a}
+.toolbtn.active{border-color:#8ea5db;background:#26385d;box-shadow:0 0 0 1px rgba(156,174,255,.15),0 0 20px rgba(110,135,210,.12)}
+.create-menu{
+  position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:40;width:min(510px,calc(100% - 28px));padding:12px;
+  border:1px solid #2a3850;border-radius:16px;background:rgba(8,12,18,.98);box-shadow:0 24px 70px rgba(0,0,0,.5)
+}
+.create-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:8px}
+.create-grid button{min-height:76px;text-align:left;border:1px solid #27344b;border-radius:11px;background:#0d1420;color:var(--text);padding:9px}
+.create-grid button:hover{border-color:#546c9b;background:#152136}.create-grid b{display:block;font-size:17px}.create-grid span{display:block;margin-top:4px;font-size:12px}.create-grid small{display:block;margin-top:2px;color:var(--muted);font-size:9px}
+.modal{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(2,4,8,.68);backdrop-filter:blur(6px)}
+.modal-card{width:min(600px,calc(100% - 28px));max-height:86%;overflow:auto;border:1px solid #30415f;border-radius:17px;background:#0b111a;padding:14px;box-shadow:0 30px 90px rgba(0,0,0,.62)}
+.editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 10px;margin-top:12px}.full{grid-column:1/-1}
+.check-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:150px;overflow:auto;padding:8px;border:1px solid #273249;border-radius:9px;background:#070b11;margin-top:5px}
+.check-row{display:flex;align-items:center;gap:6px;font-size:10px;color:#c6cfdf}.check-row input{width:auto;margin:0}
+.modal-actions{display:flex;gap:8px;margin-top:13px}.modal-actions>*{flex:1}
+.link-preview{display:flex;align-items:center;justify-content:center;min-height:50px;border:1px solid #31435f;border-radius:10px;background:#091019;color:#d4dced}
+.connections-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.connection-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px;border:1px solid #27344a;border-radius:11px;background:#0a0f17}
+.connection-row strong{display:block;font-size:12px}.connection-row small{display:block;color:#8995aa;margin-top:3px}
+.connection-actions{display:flex;gap:6px}.connection-actions button{border:1px solid #31415c;border-radius:8px;padding:6px 8px;background:#111926;color:#dce5f5;font-size:10px}
+.connection-actions .danger{border-color:#653543;background:#2a151b;color:#ffb8c2}
+.connection-line-sample{display:inline-block;width:28px;border-top:2px solid currentColor;margin-right:6px;vertical-align:middle}
+.connection-line-sample.dashed{border-top-style:dashed}.connection-line-sample.dotted{border-top-style:dotted}
+@media(max-width:1100px){.toolbtn span{display:none}}
+@media(max-width:800px){.create-grid{grid-template-columns:1fr 1fr}}
+
+.toolbtn.snip-active{border-color:#b85b6e;background:#321820;box-shadow:0 0 0 1px rgba(255,132,148,.18)}
+
+/* v8 */
+.toolbtn.freeze-active{border-color:#78d9ff;background:#123040;box-shadow:0 0 0 1px rgba(125,231,255,.18)}
+#pullStrengthSlider,#largeGraphSlider{accent-color:#9caeff}
+
+/* v9 */
+.audit-body{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.audit-card{border:1px solid #28364d;border-radius:11px;background:#0a0f17;padding:10px}
+.audit-card strong{display:block;font-size:15px}
+.audit-card span{display:block;color:#8f9bb0;font-size:10px;margin-top:3px}
+.audit-section{grid-column:1/-1;border-top:1px solid #253047;padding-top:10px;margin-top:4px}
+.audit-section h3{font-size:12px;margin:0 0 7px}
+.audit-pill{display:inline-block;margin:3px 4px 3px 0;padding:4px 7px;border-radius:999px;border:1px solid #30415d;color:#b8c4d8;font-size:10px;background:#0d1420}
+
+/* v10 */
+.create-help{
+  margin:7px 0 10px;padding:9px 10px;border:1px solid #2b3a52;border-radius:10px;
+  background:#0b121d;color:#9eabc0;font-size:10px;line-height:1.5
+}
+.create-grid button small{line-height:1.35}
+.editor-hint{
+  grid-column:1/-1;padding:8px 9px;border:1px solid #2b3b53;border-radius:9px;
+  background:#0a111b;color:#93a1b6;font-size:10px;line-height:1.45
+}
+
+/* v11 — progressive detail + civilization simulation */
+.simulation-card{width:min(820px,calc(100% - 28px))}
+.sim-controls{display:grid;grid-template-columns:2fr 1fr 1fr;gap:9px;margin-top:12px}
+.sim-actions{display:flex;gap:8px;margin:10px 0}.sim-actions>*{flex:1}
+.sim-summary{padding:10px;border:1px solid #2a3951;border-radius:10px;background:#09111b;color:#9eacc0;font-size:11px;line-height:1.5}
+.sim-timeline{display:flex;flex-direction:column;gap:8px;margin-top:10px;max-height:430px;overflow:auto;padding-right:3px}
+.sim-event{display:grid;grid-template-columns:64px 1fr;gap:10px;padding:10px;border:1px solid #26344a;border-radius:11px;background:#090f18}
+.sim-year{font-size:10px;color:#8290a7}.sim-event strong{font-size:12px}.sim-event p{font-size:10px;line-height:1.5;color:#a8b4c7;margin:4px 0 0}
+.sim-tag{display:inline-block;margin:5px 4px 0 0;padding:2px 6px;border:1px solid #30415b;border-radius:999px;font-size:9px;color:#9faec4}
+@media(max-width:800px){.sim-controls{grid-template-columns:1fr}}
+
+/* v12 civilization engine */
+.sim-dashboard{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin:9px 0}
+.sim-stat{padding:8px;border:1px solid #29384f;border-radius:9px;background:#0a111b;text-align:center}
+.sim-stat b{display:block;font-size:14px}.sim-stat span{font-size:8px;color:#8491a5;text-transform:uppercase;letter-spacing:.06em}
+.sim-tabs{display:flex;gap:6px;margin:8px 0}.sim-tab{border:1px solid #29384f;background:#0b111b;color:#9aa8bc;border-radius:8px;padding:6px 10px;font-size:10px}
+.sim-tab.active{background:#18253b;border-color:#526b99;color:#eef4ff}
+.sim-world{max-height:430px;overflow:auto}
+.world-section{border:1px solid #26354b;border-radius:10px;background:#090f18;padding:10px;margin-bottom:8px}
+.world-section h3{font-size:11px;margin:0 0 7px}.world-chip{display:inline-block;padding:3px 7px;margin:2px;border:1px solid #30415b;border-radius:999px;font-size:9px;color:#a8b5c8}
+.sim-event.major{border-color:#536c9e;background:#0d1726}.sim-event.crisis{border-color:#77404a;background:#1a0e13}.sim-event.breakthrough{border-color:#4b755e;background:#0d1913}
+@media(max-width:800px){.sim-dashboard{grid-template-columns:repeat(2,1fr)}}
+
+/* v13 Living Civilization */
+.toolbtn.danger-tool{border-color:#6f3541;background:#28151b;color:#ffc0c9}
+.toolbtn.danger-tool:hover{border-color:#a44a5b;background:#351820}
+.simulation-card.v13{width:min(1040px,calc(100% - 24px));max-height:92%}
+.sim-runbar{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:7px;margin:10px 0}
+.sim-dashboard{grid-template-columns:repeat(6,1fr)}
+.sim-event{cursor:pointer;transition:.14s ease}
+.sim-event:hover{transform:translateY(-1px);border-color:#4a628f}
+.event-inspector{margin-top:10px;border:1px solid #31435f;border-radius:11px;background:#09111b;padding:11px}
+.event-inspector h3{font-size:12px;margin:0 0 7px}.event-inspector p{font-size:10px;color:#9dacbf;line-height:1.5}
+.reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.reason-card{padding:8px;border:1px solid #27364d;border-radius:8px;background:#0a0f17;font-size:9px;color:#9eacc0}
+.region-grid,.research-grid,.institution-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.region-card,.research-card,.institution-card{padding:10px;border:1px solid #283850;border-radius:11px;background:#091019}
+.region-card h3,.research-card h3,.institution-card h3{font-size:12px;margin:0 0 4px}
+.region-card p,.research-card p,.institution-card p{font-size:9px;color:#91a0b6;line-height:1.45;margin:3px 0}
+.progress{height:5px;background:#131b28;border-radius:99px;overflow:hidden;margin-top:7px}.progress i{display:block;height:100%;background:#8fa6dc}
+.sim-civgraph{height:440px;border:1px solid #26364d;border-radius:11px;overflow:hidden;background:#070c13}
+.sim-civgraph canvas{width:100%;height:100%;display:block}
+.world-section+.world-section{margin-top:8px}
+@media(max-width:800px){
+  .sim-runbar{grid-template-columns:1fr 1fr}
+  .sim-dashboard{grid-template-columns:repeat(2,1fr)}
+  .region-grid,.research-grid,.institution-grid{grid-template-columns:1fr}
+}
+
+/* v14 — examples + context-aware inspiration */
+.editor-grid input::placeholder,.editor-grid textarea::placeholder{color:#66758d;opacity:1;font-style:italic}
+.spark-btn{border:1px solid #66588f!important;background:linear-gradient(135deg,#211a37,#17213b)!important;color:#ddd3ff!important;flex:.72!important}
+.spark-btn:hover{border-color:#9c86d8!important;box-shadow:0 0 18px rgba(168,135,255,.14)}
+.spark-btn.sparked{animation:sparkPop .45s ease}
+@keyframes sparkPop{50%{transform:translateY(-2px) scale(1.025);box-shadow:0 0 24px rgba(180,150,255,.32)}}
+
+/* V15 UI cleanup */
+.toolbar{gap:5px;padding:7px 8px}
+.toolbar .toolgroup{gap:4px}
+.toolbtn{position:relative;width:38px!important;min-width:38px!important;height:38px!important;padding:0!important;display:grid!important;place-items:center;font-size:16px!important}
+.toolbtn>span{position:absolute!important;left:50%;bottom:calc(100% + 7px);transform:translateX(-50%);width:max-content;max-width:160px;padding:5px 7px;border:1px solid #34445e;border-radius:7px;background:#070b11;color:#eef4ff;font-size:9px!important;line-height:1;opacity:0;pointer-events:none;transition:opacity .05s,transform .05s;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.toolbtn:hover{background:#1b2942!important;border-color:#6d85b5!important;box-shadow:0 0 16px rgba(124,155,220,.15)}
+.toolbtn:hover>span{opacity:1;transform:translateX(-50%) translateY(-2px)}
+.top-actions{position:absolute;z-index:32;top:9px;left:50%;transform:translateX(-50%);display:flex;gap:5px;padding:5px;border:1px solid #293950;border-radius:11px;background:rgba(7,11,17,.92);backdrop-filter:blur(8px);box-shadow:0 8px 25px rgba(0,0,0,.25)}
+.top-action{position:relative;width:34px;height:30px;border:1px solid #2b3950;border-radius:7px;background:#101722;color:#dce6f7}
+.top-action span{position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);padding:4px 6px;border:1px solid #33435d;border-radius:6px;background:#080c12;font-size:8px;opacity:0;pointer-events:none}
+.top-action:hover{border-color:#7188b5;background:#1a263c}.top-action:hover span{opacity:1}
+.create-grid{grid-template-columns:repeat(4,1fr)!important}
+.morality-readout{display:flex;justify-content:space-between;align-items:center;padding:7px 9px;border:1px solid #2a3850;border-radius:8px;background:#090f17;color:#8290a6;font-size:8px}
+.morality-readout b{font-size:13px;color:#eef4ff}
+.auto-connection-setting{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-top:12px;padding:11px;border:1px solid #2d3d56;border-radius:10px;background:#091019}
+.auto-connection-setting p{margin:3px 0;color:#8d9bb0;font-size:9px;line-height:1.4}.setting-status{grid-column:1/-1;color:#91a0b5;font-size:9px}
+.toggle-button{min-width:58px;padding:8px;border:1px solid #4f7097;border-radius:99px;background:#173248;color:#bfeaff;font-weight:700}.toggle-button.off{background:#21151a;border-color:#6c3c48;color:#ffb6c0}
+.decision-copy{color:#9aa8bc;font-size:10px;line-height:1.5}.decision-choices{display:grid;gap:7px}.decision-choice{text-align:left;padding:10px;border:1px solid #2c3c55;border-radius:9px;background:#0b121c;color:#e8eef9}.decision-choice:hover{border-color:#6d84b1;background:#111d2d}.decision-choice b,.decision-choice span{display:block}.decision-choice span{margin-top:3px;color:#8e9db2;font-size:9px}
+.world-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.world-grid .world-section{margin:0}.world-section p{font-size:9px;color:#8e9db2;line-height:1.5}
+@media(max-width:800px){.create-grid{grid-template-columns:repeat(2,1fr)!important}.world-grid{grid-template-columns:1fr}.top-actions{top:55px}}
+
+
+
+
+/* V15.2c.2 — JS-painted morality slider */
+.morality-field{display:block}
+.morality-slider-shell{width:100%;padding:10px 2px 7px}
+.editor-grid input[type="range"].morality-slider{
+  --morality-color:#8c98aa;
+  --morality-glow:rgba(150,165,190,.18);
+  -webkit-appearance:none!important;
+  appearance:none!important;
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:6px!important;
+  padding:0!important;
+  margin:8px 0!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  border-radius:999px!important;
+  outline:none!important;
+  background:linear-gradient(90deg,#8c98aa 0%,#8c98aa 50%,#2d3542 50%,#2d3542 100%);
+  box-shadow:0 0 12px var(--morality-glow)!important;
+  cursor:pointer;
+}
+.editor-grid input[type="range"].morality-slider::-webkit-slider-runnable-track{
+  height:6px;background:transparent;border:0;border-radius:999px;
+}
+.editor-grid input[type="range"].morality-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:16px;height:16px;margin-top:-5px;
+  border-radius:50%;border:2px solid #f2f6ff;background:var(--morality-color);
+  box-shadow:0 0 0 4px var(--morality-glow),0 0 14px var(--morality-glow),0 2px 7px rgba(0,0,0,.55);
+}
+.editor-grid input[type="range"].morality-slider::-moz-range-track{
+  height:6px;background:transparent;border:0;border-radius:999px;
+}
+.editor-grid input[type="range"].morality-slider::-moz-range-progress{background:transparent}
+.editor-grid input[type="range"].morality-slider::-moz-range-thumb{
+  width:16px;height:16px;border-radius:50%;border:2px solid #f2f6ff;background:var(--morality-color);
+  box-shadow:0 0 0 4px var(--morality-glow),0 0 14px var(--morality-glow),0 2px 7px rgba(0,0,0,.55);
+}
+.morality-readout{
+  --morality-color:#8c98aa;--morality-glow:rgba(150,165,190,.18);
+  display:flex;justify-content:space-between;align-items:center;padding:6px 9px;
+  border:1px solid #2a3850;border-radius:8px;background:#090f17;color:#8290a6;font-size:8px;
+  box-shadow:inset 0 0 16px var(--morality-glow);
+}
+.morality-center{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:110px}
+.morality-center b{font-size:14px;color:var(--morality-color);text-shadow:0 0 10px var(--morality-glow)}
+.morality-center small{font-size:7px;letter-spacing:.08em;text-transform:uppercase;color:#9aa8bb}
+
+/* V15.3 Create Hub */
+.create-hub-choice{display:flex;gap:9px;align-items:flex-start;margin-top:10px;padding:10px;border:1px solid #2c3b52;border-radius:9px;background:#0a111a;cursor:pointer}
+.create-hub-choice input{width:15px;height:15px;margin-top:1px;accent-color:#8298c8}
+.create-hub-choice span{display:flex;flex-direction:column;gap:3px}.create-hub-choice b{font-size:10px;color:#e7eef9}.create-hub-choice small{font-size:8px;line-height:1.45;color:#8796aa}
+
+/* V15.4 — Auto-Connection preview */
+.editor-workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.editor-workspace:has(.auto-connections-panel:not(.hidden)){grid-template-columns:minmax(0,1fr) 310px}
+.auto-connections-panel{border-left:1px solid #26364d;padding:4px 0 4px 14px;min-width:0;max-height:58vh;overflow:auto}
+.auto-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.auto-panel-head h3{margin:2px 0 0;font-size:14px}
+.auto-panel-help{font-size:8px;line-height:1.5;color:#8d9cb1;margin:8px 0 10px}
+.auto-plan-row{display:grid;grid-template-columns:minmax(90px,.85fr) minmax(110px,1.15fr) 28px;gap:5px;align-items:center;margin-bottom:6px}
+.auto-plan-row select,.auto-plan-row input{width:100%;min-width:0;font-size:8px;padding:7px;border:1px solid #2a3950;border-radius:6px;background:#0a111a;color:#dbe5f4}
+.auto-plan-remove{width:28px;height:28px}
+.auto-empty{padding:12px;border:1px dashed #2a3950;border-radius:8px;color:#8190a5;font-size:8px;line-height:1.5}
+.auto-refresh{width:100%;margin-top:8px}
+@media(max-width:900px){.editor-workspace:has(.auto-connections-panel:not(.hidden)){grid-template-columns:1fr}.auto-connections-panel{border-left:0;border-top:1px solid #26364d;padding:12px 0 0}}
+
+/* V15.4a — clean Auto-Connections drawer */
+.editor-shell{
+  display:flex;
+  align-items:stretch;
+  justify-content:center;
+  gap:10px;
+  width:min(1080px,calc(100% - 28px));
+  max-height:90vh;
+}
+.editor-main-card{
+  width:min(650px,100%)!important;
+  max-height:90vh;
+  flex:0 1 650px;
+}
+.editor-title-line{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.editor-title-line h2{margin-right:1px}
+.title-icon-btn{
+  position:relative;
+  width:27px;
+  height:27px;
+  display:grid;
+  place-items:center;
+  border:1px solid #33435d;
+  border-radius:7px;
+  background:#111927;
+  color:#cbd8ef;
+  font-size:14px;
+  padding:0;
+}
+.title-icon-btn:hover{
+  background:#1b2a43;
+  border-color:#7890c1;
+  box-shadow:0 0 15px rgba(127,155,215,.18);
+}
+.title-icon-btn>span{
+  position:absolute;
+  left:50%;
+  bottom:calc(100% + 6px);
+  transform:translateX(-50%);
+  width:max-content;
+  padding:4px 6px;
+  border:1px solid #34445e;
+  border-radius:6px;
+  background:#070b11;
+  color:#edf3ff;
+  font-size:8px;
+  opacity:0;
+  pointer-events:none;
+}
+.title-icon-btn:hover>span{opacity:1}
+
+.auto-connections-drawer{
+  width:350px;
+  flex:0 0 350px;
+  max-height:90vh;
+  overflow:auto;
+  border:1px solid #33445f!important;
+  border-radius:15px;
+  background:#091019;
+  padding:13px!important;
+  box-shadow:0 18px 50px rgba(0,0,0,.35);
+}
+.auto-connection-card{
+  padding:9px;
+  border:1px solid #293950;
+  border-radius:9px;
+  background:#0b121c;
+  margin-bottom:7px;
+}
+.auto-connection-sentence{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:4px;
+  min-height:25px;
+  color:#a8b6c9;
+  font-size:9px;
+  line-height:1.45;
+}
+.auto-connection-sentence strong{color:#edf3ff;font-size:10px}
+.auto-connection-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:5px;
+  margin-top:7px;
+}
+.auto-connection-actions button{
+  padding:5px 8px;
+  border-radius:6px;
+  border:1px solid #30415a;
+  background:#111927;
+  color:#cbd6e7;
+  font-size:8px;
+}
+.auto-connection-actions .danger{
+  border-color:#6b3945;
+  background:#251319;
+  color:#ffb6c0;
+}
+.auto-refresh{width:100%;margin-top:5px}
+@media(max-width:950px){
+  .editor-shell{flex-direction:column;overflow:auto;justify-content:flex-start}
+  .editor-main-card,.auto-connections-drawer{width:100%!important;flex:0 0 auto}
+  .auto-connections-drawer{max-height:300px}
+}
+
+/* V15.4f — Undo / Redo */
+.toolbtn.history-btn:disabled{
+  opacity:.28;
+  cursor:default;
+  filter:saturate(.25);
+  box-shadow:none!important;
+  border-color:#273245!important;
+  background:#0d131c!important;
+}
+.toolbtn.history-btn:disabled>span{display:none}
+
+/* V16.1b — Worldbuilder's Paradise, stable DOM build */
+.global-generator{position:absolute;left:50%;bottom:72px;transform:translateX(-50%);z-index:29}
+.global-generator-btn{padding:7px 12px;border:1px solid #43577a;border-radius:9px;background:rgba(10,16,25,.94);color:#dbe8fa;font-size:9px;box-shadow:0 9px 25px rgba(0,0,0,.3)}
+.global-generator-btn:hover{background:#18253a;border-color:#7993c4;box-shadow:0 0 18px rgba(115,145,210,.16)}
+.permanent-planet-card{width:min(1450px,calc(100vw - 20px))!important;height:min(900px,calc(100vh - 20px));max-height:none!important;overflow:hidden!important;display:flex;flex-direction:column}
+.v16-sim-controls{grid-template-columns:repeat(3,1fr)!important}.v16-runbar{margin:7px 0 9px}
+.civilization-stage{min-height:0;flex:1;display:grid;grid-template-columns:minmax(330px,390px) minmax(540px,1fr);gap:10px}
+.civilization-info-panel{min-height:0;display:flex;flex-direction:column;border:1px solid #293a51;border-radius:12px;background:#08111a;padding:9px;overflow:hidden}
+.civilization-info-panel .sim-dashboard{grid-template-columns:repeat(3,1fr)}
+.civilization-info-panel .sim-tabs{display:flex;flex-wrap:wrap;gap:4px}
+.civilization-tab-content{min-height:0;flex:1;overflow:auto;margin-top:7px;padding-right:3px}
+.civilization-tab-content .sim-timeline,.civilization-tab-content .sim-world,.civilization-tab-content .sim-civgraph{max-height:none!important}
+.permanent-planet{min-height:0;display:flex;flex-direction:column;border:1px solid #334860;border-radius:12px;background:#071019;overflow:hidden}
+.planet-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid #27384e;background:#09131d}
+.planet-panel-head h3{margin:2px 0;font-size:14px}.planet-panel-head span{font-size:8px;color:#8495aa}.planet-panel-actions{display:flex;gap:5px}
+.planet-stage{position:relative;flex:1;min-height:480px;background:radial-gradient(circle at 50% 45%,rgba(34,72,100,.2),transparent 42%),radial-gradient(circle at 50% 50%,#101b29,#05080d 75%)}
+#planetCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}#planetCanvas:active{cursor:grabbing}
+.planet-hint{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:5px 8px;border:1px solid #2b3b51;border-radius:99px;background:rgba(5,9,14,.78);color:#8fa0b7;font-size:8px;pointer-events:none}
+.planet-tooltip{position:absolute;z-index:4;width:205px;padding:9px;border:1px solid #3b506f;border-radius:9px;background:rgba(6,11,18,.96);box-shadow:0 12px 35px rgba(0,0,0,.45);pointer-events:none}
+.planet-tooltip b,.planet-tooltip span{display:block}.planet-tooltip b{font-size:10px}.planet-tooltip span{font-size:8px;text-transform:uppercase;color:#8192a9;margin-top:2px}.planet-tooltip p{font-size:8px;line-height:1.45;color:#a3b0c2;margin:6px 0}.planet-tooltip small{font-size:7px;color:#718198}
+.planet-legend{display:flex;gap:10px;flex-wrap:wrap;padding:7px 10px;border-top:1px solid #26364b;background:#081019;color:#8496ad;font-size:8px}
+@media(max-width:1000px){.permanent-planet-card{height:auto;max-height:95vh!important;overflow:auto!important}.civilization-stage{grid-template-columns:1fr}.civilization-info-panel{min-height:470px}.planet-stage{min-height:470px}.global-generator{bottom:76px}}
+
+/* V16.2 planet navigation polish */
+#planetCanvas{touch-action:none}
+.planet-hint{white-space:nowrap}
+
+/* V16.3 structured planet navigation */
+#planetCanvas.pan-ready{cursor:move}
+#planetCanvas.pan-ready:active{cursor:grabbing}
+
+/* V16.4 performance/navigation */
+#planetCanvas{will-change:contents;cursor:grab}
+#planetCanvas:active{cursor:grabbing}
+
+/* V16.5 performance */
+.planet-stage{contain:strict}
+#planetCanvas{touch-action:none;contain:strict;cursor:grab}
+#planetCanvas:active{cursor:grabbing}
+
+.v16-runbar{display:flex!important;justify-content:center;gap:5px}
+.sim-icon-btn{position:relative;min-width:42px;height:34px;padding:0 9px;border:1px solid #30415a;border-radius:8px;background:#0f1722;color:#d7e3f4;font-size:10px;font-weight:700}
+.sim-icon-btn:hover{background:#19263a;border-color:#7088b5;box-shadow:0 0 15px rgba(110,145,205,.15)}
+.sim-icon-btn span{position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);white-space:nowrap;padding:4px 6px;border:1px solid #33465f;border-radius:6px;background:#070b11;color:#eef4ff;font-size:8px;font-weight:500;opacity:0;pointer-events:none;z-index:20}
+.sim-icon-btn:hover span{opacity:1}
+.development-stage-card{display:flex;gap:10px;align-items:flex-start;padding:10px;margin-bottom:8px;border:1px solid #33465d;border-radius:10px;background:linear-gradient(135deg,rgba(25,41,61,.75),rgba(8,14,22,.88))}
+.development-stage-icon{width:34px;height:34px;display:grid;place-items:center;border:1px solid #526d92;border-radius:9px;background:#111c2a;font-size:17px;flex:0 0 auto}
+.development-stage-card b{font-size:10px;color:#e8f0fb}.development-stage-card p{font-size:8px;line-height:1.5;color:#9baabd;margin:4px 0}.development-stage-card small{font-size:7px;color:#72859d}
+
+/* V16.7 — Life roles + Places */
+.life-role-editor{
+  display:grid;
+  gap:7px;
+  padding:9px;
+  border:1px solid #2c3d54;
+  border-radius:9px;
+  background:#09111a;
+}
+.life-role-title{
+  font-size:8px;
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  color:#8193aa;
+}
+.life-check{
+  display:flex!important;
+  align-items:flex-start!important;
+  gap:8px;
+  padding:7px;
+  border:1px solid #26374d;
+  border-radius:8px;
+  background:#0c151f;
+}
+.life-check input{
+  width:15px!important;
+  height:15px!important;
+  flex:0 0 auto;
+  margin-top:1px;
+  accent-color:#8fcf91;
+}
+.life-check span{display:flex;flex-direction:column;gap:2px}
+.life-check b{font-size:9px;color:#e7eef7}
+.life-check small{font-size:8px;line-height:1.45;color:#8394aa}
+
+/* V17 relationships */
+.life-relationship-wrap,.relationship-link-fields{padding:8px;border:1px solid #28483a;border-radius:8px;background:rgba(24,58,43,.20)}
+.relationship-slider-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
+.relationship-slider-head b{font-size:9px}.relationship-slider-head output{font:700 10px ui-monospace,monospace;color:#76e6a7}
+.relationship-slider{width:100%!important;accent-color:#55d889}
+.life-relationship-wrap small,.relationship-link-fields small{display:block;margin-top:4px;font-size:8px;color:#8fa79b;line-height:1.4}
+
+/* V17.2 globe graph references */
+.planet-tooltip{width:235px}
+.planet-link-ref{
+  margin-top:5px;
+  padding:5px 6px;
+  border:1px solid #2c4057;
+  border-radius:6px;
+  background:rgba(12,22,34,.72);
+  color:#91a4bb;
+  font-size:7.5px;
+  line-height:1.4;
+}
+.planet-link-ref b{display:inline!important;font-size:7.5px!important;color:#dbe8f7}
+
+/* V17.4 relationship subtype */
+#linkRelationshipKind{margin-bottom:4px}
+#linkRelationshipKindHelp{display:block;margin:0 0 8px;color:#8fa79b;line-height:1.45}
+
+/* V18 Technology Tree */
+.technology-tree{position:absolute;right:14px;top:74px;width:245px;max-height:calc(100% - 150px);overflow:auto;z-index:7;padding:10px;border:1px solid #30485f;border-radius:10px;background:rgba(8,15,24,.94);box-shadow:0 14px 40px rgba(0,0,0,.32);transition:border-color .15s,transform .15s}
+.technology-tree.tech-drop-ready{border-color:#79d7ff;transform:scale(1.015);box-shadow:0 0 0 2px rgba(121,215,255,.15),0 14px 40px rgba(0,0,0,.35)}
+.tech-tree-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.tech-tree-head h3{margin:1px 0;font-size:12px}.tech-tree-hint{font-size:7.5px;line-height:1.45;color:#8295aa;margin:7px 0 9px}
+.technology-tree-body{display:flex;flex-direction:column;gap:8px}.tech-empty{padding:18px 8px;text-align:center;border:1px dashed #293b4d;border-radius:8px;color:#8295aa;font-size:8px;line-height:1.5}
+.tech-branch{border-left:1px solid #35546b;padding-left:8px}.tech-branch>b{font-size:8px;color:#91dfff}.tech-branch>div{display:flex;flex-direction:column;align-items:stretch;gap:2px;margin-top:5px}.tech-branch i{text-align:center;font-size:8px;color:#49677d;font-style:normal}
+.tech-node{border:1px solid #34556c;background:#101e2b;color:#d8e8f4;border-radius:6px;padding:6px;text-align:left;font-size:8px;cursor:pointer}.tech-node:hover{border-color:#72cbea;background:#142838}.tech-node span{margin-right:5px;color:#74d7ff}
+.tech-tree-foot{margin-top:9px;padding-top:7px;border-top:1px solid #233545;color:#71879b;font-size:7px}.tech-tree-foot b{color:#78e7ff}
+.tech-object-check{margin-top:5px}.technology-setting{margin-top:9px}
+@media(max-width:900px){.technology-tree{width:190px;right:8px}}
+
+/* V18.1 — Technology is part of the main graph */
+.legend .line.technology{background:#69d8ff;box-shadow:0 0 8px rgba(105,216,255,.45)}
+
+/* V18.2 Technology advancement */
+.advancement-card{width:min(440px,calc(100vw - 28px))!important}
+.advancement-editor{padding:12px;border:1px solid #29475c;border-radius:10px;background:rgba(12,27,38,.72)}
+#advancementSlider{width:100%;accent-color:#69d8ff}
+#advancementOut{font:700 11px ui-monospace,monospace;color:#7be1ff}
+.advancement-editor small{display:block;margin-top:6px;color:#8297aa;font-size:8px;line-height:1.45}
+
+/* V18.3 unbounded advancement field */
+.advancement-number-label{display:flex;flex-direction:column;gap:5px;font-size:9px;color:#9badc0}
+#advancementValue{width:100%;font:600 11px ui-monospace,monospace}
+
+
+/* V18.4a — minor Individual timeline event colors.
+   Full civilization-scale good/bad events keep their stronger green/red colors. */
+.timeline-event.pale-good,
+.event-card.pale-good,
+.timeline-card.pale-good,
+.sim-event.pale-good,
+[data-tone="pale-good"] {
+  background: rgba(118, 190, 145, .14);
+  border-color: rgba(148, 218, 171, .48);
+  box-shadow: inset 3px 0 0 rgba(148, 218, 171, .62);
+}
+
+.timeline-event.pale-bad,
+.event-card.pale-bad,
+.timeline-card.pale-bad,
+.sim-event.pale-bad,
+[data-tone="pale-bad"] {
+  background: rgba(205, 112, 112, .14);
+  border-color: rgba(232, 150, 150, .48);
+  box-shadow: inset 3px 0 0 rgba(232, 150, 150, .62);
+}
+
+/* V19 */
+#planetCanvas{background:#050912}
+
+/* V19.1 nested navigation + planet palette */
+.planet-color-editor{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:8px;border:1px solid #2a4055;border-radius:9px;background:#09111a}
+.planet-color-editor .life-role-title{grid-column:1/-1}
+.planet-color-editor input[type="color"]{width:100%;height:30px}
+
+/* V19.2 nested map polish */
+#planetCanvas{image-rendering:auto}
+
+/* V19.3 richer planet palette */
+.planet-palette-group{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;grid-column:1/-1}
+.planet-palette-group>b{grid-column:1/-1;font-size:8px;color:#b4c9db}
+.planet-coverage{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.planet-coverage label{display:flex;flex-direction:column;gap:4px}
+.planet-coverage output{font:700 8px ui-monospace,monospace;color:#85dfff}
+
+/* V19.4 palette drawer */
+.planet-palette-panel{width:270px;max-height:min(78vh,720px);overflow:auto;border:1px solid #2b465b;border-radius:12px;padding:11px;background:rgba(8,16,25,.97);box-shadow:0 18px 50px rgba(0,0,0,.34)}
+.editor-shell:has(.planet-palette-panel:not(.hidden)){align-items:flex-start}
+.planet-palette-panel .planet-palette-group{margin:9px 0}
+.planet-palette-panel .planet-coverage{margin:10px 0}
+
+/* V19.5 Star / Solar System authoring drawers */
+.solar-system-editor-panel,.star-editor-panel{
+  width:285px;max-height:min(80vh,740px);overflow:auto;
+  border:1px solid #2b465b;border-radius:12px;padding:11px;
+  background:rgba(8,16,25,.97);box-shadow:0 18px 50px rgba(0,0,0,.34)
+}
+.system-editor-section{padding:9px 0;border-top:1px solid #203446;display:flex;flex-direction:column;gap:7px}
+.system-editor-section:first-of-type{border-top:0}
+.system-editor-section label,.star-editor-panel>label{display:flex;flex-direction:column;gap:4px;font-size:8px;color:#9eb2c4}
+.star-color-row,.star-palette-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.star-palette-grid{grid-template-columns:repeat(3,minmax(0,1fr));margin:10px 0}
+.star-color-row input[type=color],.star-palette-grid input[type=color]{width:100%;height:32px}
+.system-member-list{display:flex;flex-direction:column;gap:5px;max-height:190px;overflow:auto}
+.system-member-row{display:flex!important;flex-direction:row!important;align-items:flex-start;gap:7px;padding:6px;border:1px solid #253c50;border-radius:7px}
+.system-member-row span{display:flex;flex-direction:column}.system-member-row small,.side-note{font-size:7px;color:#72889b}
+.section-title-row{display:flex;justify-content:space-between;align-items:end;gap:8px}
+.section-title-row small{font-size:7px;color:#72889b}
+#eStarSizeOut{font:700 9px ui-monospace,monospace;color:#88ddff}
+
+/* V19.6 Megastructure editor */
+.megastructure-editor-panel{
+  width:285px;max-height:min(82vh,760px);overflow:auto;
+  border:1px solid #2b465b;border-radius:12px;padding:11px;
+  background:rgba(8,16,25,.97);box-shadow:0 18px 50px rgba(0,0,0,.34)
+}
+.megastructure-editor-panel>label{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:8px;color:#9fb3c5}
+.mega-palette-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:9px 0}
+.mega-palette-grid label{font-size:8px;color:#9fb3c5}
+.mega-palette-grid input[type=color]{width:100%;height:32px}
+.mega-surface-anchor{margin-top:10px;padding-top:9px;border-top:1px solid #203446;display:flex;flex-direction:column;gap:6px}
+.mega-surface-anchor label{display:flex;flex-direction:column;gap:4px;font-size:8px;color:#9fb3c5}
+.mega-surface-anchor small{font-size:7px;color:#758a9c}
+.mega-structure-check{border-color:#315468!important}
+
+/* V19.6a Megastructure Painter */
+.mega-painter{margin-top:10px;padding-top:9px;border-top:1px solid #203446;display:flex;flex-direction:column;gap:7px}
+.mega-paint-toolbar{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.mega-paint-toolbar button,.mega-import-btn{
+  width:30px;height:30px;border:1px solid #29475d;border-radius:6px;background:#0b1824;color:#a9c6dc;
+  display:grid;place-items:center;cursor:pointer;font-size:14px
+}
+.mega-paint-toolbar button:hover,.mega-import-btn:hover,.mega-paint-tool.active{
+  border-color:#62c9ee;color:#d7f5ff;background:#112b3d
+}
+.mega-paint-settings{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.mega-paint-settings label{display:flex;flex-direction:column;gap:3px;font-size:7px;color:#8fa8bb}
+#megaPaintCanvas{width:100%;aspect-ratio:2/1;border:1px solid #29465b;border-radius:7px;background:#07101a;touch-action:none;cursor:crosshair}
+
+/* V19.6b painter expansion / height map / preview */
+.mega-paint-workspace{display:grid;grid-template-columns:minmax(0,1fr) 132px;gap:8px;align-items:start}
+.mega-icon-preview-wrap{display:flex;flex-direction:column;gap:5px;align-items:center;padding:7px;border:1px solid #29465b;border-radius:7px;background:#07101a;text-align:center}
+.mega-icon-preview-wrap>b{font-size:7px;color:#b5cbda}.mega-icon-preview-wrap small{font-size:6px;color:#71889a;line-height:1.35}
+#megaIconPreview{width:120px;height:120px}
+.mega-height-settings{padding:7px;border:1px solid #405067;border-radius:7px;background:rgba(80,90,110,.12)}
+.mega-height-settings label{display:flex;flex-direction:column;gap:4px;font-size:7px;color:#b4c1cc}
+#eMegaHeightMode.active{border-color:#d5b5ff!important;color:#ead9ff!important;background:#2a1d3b!important}
+.mega-painter-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9997}
+.mega-painter.expanded{position:fixed;z-index:9998;left:3vw;right:3vw;top:3vh;bottom:3vh;background:#08121c;border:1px solid #41627a;border-radius:14px;padding:14px;box-shadow:0 25px 90px rgba(0,0,0,.65);overflow:auto}
+.mega-painter.expanded .mega-paint-workspace{grid-template-columns:minmax(0,1fr) 160px}
+.mega-painter.expanded #megaPaintCanvas{width:100%;max-height:calc(100vh - 230px)}
+body.mega-painter-open{overflow:hidden}
+
+/* V19.6c painter interaction + globe guide */
+.mega-paint-stage{position:relative;min-width:0}
+.mega-paint-stage #megaPaintCanvas{position:relative;z-index:1;display:block}
+#megaPlanetGuide{
+  position:absolute;inset:0;width:100%;height:100%;z-index:2;
+  pointer-events:none!important;user-select:none!important
+}
+.mega-painter-backdrop{z-index:2147483000!important}
+.mega-painter.expanded{
+  z-index:2147483001!important;
+  isolation:isolate;
+  opacity:1!important;
+  filter:none!important;
+}
+.mega-painter.expanded #megaPaintCanvas,
+.mega-painter.expanded .mega-paint-workspace,
+.mega-painter.expanded .mega-paint-stage{opacity:1!important;filter:none!important}
+
+/* V19.6d Painter QOL */
+#megaPlanetGuide{opacity:.42!important}
+.mega-paint-tool[data-tool="fill"]{font-size:13px}
+#eMegaPaintUndo,#eMegaPaintRedo{font-size:14px}
+
+/* V19.6e cloud controls */
+.planet-cloud-controls{grid-column:1/-1;margin-top:9px;padding-top:9px;border-top:1px solid #29465b;display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.planet-cloud-controls .life-role-title,.planet-cloud-controls .life-check{grid-column:1/-1}
+.planet-cloud-controls label{display:flex;flex-direction:column;gap:4px;font-size:8px;color:#9eb2c4}
+
+/* V19.7 Created Megastructures */
+.mega-attachment-status{margin:9px 0;padding:8px;border:1px solid #2b465b;border-radius:8px;background:#09141e;display:flex;flex-direction:column;gap:3px}
+.mega-attachment-status b{font-size:8px;color:#c8e7f5}.mega-attachment-status small{font-size:7px;color:#7892a6}
+.created-mega-controls{margin:10px 0;padding:9px;border:1px solid #35576d;border-radius:9px;background:rgba(18,45,61,.25);display:flex;flex-direction:column;gap:8px}
+.created-mega-controls label{display:flex;flex-direction:column;gap:4px;font-size:8px;color:#a8becd}
+.created-mega-face-tabs{display:flex;gap:5px;flex-wrap:wrap}
+.created-mega-face-tabs button{padding:5px 7px;border:1px solid #2b4d63;border-radius:6px;background:#0b1822;color:#91adbf;font-size:7px}
+.created-mega-face-tabs button.active{border-color:#6fdcff;color:#e5faff;background:#123246}
+.created-mega-face-title{font-size:8px;font-weight:800;color:#c4dae7}
+
+/* V19.7a explicit megastructure mode chooser + standalone 3D */
+.mega-type-chooser{display:flex;flex-direction:column;gap:8px;padding:8px 0}
+.mega-type-chooser button{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:10px;border:1px solid #2e5268;border-radius:9px;background:#0a1721;color:#c8e8f6;cursor:pointer}
+.mega-type-chooser button:hover{border-color:#76dcf6;background:#102838}
+.mega-type-chooser button b{font-size:9px}.mega-type-chooser button small{font-size:7px;color:#7f9bad;text-align:left}
+#createdMega3DCanvas{width:100%;aspect-ratio:1/1;border:1px solid #315469;border-radius:9px;background:#050a10;touch-action:none;cursor:crosshair}
+.created-mega-3d-help{display:flex;justify-content:space-between;align-items:end;gap:8px}
+.created-mega-3d-help b{font-size:8px;color:#c8e7f5}.created-mega-3d-help small{font-size:7px;color:#7d98aa}
+
+/* V19.7b unified 3D Separate Megastructure painter */
+#createdMega3DCanvas{
+  width:100%;
+  aspect-ratio:2/1;
+  border:1px solid #315469;
+  border-radius:9px;
+  background:#050a10;
+  touch-action:none;
+  cursor:crosshair;
+  position:relative;
+  z-index:3;
+}
+.mega-painter.three-d-mode #megaPaintCanvas,
+.mega-painter.three-d-mode .mega-painter.three-d-mode #megaPlanetGuide{display:none!important}
+.mega-painter.three-d-mode #createdMega3DCanvas{display:block!important}
+.mega-painter.expanded.three-d-mode #createdMega3DCanvas{
+  width:100%;height:min(72vh,760px);aspect-ratio:auto
+}
+
+/* V19.7c layout correction */
+.megastructure-editor-panel{
+  width:min(360px,34vw)!important;
+  min-width:320px!important;
+  max-width:420px!important;
+}
+#megaEditorBody{
+  width:100%;
+  min-width:0;
+}
+.mega-painter{
+  width:100%;
+  min-width:0;
+}
+.mega-paint-workspace{
+  width:100%;
+  grid-template-columns:minmax(320px,1fr) 132px!important;
+}
+.mega-paint-stage{
+  width:100%;
+  min-width:320px;
+}
+#createdMega3DCanvas{
+  width:100%!important;
+  min-width:320px;
+  height:auto;
+}
+.mega-painter.expanded.three-d-mode{
+  width:auto!important;
+}
+.mega-painter.expanded.three-d-mode .mega-paint-workspace{
+  grid-template-columns:minmax(0,1fr) 160px!important;
+}
+.mega-painter.expanded.three-d-mode #createdMega3DCanvas{
+  min-width:0;
+}
+.mega-paint-tool[data-tool="circumference"]{
+  font-size:15px;
+}
+
+/* V19.7d — preserve 3D geometry in whatever size the editor actually is.
+   The JS backing buffer now matches this rendered box exactly. */
+.mega-painter.three-d-mode .mega-paint-stage{
+  min-height:420px;
+  height:min(62vh,720px);
+}
+.mega-painter.three-d-mode #createdMega3DCanvas{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  aspect-ratio:auto!important;
+  object-fit:contain;
+}
+.mega-painter.expanded.three-d-mode .mega-paint-stage{
+  height:min(76vh,900px);
+}
+.mega-painter.expanded.three-d-mode #createdMega3DCanvas{
+  width:100%!important;
+  height:100%!important;
+  aspect-ratio:auto!important;
+}
+
+/* V19.8 — Separate Megastructure flat blueprint painter */
+.mega-painter .mega-paint-stage{
+  position:relative;
+  width:100%;
+  min-height:0!important;
+  height:auto!important;
+  aspect-ratio:2/1;
+}
+.mega-painter #megaPaintCanvas,
+.mega-painter #megaPlanetGuide{
+  width:100%!important;
+  height:100%!important;
+  position:absolute;
+  inset:0;
+}
+.mega-painter #megaPaintCanvas{z-index:2}
+.mega-painter #megaPlanetGuide{
+  z-index:3;
+  pointer-events:none;
+}
+.mega-painter.expanded .mega-paint-stage{
+  width:min(100%,1400px);
+  height:auto!important;
+  aspect-ratio:2/1;
+  margin:auto;
+}
+
+#eMegaEraserMode{width:auto!important;min-width:44px;padding:0 7px;font-size:7px;font-weight:700}
+
+/* V19.9 painter QOL layout */
+.megastructure-editor-panel{
+  width:min(360px,32vw)!important;
+  max-height:94vh!important;
+  overflow:auto!important;
+}
+.mega-painter{
+  max-height:88vh;
+  overflow:auto;
+}
+.mega-paint-toolbar{
+  gap:4px!important;
+  flex-wrap:wrap!important;
+}
+.mega-paint-toolbar button,
+.mega-import-btn{
+  width:28px!important;
+  height:28px!important;
+}
+#eMegaEraserMode{
+  min-width:40px!important;
+  height:28px!important;
+}
+.mega-paint-settings{
+  grid-template-columns:repeat(3,minmax(110px,1fr))!important;
+  gap:8px!important;
+}
+.mega-paint-workspace{
+  grid-template-columns:minmax(0,1fr) 118px!important;
+  gap:8px!important;
+}
+.mega-icon-preview-wrap{
+  width:118px;
+  padding:6px!important;
+}
+#megaIconPreview{
+  width:96px!important;
+  height:96px!important;
+}
+.mega-paint-stage{
+  min-height:0!important;
+}
+.mega-painter:not(.expanded) .mega-paint-stage{
+  max-height:54vh;
+}
+.mega-painter.expanded{
+  top:2vh!important;
+  bottom:2vh!important;
+}
+.mega-painter.expanded .mega-paint-stage{
+  max-height:72vh;
+}
+
+/* V19.9a — compact viewport-safe Megastructure editor */
+.megastructure-editor-panel{
+  box-sizing:border-box!important;
+  width:min(320px,calc(100vw - 24px))!important;
+  min-width:0!important;
+  max-width:320px!important;
+  max-height:calc(100vh - 24px)!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  padding:10px!important;
+  margin:0!important;
+  scrollbar-width:thin;
+}
+
+/* Keep every section inside panel width. */
+#megaEditorBody,
+.mega-painter,
+.mega-paint-workspace,
+.mega-paint-stage,
+.mega-paint-settings,
+.mega-height-settings,
+.created-mega-controls,
+.mega-surface-anchor{
+  box-sizing:border-box;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+}
+
+/* Stack painter settings vertically instead of three columns. */
+.mega-paint-settings{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:7px!important;
+}
+.mega-paint-settings label,
+.mega-height-settings label,
+.megastructure-editor-panel>label,
+.mega-surface-anchor label,
+.created-mega-controls label{
+  display:flex!important;
+  flex-direction:column!important;
+  width:100%!important;
+  gap:4px!important;
+}
+.mega-paint-settings input[type="range"],
+.mega-height-settings input[type="range"],
+.megastructure-editor-panel input[type="range"],
+.created-mega-controls input[type="range"]{
+  width:100%!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+}
+
+/* Canvas first, icon preview below it instead of stealing horizontal room. */
+.mega-paint-workspace{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:7px!important;
+}
+.mega-paint-stage{
+  position:relative!important;
+  aspect-ratio:2/1!important;
+  height:auto!important;
+  max-height:none!important;
+}
+.mega-icon-preview-wrap{
+  width:100%!important;
+  min-width:0!important;
+  display:grid!important;
+  grid-template-columns:auto 72px 1fr!important;
+  align-items:center!important;
+  gap:8px!important;
+  text-align:left!important;
+}
+#megaIconPreview{
+  width:64px!important;
+  height:64px!important;
+}
+.mega-icon-preview-wrap small{
+  font-size:7px!important;
+  line-height:1.3!important;
+}
+
+/* Toolbar stays compact and wraps inside width. */
+.mega-paint-toolbar{
+  display:flex!important;
+  flex-wrap:wrap!important;
+  gap:4px!important;
+  width:100%!important;
+}
+.mega-paint-toolbar button,
+.mega-import-btn{
+  width:27px!important;
+  height:27px!important;
+  flex:0 0 27px!important;
+}
+#eMegaEraserMode{
+  width:auto!important;
+  min-width:42px!important;
+  flex:0 0 auto!important;
+}
+
+/* Smaller vertical rhythm. */
+.megastructure-editor-panel .side-note{
+  margin:3px 0!important;
+  line-height:1.3!important;
+}
+.megastructure-editor-panel select,
+.megastructure-editor-panel input[type="text"],
+.megastructure-editor-panel input[type="number"]{
+  width:100%!important;
+  box-sizing:border-box!important;
+}
+
+/* Expanded painter also remains fully inside screen. */
+.mega-painter.expanded{
+  left:2vw!important;
+  right:2vw!important;
+  top:2vh!important;
+  bottom:2vh!important;
+  width:auto!important;
+  max-width:none!important;
+  max-height:none!important;
+  box-sizing:border-box!important;
+}
+.mega-painter.expanded .mega-paint-workspace{
+  display:flex!important;
+  flex-direction:column!important;
+}
+.mega-painter.expanded .mega-paint-stage{
+  width:min(100%,1200px)!important;
+  margin:0 auto!important;
+}
+
+/* V19.9S — exact old Planet Surface Guide restored.
+   The obsolete 3D painter had globally hidden #megaPlanetGuide. */
+.mega-painter:not(.three-d-mode) #megaPlanetGuide{
+  display:block!important;
+  visibility:visible!important;
+  opacity:.72!important;
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  z-index:5!important;
+  pointer-events:none!important;
+}
+.mega-painter:not(.three-d-mode) #megaPaintCanvas{
+  z-index:2!important;
+}
+
+/* V19.9AB — Megastructure Editor compact layout */
+#megastructureEditorPanel{
+  padding:12px!important;
+}
+#megastructureEditorPanel .auto-panel-head{
+  margin-bottom:5px!important;
+}
+#megastructureEditorPanel .auto-panel-help{
+  margin:0 0 8px!important;
+}
+#megaEditorBody{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.mega-compact-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:7px;
+}
+#megaEditorBody label{
+  margin:0!important;
+  gap:3px!important;
+}
+#megaEditorBody select{
+  min-height:32px!important;
+  padding:5px 8px!important;
+}
+.mega-palette-grid-compact{
+  display:grid!important;
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:7px!important;
+  margin:0!important;
+}
+.mega-palette-grid-compact label{
+  min-width:0!important;
+}
+.mega-palette-grid-compact input[type="color"]{
+  height:34px!important;
+  min-height:34px!important;
+}
+.mega-paint-toolbar-compact{
+  display:flex!important;
+  flex-wrap:wrap!important;
+  gap:4px!important;
+  margin:4px 0 5px!important;
+}
+.mega-paint-toolbar-compact button{
+  min-width:29px!important;
+  min-height:29px!important;
+  padding:4px 6px!important;
+}
+.mega-paint-settings-compact{
+  display:grid!important;
+  grid-template-columns:minmax(0,.8fr) minmax(0,1.1fr) minmax(0,1.1fr)!important;
+  gap:7px!important;
+  align-items:end!important;
+}
+.mega-paint-settings-compact label{
+  min-width:0!important;
+}
+.mega-paint-settings-compact input[type="range"]{
+  margin:2px 0!important;
+}
+.mega-painter{
+  padding:8px!important;
+  margin-top:0!important;
+}
+.mega-painter .section-title-row{
+  margin-bottom:3px!important;
+}
+.mega-paint-workspace{
+  margin-top:5px!important;
+}
+.mega-paint-stage{
+  max-height:300px!important;
+}
+.mega-paint-stage canvas{
+  max-height:300px!important;
+}
+#megaHeightSettings{
+  margin:3px 0!important;
+  padding:6px!important;
+}
+#megaEditorBody>label,
+#megaEditorBody>.mega-palette-grid,
+#megaEditorBody>.mega-painter,
+#megaEditorBody>.mega-dominant-debug-panel{
+  margin-top:0!important;
+  margin-bottom:0!important;
+}
+
+/* Dedicated dominant-color diagnostic panel */
+.mega-dominant-debug-panel{
+  border:1px solid rgba(125,190,225,.28);
+  border-radius:9px;
+  padding:8px 9px;
+  background:rgba(4,12,22,.72);
+}
+.mega-debug-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+}
+.mega-debug-head>div{
+  display:flex;
+  flex-direction:column;
+  gap:1px;
+}
+.mega-debug-head strong{
+  font-size:12px;
+}
+.mega-debug-head small{
+  font-size:10px;
+  opacity:.66;
+}
+.mega-debug-badge{
+  border:1px solid rgba(130,200,235,.3);
+  border-radius:999px;
+  padding:2px 7px;
+  font-size:10px;
+}
+.mega-debug-body{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:6px;
+}
+.mega-debug-swatch{
+  width:32px;
+  height:32px;
+  flex:none;
+  border-radius:6px;
+  border:1px solid rgba(255,255,255,.34);
+  background:transparent;
+}
+.mega-debug-values{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+}
+.mega-debug-values b{
+  font-size:12px;
+}
+.mega-debug-values small{
+  font-size:10px;
+  opacity:.66;
+}
+
+@media (max-width:900px){
+  .mega-compact-grid{grid-template-columns:1fr}
+  .mega-paint-settings-compact{grid-template-columns:1fr}
+}
+
+/* V19.9AC — ultra-compact Megastructure Editor */
+#megastructureEditorPanel{
+  padding:7px!important;
+  gap:3px!important;
+}
+#megastructureEditorPanel .auto-panel-head{
+  min-height:31px!important;
+  padding:0!important;
+  margin:0 0 2px!important;
+}
+#megastructureEditorPanel .auto-panel-head .eyebrow{
+  font-size:7px!important;
+  line-height:1!important;
+  margin-bottom:0!important;
+}
+#megastructureEditorPanel .auto-panel-head h3{
+  font-size:14px!important;
+  line-height:1!important;
+  margin:0!important;
+}
+#megastructureEditorPanel .icon-btn{
+  width:28px!important;
+  height:28px!important;
+  min-width:28px!important;
+  padding:0!important;
+}
+#megaEditorIntro{
+  font-size:8px!important;
+  line-height:1.05!important;
+  margin:0 0 3px!important;
+}
+#megaEditorBody{
+  gap:4px!important;
+}
+.mega-compact-grid{
+  gap:4px!important;
+}
+#megaEditorBody label{
+  font-size:8px!important;
+  line-height:1.05!important;
+}
+#megaEditorBody select{
+  min-height:27px!important;
+  height:27px!important;
+  font-size:9px!important;
+  padding:2px 6px!important;
+}
+.mega-palette-grid-compact{
+  gap:4px!important;
+}
+.mega-palette-grid-compact input[type="color"]{
+  height:25px!important;
+  min-height:25px!important;
+  padding:1px!important;
+}
+.mega-dominant-debug-panel{
+  padding:4px 6px!important;
+  border-radius:6px!important;
+}
+.mega-debug-head strong{font-size:9px!important}
+.mega-debug-head small,.mega-debug-values small{font-size:7px!important}
+.mega-debug-badge{
+  font-size:8px!important;
+  padding:1px 4px!important;
+}
+.mega-debug-body{
+  margin-top:3px!important;
+  gap:5px!important;
+}
+.mega-debug-swatch{
+  width:23px!important;
+  height:23px!important;
+}
+.mega-debug-values b{font-size:9px!important}
+
+/* Megastructure Paint container/title bar */
+.mega-painter{
+  padding:4px!important;
+  border-radius:7px!important;
+}
+.mega-painter .section-title-row{
+  min-height:18px!important;
+  height:18px!important;
+  margin:0 0 2px!important;
+  padding:0 1px!important;
+}
+.mega-painter .section-title-row b{
+  font-size:10px!important;
+  line-height:18px!important;
+}
+.mega-painter .section-title-row small{
+  font-size:7px!important;
+  line-height:18px!important;
+}
+
+/* Toolbar housing */
+.mega-paint-toolbar-compact{
+  min-height:25px!important;
+  height:auto!important;
+  gap:2px!important;
+  margin:0 0 2px!important;
+  padding:0!important;
+}
+.mega-paint-toolbar-compact button{
+  width:24px!important;
+  height:24px!important;
+  min-width:24px!important;
+  min-height:24px!important;
+  padding:1px!important;
+  font-size:9px!important;
+  border-radius:4px!important;
+}
+.mega-paint-toolbar-compact #eMegaEraserMode{
+  width:auto!important;
+  min-width:39px!important;
+  padding:1px 4px!important;
+  font-size:7px!important;
+}
+
+/* Settings housing */
+.mega-paint-settings-compact{
+  gap:4px!important;
+  margin:0 0 1px!important;
+  padding:0!important;
+}
+.mega-paint-settings-compact label{
+  font-size:7px!important;
+}
+.mega-paint-settings-compact input[type="color"]{
+  height:22px!important;
+  min-height:22px!important;
+}
+.mega-paint-settings-compact input[type="range"]{
+  height:12px!important;
+  margin:0!important;
+}
+
+.mega-paint-workspace{margin-top:1px!important}
+.mega-paint-stage{max-height:215px!important}
+.mega-paint-stage canvas{max-height:215px!important}
+#megaHeightSettings{
+  margin:2px 0!important;
+  padding:4px!important;
+}
+.mega-paint-help,.mega-painter small{
+  font-size:7px!important;
+  line-height:1.05!important;
+}
+.mega-icon-preview{
+  min-height:36px!important;
+  padding:3px!important;
+}
+#megaEditorBody input[type="range"]{margin:0!important}
+#megaEditorBody output{font-size:8px!important}
+#megaEditorBody .life-check{
+  min-height:25px!important;
+  padding:3px 5px!important;
+}
+
+/* Keep compact multi-column layout even when panel is narrow. */
+@media (max-width:900px){
+  .mega-compact-grid{
+    grid-template-columns:1fr 1fr!important;
+  }
+  .mega-paint-settings-compact{
+    grid-template-columns:.8fr 1fr 1fr!important;
+  }
+}
+
+/* V19.9AD — expanded painter gets its OWN layout.
+   Side-panel compact caps must never flatten the expanded canvas. */
+.mega-painter.expanded{
+  position:fixed!important;
+  left:50%!important;
+  right:auto!important;
+  top:50%!important;
+  bottom:auto!important;
+  transform:translate(-50%,-50%)!important;
+
+  width:min(1240px,calc(100vw - 40px))!important;
+  height:min(860px,calc(100vh - 40px))!important;
+  max-width:1240px!important;
+  max-height:860px!important;
+
+  padding:12px!important;
+  overflow:auto!important;
+  box-sizing:border-box!important;
+  z-index:10002!important;
+}
+
+/* Keep all expanded controls aligned to one sane content width instead of
+   stretching sliders across the entire monitor. */
+.mega-painter.expanded > .section-title-row,
+.mega-painter.expanded > .mega-paint-toolbar,
+.mega-painter.expanded > .mega-paint-settings,
+.mega-painter.expanded > .mega-height-settings,
+.mega-painter.expanded > .mega-paint-workspace,
+.mega-painter.expanded > .mega-paint-help{
+  width:min(1100px,100%)!important;
+  max-width:1100px!important;
+  margin-left:auto!important;
+  margin-right:auto!important;
+  box-sizing:border-box!important;
+}
+
+/* Expanded title bar */
+.mega-painter.expanded .section-title-row{
+  height:28px!important;
+  min-height:28px!important;
+  padding:0 4px!important;
+  margin-bottom:5px!important;
+}
+.mega-painter.expanded .section-title-row b{
+  font-size:14px!important;
+  line-height:28px!important;
+}
+.mega-painter.expanded .section-title-row small{
+  font-size:9px!important;
+  line-height:28px!important;
+}
+
+/* Expanded toolbar: still compact, but readable. */
+.mega-painter.expanded .mega-paint-toolbar{
+  min-height:32px!important;
+  gap:4px!important;
+  margin-bottom:5px!important;
+}
+.mega-painter.expanded .mega-paint-toolbar button{
+  width:30px!important;
+  height:30px!important;
+  min-width:30px!important;
+  min-height:30px!important;
+  font-size:11px!important;
+}
+.mega-painter.expanded .mega-paint-toolbar #eMegaEraserMode{
+  width:auto!important;
+  min-width:48px!important;
+}
+
+/* Expanded settings: compact three-column bar, not full-screen sliders. */
+.mega-painter.expanded .mega-paint-settings{
+  display:grid!important;
+  grid-template-columns:180px 1fr 1fr!important;
+  gap:10px!important;
+  align-items:end!important;
+  margin-bottom:6px!important;
+}
+.mega-painter.expanded .mega-paint-settings label{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:3px!important;
+  width:auto!important;
+  font-size:9px!important;
+}
+.mega-painter.expanded .mega-paint-settings input[type="color"]{
+  height:30px!important;
+}
+.mega-painter.expanded .mega-paint-settings input[type="range"]{
+  height:16px!important;
+}
+
+/* CRITICAL FIX:
+   AC's 215px side-panel cap was flattening the expanded 2:1 canvas. */
+.mega-painter.expanded .mega-paint-workspace{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:7px!important;
+}
+.mega-painter.expanded .mega-paint-stage{
+  width:min(100%,1100px)!important;
+  height:auto!important;
+  max-height:none!important;
+  aspect-ratio:2 / 1!important;
+  margin:0 auto!important;
+  flex:none!important;
+}
+.mega-painter.expanded .mega-paint-stage canvas{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  aspect-ratio:2 / 1!important;
+}
+
+/* Keep the preview/help under the real-size painter instead of stretching. */
+.mega-painter.expanded .mega-icon-preview-wrap{
+  width:100%!important;
+  max-width:1100px!important;
+  margin:0 auto!important;
+  min-height:56px!important;
+}
+
+/* Expanded height controls */
+.mega-painter.expanded .mega-height-settings{
+  padding:6px 8px!important;
+  margin-bottom:5px!important;
+}
+
+/* Backdrop reliably covers the viewport behind the centered editor. */
+body.mega-painter-open{
+  overflow:hidden!important;
+}
+
+/* V19.9AE — expanded painter backdrop/input fix */
+
+/* Backdrop is dimming only. It sits BELOW the painter. */
+#megaPainterBackdrop{
+  position:fixed!important;
+  inset:0!important;
+  z-index:10000!important;
+  background:rgba(0,0,0,.58)!important;
+  pointer-events:auto!important;
+}
+
+/* Expanded painter must always be above the backdrop and fully interactive. */
+.mega-painter.expanded{
+  z-index:10010!important;
+  pointer-events:auto!important;
+}
+
+/* Every interactive child stays clickable. */
+.mega-painter.expanded *,
+.mega-painter.expanded button,
+.mega-painter.expanded input,
+.mega-painter.expanded select,
+.mega-painter.expanded canvas{
+  pointer-events:auto!important;
+}
+
+/* Guide canvas remains visual-only so it never blocks drawing. */
+.mega-painter.expanded #megaPlanetGuide{
+  pointer-events:none!important;
+}
+
+/* Ensure the actual paint canvas is the interactive surface. */
+.mega-painter.expanded #megaPaintCanvas{
+  position:relative!important;
+  z-index:3!important;
+  pointer-events:auto!important;
+}
+
+/* When hidden, the backdrop must be completely inert. */
+#megaPainterBackdrop.hidden{
+  display:none!important;
+  pointer-events:none!important;
+}
+
+body.mega-painter-open::before,
+body.mega-painter-open::after{
+  pointer-events:none!important;
+}
+
+/* V20 · Living History */
+.galactic-coordinates{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:4px;min-height:18px;color:#8ea2ba;font-size:9px}
+.galactic-coordinates>span{opacity:.45}
+.galactic-crumb{border:0;background:transparent;color:#9fd9f2;padding:1px 2px;font-size:9px;border-radius:4px;cursor:pointer}
+.galactic-crumb:hover{background:rgba(90,170,215,.12);color:#d9f5ff}
+.civilization-stage.event-inspector-open{grid-template-columns:minmax(310px,370px) minmax(270px,330px) minmax(470px,1fr)}
+.event-inspector-panel{min-height:0;overflow:hidden;display:flex;flex-direction:column;border:1px solid #36506e;border-radius:12px;background:#08111a;box-shadow:0 16px 46px rgba(0,0,0,.28)}
+.event-inspector-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px;border-bottom:1px solid #24374d}
+.event-inspector-head h3{font-size:13px;margin:1px 0 0}
+.event-inspector-body{padding:10px;overflow:auto;min-height:0}
+.event-inspector-body>p{font-size:10px;line-height:1.55;color:#a7b7ca}
+.event-inspector-title{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.event-inspector-title h3{margin:3px 0 0;font-size:14px}
+.event-tone-badge{font-size:8px;text-transform:uppercase;letter-spacing:.07em;border:1px solid #31445e;border-radius:999px;padding:3px 6px;color:#aebed1}
+.event-tone-badge.crisis{border-color:#774653;color:#ffb1bb}.event-tone-badge.breakthrough{border-color:#497760;color:#aee9c4}.event-tone-badge.major{border-color:#536d9d;color:#bfd3ff}
+.event-location-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;margin:10px 0;padding:8px;border:1px solid #2d455f;border-radius:9px;background:#091521}
+.event-location-card>div{display:flex;flex-direction:column;gap:3px;min-width:0}.event-location-card b{font-size:10px;color:#d8edf7}.event-location-card button{padding:7px 8px;font-size:9px;white-space:nowrap}
+.event-section-label{margin-top:12px!important;margin-bottom:5px}.related-events-list{display:flex;flex-direction:column;gap:5px}
+.related-event-card{width:100%;text-align:left;border:1px solid #293e56;border-radius:8px;background:#0a1420;color:#dbe7f7;padding:7px;display:flex;flex-direction:column;gap:2px}
+.related-event-card:hover{border-color:#52749a;background:#0e1c2b}.related-event-card span{font-size:8px;color:#85cdeb;text-transform:uppercase}.related-event-card b{font-size:10px}.related-event-card small{font-size:8px;color:#8295aa}
+.sim-event.selected-event{border-color:#6a8fba;box-shadow:inset 3px 0 0 #78b7df}
+.event-meta-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.event-location-chip,.event-related-chip{display:inline-block;border:1px solid #2c4158;border-radius:999px;padding:2px 6px;font-size:8px;color:#8fb6cb;background:#0a1420}
+.event-related-chip{color:#c0a9ee;border-color:#4b4169}
+@media(max-width:1380px){.civilization-stage.event-inspector-open{grid-template-columns:minmax(300px,360px) minmax(250px,300px) minmax(430px,1fr)}}
+@media(max-width:1120px){.civilization-stage.event-inspector-open{grid-template-columns:1fr}.event-inspector-panel{max-height:440px}}
+
+/* V20.1 · Persistent World State */
+.world-effect-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+.world-effect-card{display:flex;flex-direction:column;gap:2px;padding:7px;border:1px solid #30445b;border-radius:8px;background:#0a1420}
+.world-effect-card span{font-size:8px;color:#8ea4bb;text-transform:uppercase}
+.world-effect-card b{font-size:10px;color:#dbe8f6}
+.world-effect-card small{font-size:8px;color:#74889e}
+.world-effect-card.positive{border-color:#315b4c;background:rgba(25,70,54,.16)}
+.world-effect-card.positive b{color:#a8e6c6}
+.world-effect-card.negative{border-color:#643e48;background:rgba(87,37,48,.14)}
+.world-effect-card.negative b{color:#ffb4bd}
+.persistent-state-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:6px}
+.persistent-state-card{display:flex;flex-direction:column;gap:2px;padding:7px;border:1px solid #2a4057;border-radius:8px;background:#09131e}
+.persistent-state-card b{font-size:10px;color:#d7e8f7}.persistent-state-card span{font-size:8px;color:#8ca1b6}
+.v201-world-state{border-color:#385773!important;background:linear-gradient(135deg,rgba(25,61,84,.14),rgba(9,19,30,.75))!important}
+@media(max-width:760px){.world-effect-grid,.persistent-state-grid{grid-template-columns:1fr}}
+
+/* V20.2 · Moons, Gas Giants, Place Inspector */
+.planet-body-options{display:flex;flex-direction:column;gap:6px;margin:7px 0 10px;padding:7px;border:1px solid #294158;border-radius:9px;background:#08131d}
+.moon-orbiting-wrap{display:flex;flex-direction:column;gap:4px;font-size:9px;color:#9bb0c4}
+.moon-orbiting-wrap select{width:100%}
+.gas-giant-palette{padding:8px;border:1px solid #5b4b38;border-radius:9px;background:rgba(74,52,31,.14);margin:7px 0}
+.gas-giant-palette>label{display:flex;flex-direction:column;gap:4px;font-size:9px}
+.place-inspector-panel{min-height:0;overflow:hidden;display:flex;flex-direction:column;border:1px solid #3e5870;border-radius:12px;background:#08111a;box-shadow:0 16px 46px rgba(0,0,0,.28)}
+.place-state-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:9px 0}
+.place-state-grid>div{display:flex;flex-direction:column;gap:2px;padding:6px;border:1px solid #293f55;border-radius:7px;background:#09141f}
+.place-state-grid span{font-size:7px;text-transform:uppercase;color:#7f95aa}.place-state-grid b{font-size:11px;color:#d9ebf8}
+@media(max-width:760px){.place-state-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V20.3 · Multiple Stars + Factions & Territory */
+.system-additional-stars{display:flex;flex-direction:column;gap:5px;margin:6px 0}
+.system-star-row{display:grid;grid-template-columns:minmax(90px,1fr) 55px 34px 28px;gap:4px;align-items:center}
+.system-star-row input,.system-star-row select{min-width:0;font-size:9px}
+.system-star-row input[type="color"]{width:34px;height:27px;padding:2px}
+.system-star-row button{height:27px}
+.territory-owner-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;box-shadow:0 0 7px currentColor}
+
+/* V20.4 · Historical Map */
+.history-map-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px}
+.history-map-controls>button{font-size:8px;padding:3px 7px}
+.history-map-controls>button.active{border-color:#7aa8d1;color:#d8efff;background:rgba(70,125,170,.18)}
+.history-map-scrubber{display:grid;grid-template-columns:auto minmax(110px,1fr) auto;gap:6px;align-items:center;min-width:250px}
+.history-map-scrubber input[type="range"]{width:100%;margin:0}
+.history-map-scrubber output{font-size:8px;color:#a8bdd1;white-space:nowrap}
+.history-map-scrubber button{font-size:7px;padding:2px 5px}
+.history-future-event{opacity:.22;filter:saturate(.35)}
+.history-future-event:hover{opacity:.6}
+
+
+/* V20.6c · Vertical Hub Role rail */
+.editor-main-card{
+  position:relative;
+  overflow:visible;
+}
+
+.hub-role-rail{
+  --hub-role-y:100%;
+  position:absolute;
+  left:-66px;
+  top:50%;
+  width:58px;
+  height:174px;
+  transform:translateY(-50%);
+  z-index:8;
+  display:grid;
+  grid-template-rows:18px 1fr 18px 18px;
+  align-items:center;
+  justify-items:center;
+  padding:7px 6px;
+  border:1px solid #334861;
+  border-radius:12px;
+  background:rgba(7,12,19,.97);
+  box-shadow:0 12px 30px rgba(0,0,0,.35);
+  user-select:none;
+  touch-action:none;
+}
+
+
+.hub-role-track{
+  position:relative;
+  width:28px;
+  height:102px;
+}
+
+.hub-role-track::before{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:7px;
+  bottom:7px;
+  width:3px;
+  transform:translateX(-50%);
+  border-radius:999px;
+  background:linear-gradient(to bottom,#718bc0,#43546d);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
+}
+
+.hub-role-stop{
+  position:absolute;
+  left:50%;
+  width:11px;
+  height:11px;
+  transform:translate(-50%,-50%);
+  padding:0;
+  border-radius:50%;
+  border:1px solid #536a88;
+  background:#111a26;
+  z-index:2;
+}
+
+.hub-role-stop.stop-hub{top:7px}
+.hub-role-stop.stop-semi{top:50%}
+.hub-role-stop.stop-normal{top:calc(100% - 7px)}
+
+.hub-role-stop.active{
+  border-color:#d8e7ff;
+  background:#8ba9d7;
+  box-shadow:0 0 10px rgba(139,169,215,.45);
+}
+
+.hub-role-thumb{
+  position:absolute;
+  left:50%;
+  top:calc(100% - 7px);
+  width:20px;
+  height:20px;
+  transform:translate(-50%,-50%);
+  border:2px solid #eef5ff;
+  border-radius:50%;
+  background:#607da9;
+  box-shadow:
+    0 0 0 3px rgba(92,123,169,.18),
+    0 5px 12px rgba(0,0,0,.35);
+  z-index:4;
+  cursor:grab;
+  transition:top .13s cubic-bezier(.2,.8,.2,1),transform .13s ease,background .13s ease;
+  outline:none;
+}
+
+
+.hub-role-rail[data-role="hub"]:not(.dragging) .hub-role-thumb{
+  top:7px;
+}
+.hub-role-rail[data-role="semi"]:not(.dragging) .hub-role-thumb{
+  top:50%;
+}
+.hub-role-rail[data-role="normal"]:not(.dragging) .hub-role-thumb{
+  top:calc(100% - 7px);
+}
+
+.hub-role-rail.dragging .hub-role-thumb{
+  top:var(--hub-role-drag-y);
+  cursor:grabbing;
+  transform:translate(-50%,-50%) scale(1.08);
+  transition:transform .08s ease;
+}
+
+.hub-role-thumb:focus-visible{
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,.18),
+    0 0 0 6px rgba(105,151,220,.24);
+}
+
+.hub-role-rail[data-role="hub"] .hub-role-thumb{
+  background:#9e86d9;
+}
+.hub-role-rail[data-role="semi"] .hub-role-thumb{
+  background:#7697c7;
+}
+.hub-role-rail[data-role="normal"] .hub-role-thumb{
+  background:#526273;
+}
+
+.hub-role-rail-label{
+  width:100%;
+  text-align:center;
+  font-size:7px;
+  line-height:1;
+  color:#77899f;
+  white-space:nowrap;
+  pointer-events:none;
+}
+
+.hub-role-rail .hub-label{
+  color:#b7a7e3;
+  font-weight:700;
+}
+.hub-role-rail .semi-label{
+  color:#91add3;
+}
+.hub-role-rail .node-label{
+  color:#78899a;
+}
+
+@media(max-width:760px){
+  .hub-role-rail{
+    left:6px;
+    top:76px;
+    transform:none;
+    opacity:.94;
+  }
+}
+
+/* V21.0 — Organizations */
+.organization-rel-editor{margin-top:8px;border:1px solid #3e342b;border-radius:10px;padding:9px;background:#110d0a}
+.organization-rel-head{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.organization-rel-head b{font-size:10px;color:#f0c6a1}.organization-rel-head small{font-size:8px;color:#9d8877}
+.organization-rel-row{--rel-color:#8490a2;display:grid;grid-template-columns:minmax(110px,.8fr) minmax(150px,1.5fr) 42px;gap:8px;align-items:center;padding:7px;margin:5px 0;border:1px solid color-mix(in srgb,var(--rel-color) 45%,#263044);border-radius:8px;background:#0b1018}
+.organization-rel-row strong{display:block;font-size:9px}.organization-rel-row small{display:block;color:var(--rel-color);font-size:7px;margin-top:2px}.organization-rel-row output{font-size:9px;color:var(--rel-color);text-align:right}
+.organization-rel-row input{accent-color:var(--rel-color)}
+
+/* V21.0 — Simulation Inspector */
+.simulation-inspector-panel{width:340px;flex:0 0 340px;overflow:auto;border:1px solid #34475f;border-radius:13px;background:#08111b;padding:12px}
+.sim-inspector-hero h2{font-size:19px;margin:3px 0}.sim-inspector-hero p{font-size:9px;color:#91a1b7;line-height:1.5}
+.sim-inspector-statgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:10px 0}
+.sim-inspector-statgrid>div{padding:8px;border:1px solid #293a50;border-radius:8px;background:#0b141e}
+.sim-inspector-statgrid b{display:block;font-size:13px;color:#e4edf9}.sim-inspector-statgrid span{display:block;font-size:7px;color:#788da5;margin-top:3px;text-transform:uppercase;letter-spacing:.08em}
+.sim-rel-list{display:flex;flex-direction:column;gap:5px}
+.sim-rel-card{border-left:3px solid var(--rel);background:#0a121c;border-radius:7px;padding:7px 8px}
+.sim-rel-card strong{display:block;font-size:9px}.sim-rel-card span{display:block;color:var(--rel);font-size:8px;margin-top:2px}
+.sim-inspector-history{display:flex;flex-direction:column;gap:5px}
+.sim-inspector-history button{text-align:left;border:1px solid #293a50;border-radius:8px;background:#0a121c;padding:7px;color:#d8e2f0}
+.sim-inspector-history button span{display:block;color:#70869e;font-size:7px}.sim-inspector-history button strong{display:block;font-size:9px;margin-top:2px}
+.inspector-section-label{margin:11px 0 6px}
+.selection-inspect-btn{width:100%;margin-top:7px;padding:6px 8px;border:1px solid #405474;border-radius:7px;background:#142033;color:#d8e6fb;font-size:9px}
+
+/* V21.2 organization diplomacy color emphasis */
+.organization-rel-row{box-shadow:inset 3px 0 0 var(--rel-color)}
+.organization-rel-row .org-rel-slider{
+  appearance:none;height:6px;border-radius:999px;
+  background:linear-gradient(90deg,#ff334f 0%,#f05252 24%,#606b7b 50%,#42d77c 76%,#26e86f 100%);
+  outline:none
+}
+.organization-rel-row .org-rel-slider::-webkit-slider-thumb{
+  appearance:none;width:15px;height:15px;border-radius:50%;border:2px solid #eef6ff;
+  background:var(--rel-color);box-shadow:0 0 10px color-mix(in srgb,var(--rel-color) 60%,transparent)
+}
+.organization-rel-row .org-rel-slider::-moz-range-thumb{
+  width:13px;height:13px;border-radius:50%;border:2px solid #eef6ff;
+  background:var(--rel-color);box-shadow:0 0 10px color-mix(in srgb,var(--rel-color) 60%,transparent)
+}
+.sim-rel-card{box-shadow:inset 0 0 18px color-mix(in srgb,var(--rel) 10%,transparent)}
+.timeline-jump-pulse{animation:v212TimelineJump .9s ease}
+@keyframes v212TimelineJump{
+  0%{box-shadow:0 0 0 0 rgba(130,175,255,.65)}
+  45%{box-shadow:0 0 0 5px rgba(130,175,255,.28)}
+  100%{box-shadow:0 0 0 0 rgba(130,175,255,0)}
+}
+
+/* V21.2a — Organization event polarity */
+.sim-event.org-negative-event{
+  border-left:4px solid #ff334f;
+  background:linear-gradient(90deg,rgba(255,51,79,.17),rgba(255,51,79,.035) 45%,transparent);
+  box-shadow:inset 0 0 26px rgba(255,51,79,.055);
+}
+.sim-event.org-positive-event{
+  border-left:4px solid #26e86f;
+  background:linear-gradient(90deg,rgba(38,232,111,.15),rgba(38,232,111,.03) 45%,transparent);
+  box-shadow:inset 0 0 26px rgba(38,232,111,.05);
+}
+.sim-event.org-negative-event .sim-year{color:#ff687d}
+.sim-event.org-positive-event .sim-year{color:#58ee8d}
+
+.event-inspector-title.org-negative-event{
+  border-left:4px solid #ff334f;
+  padding-left:10px;
+  background:linear-gradient(90deg,rgba(255,51,79,.13),transparent 70%);
+}
+.event-inspector-title.org-positive-event{
+  border-left:4px solid #26e86f;
+  padding-left:10px;
+  background:linear-gradient(90deg,rgba(38,232,111,.12),transparent 70%);
+}
+.related-event-card.org-negative-event{
+  border-color:rgba(255,51,79,.55);
+  box-shadow:inset 3px 0 0 #ff334f;
+  background:linear-gradient(90deg,rgba(255,51,79,.10),rgba(255,51,79,.015));
+}
+.related-event-card.org-positive-event{
+  border-color:rgba(38,232,111,.48);
+  box-shadow:inset 3px 0 0 #26e86f;
+  background:linear-gradient(90deg,rgba(38,232,111,.09),rgba(38,232,111,.012));
+}
+
+/* V22 Civilization Utils */
+.civ-util-picker{width:min(720px,92vw)}
+.civ-util-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:8px}
+.civ-util-grid button{min-height:105px;text-align:left;padding:14px;border:1px solid #3d4961;border-radius:12px;background:#0c1420;color:#e7efff}
+.civ-util-grid button b{display:block;font-size:24px;color:#caa8ff}.civ-util-grid button span{display:block;font-weight:800;margin:5px 0}.civ-util-grid button small{color:#8292aa}
+.symbol-library-card{width:min(760px,94vw)}
+.symbol-workbench{display:grid;grid-template-columns:280px 1fr;gap:18px;padding:10px}
+#symbolCanvas{width:256px;height:256px;background:#070b12;border:1px solid #53617a;border-radius:12px;touch-action:none}
+.symbol-actions{display:flex;gap:8px;margin-top:8px}
+.symbol-meta label{display:flex;flex-direction:column;gap:5px;font-size:9px}.symbol-meta input{padding:8px;background:#09111b;border:1px solid #39475d;color:#eef5ff;border-radius:7px}
+.symbol-library-list{display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:250px;overflow:auto}
+.symbol-library-item{display:grid;grid-template-columns:42px 1fr 30px;gap:8px;align-items:center;padding:6px;border:1px solid #2d3b50;border-radius:8px;background:#09111b}
+.symbol-library-item img{width:38px;height:38px;object-fit:contain;background:#05080d}.symbol-library-item small{display:block;color:#72849d;font-size:7px}
+.material-price-row{display:grid;grid-template-columns:1fr 110px 35px;gap:7px;align-items:center;padding:5px 0}.material-price-row input{background:#080e17;border:1px solid #34445c;color:#eef5ff;border-radius:6px;padding:6px}
+
+/* V22.1 — unified event palette */
+.sim-event.event-negative,.sim-event.org-negative-event{
+  border-left:4px solid #ff3b5c;
+  background:linear-gradient(90deg,rgba(255,59,92,.18),rgba(255,59,92,.035) 48%,transparent);
+}
+.sim-event.event-positive,.sim-event.org-positive-event{
+  border-left:4px solid #2ee879;
+  background:linear-gradient(90deg,rgba(46,232,121,.16),rgba(46,232,121,.03) 48%,transparent);
+}
+.sim-event.event-breakthrough{border-left:4px solid #43d9ff;background:linear-gradient(90deg,rgba(67,217,255,.15),transparent)}
+.sim-event.event-major{border-left:4px solid #c99cff;background:linear-gradient(90deg,rgba(201,156,255,.14),transparent)}
+.sim-event.event-neutral{border-left:3px solid #7d9bc8;background:linear-gradient(90deg,rgba(125,155,200,.08),transparent)}
+.sim-event.event-negative .sim-year{color:#ff7186}.sim-event.event-positive .sim-year{color:#64ef99}
+.event-inspector-title.event-negative{border-left:4px solid #ff3b5c;padding-left:10px;background:linear-gradient(90deg,rgba(255,59,92,.12),transparent)}
+.event-inspector-title.event-positive{border-left:4px solid #2ee879;padding-left:10px;background:linear-gradient(90deg,rgba(46,232,121,.11),transparent)}
+.related-event-card.event-negative{box-shadow:inset 3px 0 #ff3b5c}.related-event-card.event-positive{box-shadow:inset 3px 0 #2ee879}
+
+/* Symbol painter */
+.symbol-painter{display:flex;flex-direction:column;gap:7px}
+.symbol-toolbar{display:flex;flex-wrap:wrap;gap:4px}
+.symbol-toolbar button{width:29px;height:27px;padding:0;border:1px solid #394960;border-radius:6px;background:#0a121c;color:#dce8fa}
+.symbol-toolbar button.active{border-color:#caa8ff;background:#261d36;color:#efe6ff}
+.symbol-settings{display:flex;gap:10px;align-items:center;font-size:8px;color:#8da0b9}
+.symbol-settings label{display:flex;gap:5px;align-items:center}
+.symbol-settings input[type="range"]{width:100px}
+
+/* Rapid Events */
+.rapid-events-panel{width:175px;flex:0 0 175px;border:1px solid #29384e;border-radius:10px;background:#070e17;overflow:hidden;transition:.18s}
+.rapid-events-panel.collapsed{width:38px;flex-basis:38px}
+.rapid-events-panel.collapsed .rapid-events-list,.rapid-events-panel.collapsed .rapid-events-head div{display:none}
+.rapid-events-head{display:flex;align-items:center;justify-content:space-between;padding:7px;border-bottom:1px solid #26364b}
+.rapid-events-head div{display:flex;gap:5px;align-items:center}.rapid-events-head span{font-size:6px;background:#e74362;color:white;border-radius:4px;padding:2px 3px}.rapid-events-head b{font-size:8px}
+.rapid-events-head button{width:22px;height:22px;padding:0}
+.rapid-events-list{max-height:590px;overflow:auto;padding:5px}
+.rapid-event{padding:6px;margin-bottom:4px;border:1px solid #243449;border-radius:7px;background:#0a131e}
+.rapid-event span{display:block;font-size:6px;color:#72879f}.rapid-event b{display:block;font-size:8px;margin:2px 0}.rapid-event strong{font-size:9px}
+.rapid-event.positive{border-left:3px solid #2ee879}.rapid-event.negative{border-left:3px solid #ff3b5c}
+
+/* Manual event creator */
+.manual-event-card{width:min(820px,94vw)}
+.manual-event-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:8px}
+.manual-event-grid label{display:flex;flex-direction:column;gap:4px;font-size:8px;color:#8fa0b6}
+.manual-event-grid input,.manual-event-grid textarea,.manual-event-grid select{background:#09111b;border:1px solid #34465e;border-radius:7px;color:#ecf4ff;padding:7px}
+.manual-event-grid .full{grid-column:1/-1}
+.manual-subhead{font-size:9px;color:#d8e5f8}
+.manual-node-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;max-height:190px;overflow:auto;margin-top:6px}
+.manual-node-picker label{display:grid;grid-template-columns:18px 1fr;padding:6px;border:1px solid #29394e;border-radius:7px;background:#08111b}
+.manual-node-picker small{grid-column:2;color:#6f839c}
+.manual-impact-grid{display:grid!important;grid-template-columns:repeat(3,1fr);gap:7px}
+
+.symbol-workbench{grid-template-columns:300px 1fr}
+
+/* V22.2 — Simulation layout cleanup */
+.simulation-card{
+  overflow:hidden;
+}
+.civilization-stage{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:
+    "upper inspector"
+    "viewer viewer";
+  gap:10px;
+  align-items:start;
+  min-width:0;
+}
+.simulation-upper-grid{
+  grid-area:upper;
+  display:grid;
+  grid-template-columns:180px minmax(0,1fr);
+  gap:10px;
+  min-width:0;
+}
+.civilization-info-panel{
+  min-width:0 !important;
+  width:auto !important;
+  max-width:none !important;
+}
+.simulation-viewer-row{
+  grid-area:viewer;
+  min-width:0;
+  width:100%;
+}
+.simulation-viewer-row .planet-view-panel{
+  width:100% !important;
+  max-width:none !important;
+  min-width:0;
+}
+.event-inspector-panel,
+.place-inspector-panel,
+.simulation-inspector-panel{
+  grid-area:inspector;
+  width:330px !important;
+  max-width:330px !important;
+  min-width:330px !important;
+  align-self:stretch;
+}
+.event-inspector-panel.hidden,
+.place-inspector-panel.hidden,
+.simulation-inspector-panel.hidden{
+  display:none !important;
+}
+.rapid-events-panel{
+  width:180px !important;
+  min-width:180px;
+  max-width:180px;
+  height:375px;
+}
+.rapid-events-panel.collapsed{
+  width:38px !important;
+  min-width:38px;
+  max-width:38px;
+}
+.sim-timeline{
+  max-height:360px;
+  min-height:240px;
+}
+.sim-dashboard{
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+}
+.planet-view-panel{
+  min-height:430px;
+}
+@media(max-width:1150px){
+  .simulation-upper-grid{
+    grid-template-columns:150px minmax(0,1fr);
+  }
+  .rapid-events-panel{
+    width:150px !important;
+    min-width:150px;
+    max-width:150px;
+  }
+  .event-inspector-panel,
+  .place-inspector-panel,
+  .simulation-inspector-panel{
+    width:290px !important;
+    max-width:290px !important;
+    min-width:290px !important;
+  }
+}
+@media(max-width:900px){
+  .civilization-stage{
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "upper"
+      "inspector"
+      "viewer";
+  }
+  .simulation-upper-grid{
+    grid-template-columns:1fr;
+  }
+  .rapid-events-panel{
+    width:100% !important;
+    min-width:0;
+    max-width:none;
+    height:150px;
+  }
+  .event-inspector-panel,
+  .place-inspector-panel,
+  .simulation-inspector-panel{
+    width:100% !important;
+    min-width:0 !important;
+    max-width:none !important;
+  }
+}
+
+/* V22.2 — Language editor */
+.language-map-editor{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+}
+.language-map-section{
+  border:1px solid #32435a;
+  border-radius:10px;
+  background:#09111b;
+  overflow:hidden;
+}
+.language-map-section-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:8px;
+  border-bottom:1px solid #26364b;
+  background:#0d1724;
+}
+.language-map-section-head b{
+  display:block;
+  font-size:9px;
+  color:#dce9fb;
+}
+.language-map-section-head small{
+  display:block;
+  margin-top:2px;
+  font-size:7px;
+  color:#71869f;
+}
+.language-add-row{
+  width:25px;
+  height:25px;
+  padding:0;
+  border:1px solid #4b6281;
+  border-radius:6px;
+  background:#122036;
+  color:#dcecff;
+}
+.language-map-rows{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  padding:7px;
+  min-height:42px;
+}
+.language-map-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr) 24px;
+  gap:5px;
+  align-items:center;
+}
+.language-map-row input{
+  min-width:0;
+  background:#060d16;
+  border:1px solid #31435b;
+  border-radius:6px;
+  color:#edf5ff;
+  padding:6px;
+  font-size:8px;
+}
+.language-map-row span{
+  text-align:center;
+  color:#7f95ae;
+}
+.language-remove-row{
+  width:23px;
+  height:23px;
+  padding:0;
+  border:1px solid #563441;
+  border-radius:6px;
+  background:#211016;
+  color:#ed8da2;
+}
+@media(max-width:900px){
+  .language-map-editor{
+    grid-template-columns:1fr;
+  }
+}
+
+/* ==========================================================
+   V22.3 — Fullscreen Living History workspace
+   ========================================================== */
+.v223-fullscreen-sim{
+  position:fixed !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100vh !important;
+  padding:0 !important;
+  margin:0 !important;
+  background:#050a11 !important;
+  z-index:3000 !important;
+  overflow:hidden !important;
+  align-items:stretch !important;
+  justify-content:stretch !important;
+}
+.v223-fullscreen-sim.hidden{
+  display:none !important;
+}
+.simulation-fullscreen-shell{
+  position:absolute;
+  inset:0;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr);
+  background:#08111b;
+  color:#e7eef8;
+  overflow:hidden;
+}
+.sim-topbar{
+  position:relative;
+  display:grid;
+  grid-template-columns:minmax(250px,.8fr) minmax(720px,2.2fr) 44px;
+  gap:14px;
+  align-items:center;
+  min-height:82px;
+  padding:12px 16px;
+  border-bottom:1px solid #26364a;
+  background:#0a121d;
+}
+.sim-brand h2{
+  margin:2px 0 0;
+  font-size:17px;
+}
+.sim-top-controls{
+  display:grid;
+  grid-template-columns:minmax(130px,.8fr) minmax(120px,.65fr) minmax(120px,.65fr) auto;
+  gap:9px;
+  align-items:end;
+}
+.sim-top-controls label{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  color:#8498b1;
+  font-size:8px;
+}
+.sim-top-controls input,
+.sim-top-controls select{
+  height:35px;
+  min-width:0;
+  border:1px solid #304259;
+  border-radius:7px;
+  background:#07101a;
+  color:#edf4ff;
+  padding:0 9px;
+}
+.sim-top-runbar{
+  display:flex;
+  gap:5px;
+  align-items:center;
+  flex-wrap:nowrap;
+}
+.sim-top-runbar button{
+  height:35px;
+  white-space:nowrap;
+}
+.sim-close-fullscreen{
+  position:static !important;
+  width:38px;
+  height:38px;
+  justify-self:end;
+  align-self:start;
+}
+
+.sim-main-layout{
+  min-height:0;
+  display:grid;
+  grid-template-columns:220px minmax(420px,1fr) 335px;
+  gap:9px;
+  padding:9px;
+  overflow:hidden;
+}
+.sim-left-column,
+.sim-center-column,
+.sim-right-column{
+  min-width:0;
+  min-height:0;
+}
+.sim-left-column{
+  display:grid;
+  grid-template-rows:minmax(190px,.48fr) minmax(230px,.52fr);
+  gap:8px;
+}
+.sim-center-column{
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr);
+  gap:8px;
+}
+.sim-right-column{
+  display:grid;
+  grid-template-rows:auto auto minmax(0,1fr);
+  border:1px solid #293a50;
+  border-radius:10px;
+  background:#08111b;
+  overflow:hidden;
+  position:relative;
+}
+
+.v223-rapid{
+  width:auto !important;
+  min-width:0 !important;
+  max-width:none !important;
+  height:auto !important;
+  border-radius:10px;
+}
+.v223-rapid.collapsed{
+  width:auto !important;
+  min-width:0 !important;
+  max-width:none !important;
+  height:37px !important;
+}
+.v223-rapid.collapsed .rapid-events-list{
+  display:none;
+}
+.rapid-events-list{
+  max-height:none !important;
+  height:100%;
+}
+
+.sim-map-dock{
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr);
+  min-height:0;
+  border:1px solid #293a50;
+  border-radius:10px;
+  background:#07101a;
+  overflow:hidden;
+}
+.sim-map-dock-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  padding:8px 9px;
+  border-bottom:1px solid #243449;
+  background:#0b1420;
+}
+.sim-map-dock-head b{
+  display:block;
+  margin-top:2px;
+  font-size:10px;
+}
+.sim-map-dock-head button{
+  width:28px;
+  height:27px;
+  padding:0;
+}
+.sim-map-dock-body{
+  display:grid;
+  grid-template-rows:auto auto minmax(0,1fr);
+  min-height:0;
+}
+.sim-map-meta{
+  padding:6px 8px 0;
+  color:#71879f;
+  font-size:7px;
+}
+.sim-map-actions{
+  display:flex;
+  gap:4px;
+  padding:6px 8px;
+}
+.sim-map-actions button{
+  flex:1;
+  padding:5px;
+  font-size:7px;
+}
+.v223-history{
+  padding:0 8px;
+}
+.sim-map-canvas-wrap{
+  position:relative;
+  min-height:0;
+  border-top:1px solid #1f2d40;
+  background:#030812;
+}
+.sim-map-canvas-wrap canvas{
+  position:absolute;
+  inset:0;
+  width:100% !important;
+  height:100% !important;
+}
+.sim-map-dock.expanded{
+  position:absolute;
+  left:9px;
+  top:9px;
+  bottom:9px;
+  width:min(620px,48vw);
+  z-index:80;
+  box-shadow:0 18px 60px rgba(0,0,0,.55);
+}
+.sim-map-dock.expanded .sim-map-dock-body{
+  min-height:0;
+}
+
+.sim-center-header{
+  display:grid;
+  gap:7px;
+}
+.sim-center-header .sim-summary{
+  margin:0 !important;
+}
+.sim-center-header .sim-dashboard{
+  grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+  gap:6px !important;
+}
+.sim-center-header .sim-stat{
+  min-width:0;
+  padding:8px 5px;
+}
+.sim-center-header .sim-stat b{
+  font-size:13px;
+}
+.sim-center-header .sim-stat span{
+  font-size:6px;
+}
+
+.sim-timeline-shell{
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr);
+  min-height:0;
+  border:1px solid #293a50;
+  border-radius:10px;
+  background:#07101a;
+  overflow:hidden;
+}
+.sim-timeline-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border-bottom:1px solid #26364a;
+  background:#0b1420;
+}
+.sim-timeline-head h3{
+  margin:2px 0 0;
+  font-size:14px;
+}
+.sim-timeline-head button{
+  font-size:8px;
+  padding:6px 9px;
+}
+.sim-timeline{
+  min-height:0 !important;
+  max-height:none !important;
+  height:100% !important;
+  overflow:auto !important;
+  padding:8px;
+}
+.sim-event{
+  margin-bottom:6px;
+}
+
+.sim-inspector-fixed-head{
+  padding:10px;
+  border-bottom:1px solid #26364a;
+  background:#0b1420;
+}
+.sim-inspector-fixed-head h3{
+  margin:2px 0 0;
+  font-size:14px;
+}
+.sim-inspector-tabs{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:4px;
+  padding:7px;
+  border-bottom:1px solid #243449;
+}
+.sim-side-tab{
+  min-width:0;
+  padding:6px 4px;
+  border:1px solid #304259;
+  border-radius:6px;
+  background:#0a121d;
+  color:#879bb3;
+  font-size:7px;
+}
+.sim-side-tab.active{
+  background:#182944;
+  border-color:#5577a8;
+  color:#e9f2ff;
+}
+.sim-side-content{
+  min-height:0;
+  overflow:auto;
+  padding:8px;
+}
+.sim-side-content .sim-world{
+  padding:0 !important;
+}
+
+.sim-right-column > .event-inspector-panel,
+.sim-right-column > .simulation-inspector-panel,
+.sim-right-column > .place-inspector-panel{
+  position:absolute !important;
+  inset:0 !important;
+  z-index:20;
+  width:auto !important;
+  min-width:0 !important;
+  max-width:none !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:#08111b !important;
+  overflow:auto;
+}
+.sim-right-column > .hidden{
+  display:none !important;
+}
+
+#simRegions,
+#simCivGraph{
+  display:none !important;
+}
+
+/* remove older competing V22.2 layout constraints */
+.v223-fullscreen-sim .civilization-stage,
+.v223-fullscreen-sim .simulation-upper-grid,
+.v223-fullscreen-sim .simulation-viewer-row{
+  display:contents !important;
+}
+
+@media(max-width:1180px){
+  .sim-main-layout{
+    grid-template-columns:190px minmax(360px,1fr) 290px;
+  }
+  .sim-topbar{
+    grid-template-columns:210px minmax(0,1fr) 40px;
+  }
+  .sim-top-controls{
+    grid-template-columns:110px 105px 105px minmax(340px,1fr);
+  }
+}
+@media(max-width:900px){
+  .sim-main-layout{
+    grid-template-columns:170px minmax(340px,1fr);
+  }
+  .sim-right-column{
+    display:none;
+  }
+  .sim-topbar{
+    grid-template-columns:1fr 40px;
+  }
+  .sim-top-controls{
+    grid-column:1/-1;
+    grid-template-columns:repeat(3,1fr);
+  }
+  .sim-top-runbar{
+    grid-column:1/-1;
+  }
+}
+
+/* ==========================================================
+   V22.3a — Simulation workspace cleanup / viewport fit
+   ========================================================== */
+
+/* Hard viewport containment */
+html:has(.v223-fullscreen-sim:not(.hidden)),
+body:has(.v223-fullscreen-sim:not(.hidden)){
+  overflow:hidden !important;
+}
+
+.v223-fullscreen-sim{
+  width:100vw !important;
+  height:100dvh !important;
+  max-width:100vw !important;
+  max-height:100dvh !important;
+  overflow:hidden !important;
+}
+
+.simulation-fullscreen-shell{
+  width:100%;
+  height:100%;
+  max-width:100%;
+  max-height:100%;
+  min-width:0;
+  min-height:0;
+  grid-template-rows:minmax(72px,auto) minmax(0,1fr) !important;
+  overflow:hidden !important;
+}
+
+/* Top bar must stay within viewport */
+.sim-topbar{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  padding:10px 12px !important;
+  grid-template-columns:minmax(180px,.65fr) minmax(0,2.35fr) 38px !important;
+  gap:10px !important;
+}
+
+.sim-brand{
+  min-width:0;
+}
+.sim-brand h2{
+  font-size:clamp(13px,1.15vw,17px) !important;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.sim-top-controls{
+  min-width:0;
+  width:100%;
+  grid-template-columns:
+    minmax(100px,.75fr)
+    minmax(100px,.65fr)
+    minmax(100px,.65fr)
+    minmax(0,1.9fr) !important;
+  gap:6px !important;
+}
+
+.sim-top-controls label{
+  min-width:0;
+}
+.sim-top-controls input,
+.sim-top-controls select{
+  width:100%;
+  min-width:0 !important;
+  height:32px !important;
+  font-size:8px;
+}
+
+.sim-top-runbar{
+  min-width:0;
+  display:grid !important;
+  grid-template-columns:minmax(105px,1.5fr) repeat(6,minmax(34px,.55fr));
+  gap:4px !important;
+}
+.sim-top-runbar button{
+  min-width:0 !important;
+  width:100%;
+  height:32px !important;
+  padding:0 6px !important;
+  font-size:8px !important;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.sim-close-fullscreen{
+  width:34px !important;
+  height:34px !important;
+}
+
+/* Main simulation workspace */
+.sim-main-layout{
+  width:100%;
+  height:100%;
+  max-width:100%;
+  max-height:100%;
+  min-width:0;
+  min-height:0;
+  box-sizing:border-box;
+  grid-template-columns:
+    clamp(175px,15vw,220px)
+    minmax(0,1fr)
+    clamp(260px,22vw,335px) !important;
+  gap:8px !important;
+  padding:8px !important;
+  overflow:hidden !important;
+}
+
+.sim-left-column,
+.sim-center-column,
+.sim-right-column{
+  width:100%;
+  max-width:100%;
+  height:100%;
+  max-height:100%;
+  min-width:0 !important;
+  min-height:0 !important;
+  overflow:hidden;
+}
+
+/* Left: Rapid Events + embedded map */
+.sim-left-column{
+  display:grid !important;
+  grid-template-rows:minmax(120px,38%) minmax(180px,62%) !important;
+  gap:7px;
+}
+
+/* When expanded, map grows INSIDE the left column */
+.sim-left-column.map-expanded{
+  grid-template-rows:minmax(42px,10%) minmax(250px,90%) !important;
+}
+
+.sim-left-column.map-expanded .rapid-events-panel{
+  min-height:42px !important;
+}
+.sim-left-column.map-expanded .rapid-events-list{
+  display:none;
+}
+
+/* Never float the map over other UI */
+.sim-map-dock,
+.sim-map-dock.expanded{
+  position:relative !important;
+  inset:auto !important;
+  left:auto !important;
+  top:auto !important;
+  right:auto !important;
+  bottom:auto !important;
+  width:100% !important;
+  height:100% !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  z-index:auto !important;
+  box-shadow:none !important;
+  grid-row:auto !important;
+}
+
+.sim-map-dock-body{
+  min-height:0 !important;
+  overflow:hidden;
+}
+
+.sim-map-canvas-wrap{
+  min-height:0 !important;
+  height:100%;
+  overflow:hidden;
+}
+.sim-map-canvas-wrap canvas{
+  max-width:100%;
+  max-height:100%;
+}
+
+/* Rapid Events must scroll internally */
+.rapid-events-panel,
+.v223-rapid,
+.v223-rapid.expanded{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  height:100% !important;
+  max-height:100% !important;
+  overflow:hidden !important;
+}
+.rapid-events-list{
+  height:auto !important;
+  max-height:none !important;
+  min-height:0;
+  overflow:auto !important;
+}
+
+/* Center column stays bounded */
+.sim-center-column{
+  grid-template-rows:auto minmax(0,1fr) !important;
+}
+
+.sim-center-header{
+  min-width:0;
+  max-width:100%;
+}
+
+.sim-center-header .sim-summary{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.sim-center-header .sim-dashboard{
+  min-width:0;
+  grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+}
+.sim-center-header .sim-stat{
+  min-width:0 !important;
+  overflow:hidden;
+}
+.sim-center-header .sim-stat b{
+  font-size:clamp(10px,1vw,13px) !important;
+}
+.sim-center-header .sim-stat span{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.sim-timeline-shell{
+  min-width:0 !important;
+  min-height:0 !important;
+  width:100%;
+  height:100%;
+}
+.sim-timeline{
+  min-width:0 !important;
+  min-height:0 !important;
+  max-width:100%;
+  max-height:100%;
+  overflow:auto !important;
+}
+.sim-event{
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+
+/* Right inspector stays embedded and scrolls internally */
+.sim-right-column{
+  min-width:0 !important;
+  max-width:100%;
+}
+
+.sim-side-content{
+  min-width:0;
+  min-height:0;
+  overflow:auto !important;
+}
+
+.sim-right-column > .event-inspector-panel,
+.sim-right-column > .simulation-inspector-panel,
+.sim-right-column > .place-inspector-panel{
+  width:100% !important;
+  height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  overflow:auto !important;
+  box-sizing:border-box;
+}
+
+/* Prevent legacy modal/card rules from imposing old dimensions */
+.v223-fullscreen-sim .simulation-card,
+.v223-fullscreen-sim .modal-card,
+.v223-fullscreen-sim .permanent-planet-card{
+  width:auto !important;
+  max-width:none !important;
+  height:auto !important;
+  max-height:none !important;
+}
+
+/* Compact screens */
+@media(max-width:1200px){
+  .sim-main-layout{
+    grid-template-columns:
+      clamp(155px,14vw,190px)
+      minmax(0,1fr)
+      clamp(235px,21vw,285px) !important;
+  }
+
+  .sim-topbar{
+    grid-template-columns:minmax(150px,.55fr) minmax(0,2.5fr) 36px !important;
+  }
+
+  .sim-top-runbar{
+    grid-template-columns:minmax(90px,1.3fr) repeat(6,minmax(31px,.5fr));
+  }
+}
+
+@media(max-width:980px){
+  .sim-topbar{
+    grid-template-columns:minmax(130px,.45fr) minmax(0,2.7fr) 34px !important;
+  }
+
+  .sim-top-controls{
+    grid-template-columns:
+      minmax(85px,.7fr)
+      minmax(85px,.6fr)
+      minmax(85px,.6fr)
+      minmax(0,1.7fr) !important;
+  }
+
+  .sim-main-layout{
+    grid-template-columns:
+      155px
+      minmax(0,1fr)
+      225px !important;
+  }
+
+  .sim-center-header .sim-dashboard{
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  }
+}
+
+/* On very small screens, keep everything inside viewport by stacking inspector */
+@media(max-width:760px){
+  .simulation-fullscreen-shell{
+    overflow:auto !important;
+  }
+
+  .sim-topbar{
+    position:sticky;
+    top:0;
+    z-index:40;
+    grid-template-columns:1fr 34px !important;
+  }
+
+  .sim-top-controls{
+    grid-column:1/-1;
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  }
+
+  .sim-top-runbar{
+    grid-column:1/-1;
+  }
+
+  .sim-main-layout{
+    height:auto;
+    min-height:calc(100dvh - 130px);
+    grid-template-columns:150px minmax(0,1fr) !important;
+    grid-template-rows:minmax(420px,1fr) auto;
+  }
+
+  .sim-right-column{
+    grid-column:1/-1;
+    min-height:280px !important;
+  }
+}
+
+/* ==========================================================
+   V22.3b — TRUE viewport-root Simulation
+   ========================================================== */
+
+/*
+  The Simulation modal is now portaled directly under BODY.
+  These rules ensure nothing from the graph workspace can sit above or beside it.
+*/
+body.simulation-workspace-open{
+  overflow:hidden !important;
+  width:100vw !important;
+  height:100vh !important;
+  height:100dvh !important;
+}
+
+/* Keep the graph loaded underneath, but remove its sidebars/header visually.
+   The simulation owns the entire viewport while open. */
+body.simulation-workspace-open > main.app{
+  visibility:hidden !important;
+  pointer-events:none !important;
+}
+
+/* The portaled Simulation itself must remain visible. */
+body.simulation-workspace-open > #simulationModal{
+  visibility:visible !important;
+  pointer-events:auto !important;
+}
+
+body > #simulationModal.v223-fullscreen-sim{
+  position:fixed !important;
+  inset:0 !important;
+  display:flex;
+  width:100vw !important;
+  width:100dvw !important;
+  height:100vh !important;
+  height:100dvh !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  max-width:100dvw !important;
+  max-height:100dvh !important;
+  margin:0 !important;
+  padding:0 !important;
+  transform:none !important;
+  overflow:hidden !important;
+  z-index:2147483000 !important;
+  box-sizing:border-box !important;
+}
+
+body > #simulationModal.v223-fullscreen-sim.hidden{
+  display:none !important;
+}
+
+body > #simulationModal .simulation-fullscreen-shell{
+  position:relative !important;
+  inset:auto !important;
+  flex:1 1 auto;
+  width:100% !important;
+  height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  overflow:hidden !important;
+  box-sizing:border-box !important;
+}
+
+/*
+  Use proportional tracks, not pixel assumptions.
+  At normal desktop sizes: ~15% left, remainder center, ~23% right.
+*/
+body > #simulationModal .sim-main-layout{
+  grid-template-columns:
+    minmax(150px,15%)
+    minmax(0,1fr)
+    minmax(235px,23%) !important;
+  width:100% !important;
+  height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  overflow:hidden !important;
+  box-sizing:border-box !important;
+}
+
+/* Every direct child is shrinkable. This is crucial for CSS Grid:
+   without min-width:0, long content silently increases the track width. */
+body > #simulationModal .sim-main-layout > *,
+body > #simulationModal .sim-topbar > *,
+body > #simulationModal .sim-top-controls > *,
+body > #simulationModal .sim-center-column > *,
+body > #simulationModal .sim-left-column > *,
+body > #simulationModal .sim-right-column > *{
+  min-width:0 !important;
+  max-width:100%;
+  box-sizing:border-box;
+}
+
+/* Header uses viewport-relative sizing and cannot overflow horizontally. */
+body > #simulationModal .sim-topbar{
+  grid-template-columns:minmax(145px,18%) minmax(0,1fr) 36px !important;
+  width:100%;
+  max-width:100%;
+  overflow:hidden;
+}
+body > #simulationModal .sim-top-controls{
+  grid-template-columns:
+    minmax(82px,.7fr)
+    minmax(82px,.58fr)
+    minmax(82px,.58fr)
+    minmax(280px,1.85fr) !important;
+  max-width:100%;
+}
+body > #simulationModal .sim-top-runbar{
+  grid-template-columns:minmax(92px,1.55fr) repeat(6,minmax(30px,.52fr)) !important;
+  max-width:100%;
+}
+
+/* ==========================================================
+   Embedded map — absolutely NO overlay mode
+   ========================================================== */
+body > #simulationModal #simMapDock,
+body > #simulationModal #simMapDock.expanded{
+  position:static !important;
+  inset:auto !important;
+  float:none !important;
+  transform:none !important;
+  width:100% !important;
+  height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  z-index:auto !important;
+  box-shadow:none !important;
+  overflow:hidden !important;
+}
+
+body > #simulationModal .sim-left-column{
+  position:relative;
+  grid-template-rows:minmax(90px,38%) minmax(130px,62%) !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+
+body > #simulationModal .sim-left-column.map-expanded{
+  grid-template-rows:38px minmax(0,1fr) !important;
+}
+
+/* Dock internals always consume only the allocated grid cell. */
+body > #simulationModal .sim-map-dock-body{
+  height:100% !important;
+  min-height:0 !important;
+  max-height:100% !important;
+  overflow:hidden !important;
+}
+body > #simulationModal .sim-map-canvas-wrap{
+  position:relative !important;
+  width:100% !important;
+  height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  max-width:100% !important;
+  max-height:100% !important;
+  overflow:hidden !important;
+}
+body > #simulationModal #planetCanvas{
+  position:absolute !important;
+  inset:0 !important;
+  display:block !important;
+  width:100% !important;
+  height:100% !important;
+  max-width:100% !important;
+  max-height:100% !important;
+}
+
+/* Dense left-column controls wrap instead of widening their column. */
+body > #simulationModal .sim-map-actions{
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  width:100%;
+}
+body > #simulationModal .sim-map-actions button{
+  min-width:0 !important;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* Center and right panels can only scroll internally. */
+body > #simulationModal .sim-center-column,
+body > #simulationModal .sim-right-column,
+body > #simulationModal .sim-timeline-shell,
+body > #simulationModal .sim-side-content{
+  min-width:0 !important;
+  min-height:0 !important;
+  overflow:hidden;
+}
+body > #simulationModal .sim-timeline,
+body > #simulationModal .sim-side-content{
+  overflow:auto !important;
+}
+
+/* Responsive track changes are based on the REAL viewport. */
+@media(max-width:1100px){
+  body > #simulationModal .sim-main-layout{
+    grid-template-columns:145px minmax(0,1fr) 225px !important;
+  }
+  body > #simulationModal .sim-top-controls{
+    grid-template-columns:80px 78px 78px minmax(250px,1fr) !important;
+  }
+  body > #simulationModal .sim-center-header .sim-dashboard{
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  }
+}
+
+@media(max-width:820px){
+  body > #simulationModal .sim-main-layout{
+    grid-template-columns:135px minmax(0,1fr) !important;
+  }
+  body > #simulationModal .sim-right-column{
+    display:none !important;
+  }
+  body > #simulationModal .sim-topbar{
+    grid-template-columns:minmax(120px,23%) minmax(0,1fr) 34px !important;
+  }
+  body > #simulationModal .sim-top-controls{
+    grid-template-columns:repeat(3,minmax(70px,1fr)) !important;
+  }
+  body > #simulationModal .sim-top-runbar{
+    grid-column:1/-1;
+  }
+}
+
+/* Height-sensitive layout: compact the header rather than push the body below screen. */
+@media(max-height:760px){
+  body > #simulationModal .sim-topbar{
+    min-height:60px !important;
+    padding:6px 10px !important;
+  }
+  body > #simulationModal .sim-brand h2{
+    font-size:13px !important;
+  }
+  body > #simulationModal .sim-top-controls input,
+  body > #simulationModal .sim-top-controls select,
+  body > #simulationModal .sim-top-runbar button{
+    height:28px !important;
+  }
+  body > #simulationModal .simulation-fullscreen-shell{
+    grid-template-rows:auto minmax(0,1fr) !important;
+  }
+}
+
+/* ==========================================================
+   V22.4 — Simulation visual polish
+   ========================================================== */
+
+body > #simulationModal{
+  --sim-bg:#07101a;
+  --sim-panel:#0a1420;
+  --sim-panel-2:#0d1927;
+  --sim-border:#263b53;
+  --sim-border-soft:#1b2b3d;
+  --sim-text:#e8f0fb;
+  --sim-muted:#7f94ac;
+  --sim-blue:#6f9fe5;
+  --sim-cyan:#55d8ee;
+  --sim-green:#2ee879;
+  --sim-red:#ff4966;
+  --sim-purple:#c995ff;
+}
+
+/* Main surface */
+body > #simulationModal .simulation-fullscreen-shell{
+  background:
+    radial-gradient(circle at 50% -20%,rgba(62,106,170,.16),transparent 38%),
+    linear-gradient(180deg,#09131f 0%,#060d16 100%) !important;
+}
+
+/* Header */
+body > #simulationModal .sim-topbar{
+  background:
+    linear-gradient(180deg,rgba(15,28,44,.98),rgba(8,17,28,.97)) !important;
+  border-bottom:1px solid rgba(91,126,170,.28) !important;
+  box-shadow:0 8px 24px rgba(0,0,0,.24);
+}
+body > #simulationModal .sim-brand .eyebrow{
+  color:#6f8fb7;
+  letter-spacing:.16em;
+}
+body > #simulationModal .sim-brand h2{
+  color:#eef5ff;
+  letter-spacing:-.02em;
+}
+body > #simulationModal .sim-top-controls input,
+body > #simulationModal .sim-top-controls select{
+  background:#070e17 !important;
+  border-color:#2c4058 !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.025);
+}
+body > #simulationModal .sim-top-controls input:focus,
+body > #simulationModal .sim-top-controls select:focus{
+  border-color:#6288bb !important;
+  box-shadow:0 0 0 2px rgba(87,132,190,.14);
+  outline:none;
+}
+body > #simulationModal .sim-top-runbar button{
+  border-color:#324963 !important;
+  background:linear-gradient(180deg,#111e2d,#0b1520) !important;
+}
+body > #simulationModal .sim-top-runbar .primary{
+  background:linear-gradient(180deg,#385c90,#294970) !important;
+  border-color:#5378a9 !important;
+  box-shadow:0 4px 14px rgba(37,76,126,.25);
+}
+body > #simulationModal .sim-close-fullscreen{
+  background:#101b29 !important;
+  border-color:#344960 !important;
+}
+
+/* Three primary columns */
+body > #simulationModal .sim-left-column > *,
+body > #simulationModal .sim-timeline-shell,
+body > #simulationModal .sim-right-column{
+  border:1px solid rgba(68,93,123,.48) !important;
+  background:linear-gradient(180deg,rgba(11,22,34,.96),rgba(7,15,25,.98)) !important;
+  box-shadow:
+    0 10px 30px rgba(0,0,0,.18),
+    inset 0 1px rgba(255,255,255,.022);
+}
+
+/* Rapid Events */
+body > #simulationModal .rapid-events-head{
+  background:linear-gradient(180deg,#101d2b,#0c1723) !important;
+  border-bottom-color:#263b51 !important;
+}
+body > #simulationModal .rapid-events-head span{
+  background:#cf4058 !important;
+  box-shadow:0 0 10px rgba(255,73,102,.22);
+}
+body > #simulationModal .rapid-event{
+  background:linear-gradient(180deg,#0c1723,#09121c) !important;
+  border-color:#203249 !important;
+  transition:.12s ease;
+}
+body > #simulationModal .rapid-event:hover{
+  transform:translateY(-1px);
+  border-color:#405d7c !important;
+  background:#101d2b !important;
+}
+body > #simulationModal .rapid-event.positive{
+  border-left-color:var(--sim-green) !important;
+}
+body > #simulationModal .rapid-event.negative{
+  border-left-color:var(--sim-red) !important;
+}
+
+/* Embedded map */
+body > #simulationModal .sim-map-dock{
+  border-radius:11px !important;
+}
+body > #simulationModal .sim-map-dock-head{
+  background:linear-gradient(180deg,#101c2a,#0b1622) !important;
+  border-bottom-color:#26394d !important;
+}
+body > #simulationModal .sim-map-canvas-wrap{
+  background:
+    radial-gradient(circle at 50% 50%,rgba(32,62,96,.18),transparent 52%),
+    #030811 !important;
+}
+body > #simulationModal .sim-map-actions button{
+  background:#0d1825 !important;
+  border-color:#2b4057 !important;
+}
+body > #simulationModal .sim-map-actions button:hover{
+  border-color:#50749a !important;
+  background:#132236 !important;
+}
+
+/* Summary / stats */
+body > #simulationModal .sim-summary{
+  border:1px solid rgba(63,88,118,.48) !important;
+  background:linear-gradient(90deg,rgba(17,31,47,.84),rgba(8,17,28,.72)) !important;
+  color:#91a5bb !important;
+  border-radius:9px !important;
+}
+body > #simulationModal .sim-dashboard{
+  gap:7px !important;
+}
+body > #simulationModal .sim-stat{
+  border:1px solid #263c54 !important;
+  border-radius:10px !important;
+  background:
+    linear-gradient(145deg,rgba(18,34,52,.92),rgba(8,17,28,.96)) !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.025);
+}
+body > #simulationModal .sim-stat b{
+  color:#f1f6fd;
+  letter-spacing:-.025em;
+}
+body > #simulationModal .sim-stat span{
+  color:#71879f !important;
+  letter-spacing:.08em;
+}
+
+/* Timeline */
+body > #simulationModal .sim-timeline-head{
+  background:linear-gradient(180deg,#101c2a,#0b1621) !important;
+  border-bottom-color:#2a3e54 !important;
+}
+body > #simulationModal .sim-timeline-head h3{
+  color:#eef5ff;
+}
+body > #simulationModal .sim-event{
+  border-radius:9px !important;
+  border-top:1px solid rgba(80,105,134,.24) !important;
+  border-right:1px solid rgba(80,105,134,.24) !important;
+  border-bottom:1px solid rgba(80,105,134,.24) !important;
+  padding:9px 10px !important;
+  transition:
+    transform .13s ease,
+    border-color .13s ease,
+    background .13s ease,
+    box-shadow .13s ease;
+}
+body > #simulationModal .sim-event:hover{
+  transform:translateX(2px);
+  border-color:rgba(108,148,196,.54) !important;
+  box-shadow:0 7px 18px rgba(0,0,0,.16);
+}
+body > #simulationModal .sim-event.selected-event{
+  box-shadow:
+    0 0 0 1px rgba(130,174,230,.5),
+    0 8px 24px rgba(0,0,0,.18) !important;
+}
+body > #simulationModal .sim-event.event-negative{
+  background:linear-gradient(90deg,rgba(255,73,102,.17),rgba(20,14,22,.82) 45%,rgba(9,16,25,.96)) !important;
+}
+body > #simulationModal .sim-event.event-positive{
+  background:linear-gradient(90deg,rgba(46,232,121,.14),rgba(10,30,23,.7) 42%,rgba(9,16,25,.96)) !important;
+}
+body > #simulationModal .sim-event.event-major{
+  background:linear-gradient(90deg,rgba(201,149,255,.14),rgba(22,16,31,.76) 45%,rgba(9,16,25,.96)) !important;
+}
+body > #simulationModal .sim-event.event-breakthrough{
+  background:linear-gradient(90deg,rgba(85,216,238,.14),rgba(10,25,31,.72) 45%,rgba(9,16,25,.96)) !important;
+}
+
+/* Right inspector */
+body > #simulationModal .sim-right-column{
+  border-radius:11px !important;
+}
+body > #simulationModal .sim-inspector-fixed-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:11px 12px !important;
+  background:linear-gradient(180deg,#111e2d,#0b1622) !important;
+}
+body > #simulationModal .sim-inspector-live-dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:#35e387;
+  box-shadow:0 0 10px rgba(53,227,135,.5);
+}
+body > #simulationModal .sim-inspector-tabs{
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  background:#08111b;
+  padding:6px !important;
+}
+body > #simulationModal .sim-side-tab{
+  border-color:transparent !important;
+  background:transparent !important;
+  color:#7389a2 !important;
+  border-radius:7px !important;
+  transition:.12s ease;
+}
+body > #simulationModal .sim-side-tab:hover{
+  color:#cbd9ea !important;
+  background:#101d2b !important;
+}
+body > #simulationModal .sim-side-tab.active{
+  color:#edf5ff !important;
+  background:linear-gradient(180deg,#223a5a,#172a41) !important;
+  border-color:#3e6086 !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.04);
+}
+body > #simulationModal .event-tab-button.active{
+  color:#f1dcff !important;
+  background:linear-gradient(180deg,#402f58,#2a203d) !important;
+  border-color:#644b83 !important;
+}
+
+body > #simulationModal .sim-side-content{
+  padding:9px !important;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(45,72,105,.08),transparent 30%),
+    #07101a;
+}
+
+body > #simulationModal .sim-event-inspector-tab{
+  padding:0 !important;
+}
+body > #simulationModal .event-tab-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 9px;
+  margin-bottom:7px;
+  border:1px solid #2b4058;
+  border-radius:9px;
+  background:linear-gradient(180deg,#101c2a,#0a1520);
+}
+body > #simulationModal .event-tab-toolbar b{
+  display:block;
+  margin-top:2px;
+  font-size:10px;
+  color:#edf4ff;
+}
+body > #simulationModal .event-inspector-body{
+  padding:0 !important;
+}
+body > #simulationModal .event-inspector-title{
+  border-radius:9px !important;
+  padding:9px !important;
+  margin-bottom:8px;
+}
+body > #simulationModal .event-location-card,
+body > #simulationModal .reason-card,
+body > #simulationModal .world-effect-card,
+body > #simulationModal .related-event-card{
+  border-color:#293e56 !important;
+  background:linear-gradient(180deg,#0d1926,#09131e) !important;
+  border-radius:8px !important;
+}
+body > #simulationModal .reason-card,
+body > #simulationModal .world-effect-card{
+  box-shadow:inset 0 1px rgba(255,255,255,.018);
+}
+
+/* Contextual node/place inspector overlays remain contained inside right column */
+body > #simulationModal .sim-right-column > .simulation-inspector-panel,
+body > #simulationModal .sim-right-column > .place-inspector-panel{
+  background:
+    linear-gradient(180deg,#0b1622,#07101a) !important;
+  box-shadow:-12px 0 30px rgba(0,0,0,.22);
+}
+
+/* Better scrollbars */
+body > #simulationModal *{
+  scrollbar-width:thin;
+  scrollbar-color:#37506c #09121b;
+}
+body > #simulationModal *::-webkit-scrollbar{
+  width:8px;
+  height:8px;
+}
+body > #simulationModal *::-webkit-scrollbar-track{
+  background:#09121b;
+}
+body > #simulationModal *::-webkit-scrollbar-thumb{
+  background:#314a67;
+  border-radius:8px;
+  border:2px solid #09121b;
+}
+body > #simulationModal *::-webkit-scrollbar-thumb:hover{
+  background:#456589;
+}
+
+/* Very narrow right column: keep tab text readable */
+@media(max-width:1050px){
+  body > #simulationModal .sim-side-tab{
+    font-size:6.5px !important;
+    padding:6px 2px !important;
+  }
+}
+
+/* ==========================================================
+   V22.5 — Map rendering / square dock / fullscreen map
+   ========================================================== */
+
+/* Left column becomes a stable rapid-events column with a square map below */
+body > #simulationModal .sim-left-column{
+  display:flex !important;
+  flex-direction:column;
+  gap:8px;
+  min-height:0 !important;
+}
+
+body > #simulationModal .rapid-events-panel{
+  flex:1 1 auto;
+  min-height:120px !important;
+  height:auto !important;
+}
+
+body > #simulationModal #simMapDock{
+  position:relative !important;
+  flex:0 0 auto;
+  width:100% !important;
+  height:auto !important;
+  aspect-ratio:1 / 1 !important;
+  max-height:none !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+
+body > #simulationModal #simMapDock .sim-map-dock-body{
+  display:grid !important;
+  grid-template-rows:auto auto minmax(0,1fr) !important;
+  min-height:0 !important;
+  height:100% !important;
+}
+
+body > #simulationModal #simMapDock .sim-map-canvas-wrap{
+  min-height:0 !important;
+  height:100% !important;
+  width:100% !important;
+}
+
+body > #simulationModal #simMapDock #planetCanvas{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  display:block !important;
+}
+
+.sim-map-head-actions{
+  display:flex;
+  gap:5px;
+  align-items:center;
+}
+.sim-map-head-actions button{
+  width:28px;
+  height:28px;
+  padding:0;
+}
+
+/* True fullscreen map overlays only the simulation workspace */
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map{
+  position:fixed !important;
+  inset:0 !important;
+  z-index:2147483500 !important;
+  width:100vw !important;
+  height:100dvh !important;
+  max-width:100vw !important;
+  max-height:100dvh !important;
+  aspect-ratio:auto !important;
+  border-radius:0 !important;
+  border:0 !important;
+  background:#030811 !important;
+  box-shadow:none !important;
+}
+
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map .sim-map-dock-head{
+  min-height:54px;
+  padding:10px 14px !important;
+  background:linear-gradient(180deg,#101c2a,#08121c) !important;
+  border-bottom:1px solid #2b4159 !important;
+}
+
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map .sim-map-dock-body{
+  grid-template-rows:auto auto minmax(0,1fr) !important;
+  height:calc(100dvh - 54px) !important;
+}
+
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map .sim-map-canvas-wrap{
+  min-height:0 !important;
+  height:100% !important;
+}
+
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map #closeSimMapFullscreen{
+  display:inline-flex !important;
+}
+
+body.simulation-map-fullscreen > #simulationModal .sim-topbar,
+body.simulation-map-fullscreen > #simulationModal .sim-center-column,
+body.simulation-map-fullscreen > #simulationModal .sim-right-column,
+body.simulation-map-fullscreen > #simulationModal .rapid-events-panel{
+  pointer-events:none;
+}
+
+/* ==========================================================
+   V22.5 — Right inspector uses full height
+   ========================================================== */
+body > #simulationModal .sim-right-column{
+  height:100% !important;
+  min-height:0 !important;
+  max-height:100% !important;
+  display:grid !important;
+  grid-template-rows:auto auto minmax(0,1fr) !important;
+  align-self:stretch !important;
+}
+
+body > #simulationModal .sim-side-content{
+  height:100% !important;
+  min-height:0 !important;
+  max-height:100% !important;
+  overflow:auto !important;
+}
+
+body > #simulationModal .sim-side-content > .sim-world:not(.hidden){
+  min-height:100%;
+}
+
+body > #simulationModal .sim-event-inspector-tab{
+  min-height:100% !important;
+}
+
+body > #simulationModal .sim-right-column > .simulation-inspector-panel,
+body > #simulationModal .sim-right-column > .place-inspector-panel{
+  inset:0 !important;
+  height:100% !important;
+  max-height:100% !important;
+}
+
+/* Slightly smaller square map at wide desktop widths */
+@media(min-width:1250px){
+  body > #simulationModal .sim-left-column{
+    justify-content:stretch;
+  }
+  body > #simulationModal #simMapDock{
+    width:100% !important;
+    aspect-ratio:1 / 1 !important;
+  }
+}
+
+/* ==========================================================
+   V22.6 — Restore the known-good V22.2 map stage
+   ========================================================== */
+
+body > #simulationModal #simMapDock{
+  display:flex !important;
+  flex-direction:column !important;
+  aspect-ratio:1 / 1 !important;
+  height:auto !important;
+  overflow:hidden !important;
+}
+
+body > #simulationModal #simMapDock .planet-panel-head{
+  flex:0 0 auto;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:6px;
+  padding:7px !important;
+  background:linear-gradient(180deg,#101c2a,#0b1622) !important;
+  border-bottom:1px solid #26394d !important;
+}
+
+body > #simulationModal #simMapDock .sim-map-title-block{
+  min-width:0;
+}
+body > #simulationModal #simMapDock .sim-map-title-block h3{
+  margin:2px 0;
+  font-size:9px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+body > #simulationModal #simMapDock #planetMeta,
+body > #simulationModal #simMapDock #galacticCoordinates{
+  display:block;
+  max-width:100%;
+  font-size:6px;
+  color:#71859c;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+body > #simulationModal #simMapDock .history-map-controls{
+  margin-top:4px;
+}
+body > #simulationModal #simMapDock .history-map-controls button{
+  padding:3px 5px;
+  font-size:6px;
+}
+
+body > #simulationModal #simMapDock .planet-panel-actions{
+  display:grid !important;
+  grid-template-columns:repeat(2,25px);
+  gap:3px;
+  flex:0 0 auto;
+}
+body > #simulationModal #simMapDock .planet-panel-actions button{
+  width:25px !important;
+  height:24px !important;
+  min-width:0 !important;
+  padding:0 !important;
+  font-size:9px;
+}
+
+/*
+  This is deliberately the old working map geometry:
+  a real .planet-stage with a non-zero flexible box.
+*/
+body > #simulationModal #simMapDock .planet-stage{
+  position:relative !important;
+  flex:1 1 auto !important;
+  width:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  height:auto !important;
+  contain:strict !important;
+  overflow:hidden !important;
+  background:
+    radial-gradient(circle at 50% 45%,rgba(34,72,100,.2),transparent 42%),
+    radial-gradient(circle at 50% 50%,#101b29,#05080d 75%) !important;
+}
+
+body > #simulationModal #simMapDock #planetCanvas{
+  position:absolute !important;
+  inset:0 !important;
+  display:block !important;
+  width:100% !important;
+  height:100% !important;
+  max-width:none !important;
+  max-height:none !important;
+  touch-action:none;
+  contain:strict;
+  cursor:grab;
+}
+body > #simulationModal #simMapDock #planetCanvas:active{
+  cursor:grabbing;
+}
+
+/* Fullscreen keeps the exact same planet-stage renderer/container. */
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map{
+  display:flex !important;
+  flex-direction:column !important;
+  aspect-ratio:auto !important;
+}
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map .planet-panel-head{
+  min-height:56px;
+  padding:10px 14px !important;
+}
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map .planet-stage{
+  flex:1 1 auto !important;
+  min-height:0 !important;
+}
+
+/* ==========================================================
+   V22.6 — Compact simulation header
+   ========================================================== */
+body > #simulationModal .sim-topbar-compact{
+  grid-template-columns:minmax(150px,210px) minmax(0,1fr) 36px !important;
+  gap:12px !important;
+  align-items:end !important;
+  min-height:66px !important;
+  padding:7px 11px !important;
+}
+
+body > #simulationModal .sim-civilization-identity{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  align-self:center;
+}
+body > #simulationModal .sim-civ-name-field{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  color:#71869f;
+  font-size:6px;
+}
+body > #simulationModal .sim-civ-name-field input{
+  width:100% !important;
+  height:29px !important;
+  padding:0 8px !important;
+  border:1px solid #30445d;
+  border-radius:7px;
+  background:#07101a;
+  color:#edf4ff;
+  font-size:10px;
+  font-weight:650;
+}
+
+body > #simulationModal .sim-top-controls-compact{
+  display:flex !important;
+  align-items:flex-end !important;
+  justify-content:flex-start !important;
+  gap:7px !important;
+  min-width:0;
+  overflow:hidden;
+}
+body > #simulationModal .sim-top-controls-compact > label{
+  flex:0 0 auto;
+  width:125px;
+}
+body > #simulationModal .sim-top-controls-compact select{
+  width:125px !important;
+  height:29px !important;
+}
+body > #simulationModal .sim-top-runbar-compact{
+  display:flex !important;
+  flex:0 1 auto;
+  gap:4px !important;
+  align-items:center;
+  min-width:0;
+}
+body > #simulationModal .sim-top-runbar-compact button{
+  width:auto !important;
+  min-width:32px !important;
+  height:29px !important;
+  padding:0 8px !important;
+  flex:0 0 auto !important;
+}
+body > #simulationModal .sim-top-runbar-compact .sim-new-civ-btn{
+  min-width:118px !important;
+}
+
+/* ==========================================================
+   V22.6 — Reorganized main graph toolbar
+   ========================================================== */
+.toolbar.toolbar-v226{
+  position:absolute !important;
+  z-index:34;
+  left:50% !important;
+  bottom:14px !important;
+  transform:translateX(-50%) !important;
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) 82px minmax(0,1fr) !important;
+  align-items:center !important;
+  gap:9px !important;
+  width:min(860px,calc(100% - 36px)) !important;
+  height:62px !important;
+  padding:6px 10px !important;
+  border:1px solid rgba(60,82,112,.72) !important;
+  border-radius:18px !important;
+  background:rgba(7,12,19,.94) !important;
+  backdrop-filter:blur(12px) !important;
+  box-shadow:0 16px 42px rgba(0,0,0,.34) !important;
+}
+
+.toolbar-v226 .toolbar-wing{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-width:0;
+}
+.toolbar-v226 .toolbar-wing-left{
+  justify-content:flex-end;
+}
+.toolbar-v226 .toolbar-wing-right{
+  justify-content:flex-start;
+}
+
+.toolbar-v226 .toolbar-cluster{
+  display:flex;
+  gap:3px;
+  align-items:center;
+  padding:3px;
+  border:1px solid #223247;
+  border-radius:10px;
+  background:rgba(14,23,35,.72);
+}
+
+.toolbar-v226 .toolbtn{
+  width:34px !important;
+  min-width:34px !important;
+  height:34px !important;
+  border-radius:8px !important;
+  font-size:14px !important;
+}
+
+.toolbar-create-center{
+  position:relative;
+  display:grid;
+  place-items:center;
+  width:82px;
+  height:70px;
+  align-self:center;
+  justify-self:center;
+}
+
+.create-hex-btn{
+  position:relative;
+  width:72px;
+  height:64px;
+  border:0;
+  color:#f4f8ff;
+  background:
+    linear-gradient(145deg,#31598b,#1e3658);
+  clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:0;
+  cursor:pointer;
+  filter:drop-shadow(0 7px 12px rgba(0,0,0,.38));
+  transition:transform .12s ease,filter .12s ease;
+}
+.create-hex-btn::before{
+  content:"";
+  position:absolute;
+  inset:3px;
+  clip-path:inherit;
+  background:linear-gradient(145deg,rgba(255,255,255,.09),rgba(255,255,255,0));
+  pointer-events:none;
+}
+.create-hex-btn:hover{
+  transform:translateY(-2px) scale(1.035);
+  filter:drop-shadow(0 9px 18px rgba(57,102,161,.34));
+}
+.create-hex-btn:active{
+  transform:translateY(0) scale(.98);
+}
+.create-hex-plus{
+  position:relative;
+  z-index:1;
+  font-size:22px;
+  line-height:19px;
+  font-weight:300;
+}
+.create-hex-label{
+  position:relative;
+  z-index:1;
+  margin-top:3px;
+  font-size:7px;
+  font-weight:750;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+
+@media(max-width:1050px){
+  .toolbar.toolbar-v226{
+    width:min(760px,calc(100% - 24px)) !important;
+    grid-template-columns:minmax(0,1fr) 70px minmax(0,1fr) !important;
+  }
+  .toolbar-v226 .toolbar-system-cluster #auditBtn,
+  .toolbar-v226 .toolbar-view-cluster #pulseBtn{
+    display:none !important;
+  }
+}
+
+@media(max-width:820px){
+  .toolbar.toolbar-v226{
+    width:min(650px,calc(100% - 18px)) !important;
+  }
+  .toolbar-v226 .toolbar-cluster{
+    padding:2px;
+  }
+  .toolbar-v226 .toolbtn{
+    width:30px !important;
+    min-width:30px !important;
+    height:30px !important;
+  }
+  .toolbar-v226 .toolbar-view-cluster #freezeBtn,
+  .toolbar-v226 .toolbar-system-cluster #resetSystemBtn{
+    display:none !important;
+  }
+}
+
+/* ==========================================================
+   V22.6a — Toolbar vertical alignment cleanup
+   ========================================================== */
+.toolbar.toolbar-v226{
+  height:72px !important;
+  min-height:72px !important;
+  padding:7px 10px !important;
+  align-items:center !important;
+  overflow:visible !important;
+}
+
+.toolbar-v226 .toolbar-wing{
+  height:100%;
+  align-items:center !important;
+}
+
+.toolbar-create-center{
+  width:72px !important;
+  height:58px !important;
+  align-self:center !important;
+  margin:0 !important;
+  transform:none !important;
+}
+
+.create-hex-btn{
+  width:64px !important;
+  height:56px !important;
+  margin:0 !important;
+  transform:none;
+}
+
+.create-hex-btn:hover{
+  transform:scale(1.035) !important;
+}
+
+.create-hex-btn:active{
+  transform:scale(.98) !important;
+}
+
+.create-hex-plus{
+  font-size:20px !important;
+  line-height:17px !important;
+}
+
+.create-hex-label{
+  margin-top:2px !important;
+  font-size:6.5px !important;
+}
+
+/* Keep all clusters vertically centered with the Create hex. */
+.toolbar-v226 .toolbar-cluster{
+  align-self:center !important;
+}
+
+/* ==========================================================
+   V22.6a — Map header controls alignment
+   ========================================================== */
+body > #simulationModal #simMapDock .planet-panel-head{
+  align-items:center !important;
+  min-height:46px !important;
+  padding:7px 8px !important;
+}
+
+body > #simulationModal #simMapDock .sim-map-title-block{
+  flex:1 1 auto;
+  min-width:0;
+}
+
+body > #simulationModal #simMapDock .planet-panel-actions{
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center !important;
+  justify-content:flex-end !important;
+  gap:4px !important;
+  width:auto !important;
+  min-width:max-content !important;
+  flex:0 0 auto !important;
+  margin:0 !important;
+  padding:0 !important;
+}
+
+body > #simulationModal #simMapDock .planet-panel-actions button{
+  position:static !important;
+  display:grid !important;
+  place-items:center !important;
+  width:27px !important;
+  min-width:27px !important;
+  max-width:27px !important;
+  height:27px !important;
+  min-height:27px !important;
+  max-height:27px !important;
+  margin:0 !important;
+  padding:0 !important;
+  border-radius:7px !important;
+  line-height:1 !important;
+}
+
+body > #simulationModal #simMapDock .planet-panel-actions .hidden{
+  display:none !important;
+}
+
+/* In fullscreen, the same buttons remain neatly aligned in the header. */
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map .planet-panel-actions{
+  display:flex !important;
+  align-items:center !important;
+  gap:6px !important;
+}
+
+body.simulation-map-fullscreen > #simulationModal #simMapDock.fullscreen-map .planet-panel-actions button{
+  width:32px !important;
+  min-width:32px !important;
+  max-width:32px !important;
+  height:32px !important;
+  min-height:32px !important;
+  max-height:32px !important;
+}
+
+/* V22.6c — Individual-scale event colors
+   Individuals use softer/paler red and green to communicate smaller-scale
+   actions compared with organization/civilization-wide history. */
+.sim-event.event-individual-negative{
+  border-left:4px solid #e996a5 !important;
+  background:linear-gradient(90deg,rgba(233,150,165,.14),rgba(28,18,23,.7) 45%,rgba(9,16,25,.96)) !important;
+}
+.sim-event.event-individual-positive{
+  border-left:4px solid #93ddb3 !important;
+  background:linear-gradient(90deg,rgba(147,221,179,.13),rgba(15,31,24,.68) 45%,rgba(9,16,25,.96)) !important;
+}
+.sim-event.event-individual-negative .sim-year{color:#eeb0bb !important}
+.sim-event.event-individual-positive .sim-year{color:#ace6c4 !important}
+
+.event-inspector-title.event-individual-negative{
+  border-left:4px solid #e996a5 !important;
+  padding-left:10px;
+  background:linear-gradient(90deg,rgba(233,150,165,.10),transparent 72%) !important;
+}
+.event-inspector-title.event-individual-positive{
+  border-left:4px solid #93ddb3 !important;
+  padding-left:10px;
+  background:linear-gradient(90deg,rgba(147,221,179,.10),transparent 72%) !important;
+}
+.related-event-card.event-individual-negative{
+  border-color:rgba(233,150,165,.42) !important;
+  box-shadow:inset 3px 0 0 #e996a5 !important;
+  background:linear-gradient(90deg,rgba(233,150,165,.07),rgba(233,150,165,.01)) !important;
+}
+.related-event-card.event-individual-positive{
+  border-color:rgba(147,221,179,.38) !important;
+  box-shadow:inset 3px 0 0 #93ddb3 !important;
+  background:linear-gradient(90deg,rgba(147,221,179,.07),rgba(147,221,179,.01)) !important;
+}
+
+/* V22.6d — explicit individual generator tones are pale even if an older
+   event/save lacks actor metadata. */
+.sim-event.pale-bad{
+  border-left-color:#e996a5 !important;
+  background:linear-gradient(90deg,rgba(233,150,165,.14),rgba(28,18,23,.7) 45%,rgba(9,16,25,.96)) !important;
+}
+.sim-event.pale-good{
+  border-left-color:#93ddb3 !important;
+  background:linear-gradient(90deg,rgba(147,221,179,.13),rgba(15,31,24,.68) 45%,rgba(9,16,25,.96)) !important;
+}
+.sim-event.pale-bad .sim-year{color:#eeb0bb !important}
+.sim-event.pale-good .sim-year{color:#ace6c4 !important}
+
+/* ==========================================================
+   V22.6e — Manual Event Creator above Simulation workspace
+   ========================================================== */
+
+/*
+  Simulation itself lives at ~2147483000.
+  Manual Event Creator is portaled directly to BODY and sits above it.
+*/
+body > #manualEventModal{
+  position:fixed !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100dvh !important;
+  max-width:100vw !important;
+  max-height:100dvh !important;
+  margin:0 !important;
+  padding:20px !important;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(2,6,12,.72) !important;
+  backdrop-filter:blur(6px);
+  z-index:2147483600 !important;
+  pointer-events:auto !important;
+  visibility:visible !important;
+  overflow:auto !important;
+}
+
+body > #manualEventModal.hidden{
+  display:none !important;
+}
+
+body > #manualEventModal .manual-event-card{
+  position:relative !important;
+  width:min(820px,calc(100vw - 40px)) !important;
+  max-width:820px !important;
+  max-height:calc(100dvh - 40px) !important;
+  overflow:auto !important;
+  margin:auto !important;
+  z-index:1;
+  box-shadow:
+    0 28px 80px rgba(0,0,0,.52),
+    0 0 0 1px rgba(110,145,185,.16);
+}
+
+/* Keep the Simulation visible behind the modal, but block clicks through it. */
+body:has(#manualEventModal:not(.hidden)) > #simulationModal{
+  pointer-events:none !important;
+}
+
+body:has(#manualEventModal:not(.hidden)) > #manualEventModal{
+  pointer-events:auto !important;
+}
+
+/* V22.6f — Manual Event Creator on the absolute top layer */
+body.manual-event-open > #manualEventModal{
+  position:fixed !important;
+  inset:0 !important;
+  display:flex !important;
+  z-index:2147483647 !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+  isolation:isolate !important;
+}
+body.manual-event-open > #manualEventModal.hidden{display:none !important}
+body.manual-event-open > #manualEventModal::before{
+  content:"";position:absolute;inset:0;z-index:-1;
+  background:rgba(1,4,9,.82);backdrop-filter:blur(8px)
+}
+body.manual-event-open > #simulationModal{
+  z-index:2147483000 !important;
+  pointer-events:none !important;
+}
+body.manual-event-open > main.app{pointer-events:none !important}
+body.manual-event-open > #manualEventModal .manual-event-card{
+  position:relative !important;z-index:2 !important;
+}
+
+#generateMagicSystem{position:relative !important;transform:translateY(-6px) !important;}
+
+/* V22.6g — extra clearance above bottom toolbar */
+button[title*="Generate a complete V22 magic world"]{
+  transform:translateY(-10px) !important;
+}
+
+#generateMagicSystem{transform:translateY(-10px) !important;}
+
+/* V22.6h — extra clearance for procedural generator */
+button[title*="Generate a complete V22 magic world"]{
+  transform:translateY(-15px) !important;
+}
+
+/* V22.6h — manual event modal visibility hardening */
+body.manual-event-open > #manualEventModal:not(.hidden){
+  display:flex !important;
+  opacity:1 !important;
+  visibility:visible !important;
+  pointer-events:auto !important;
+}
+
+#generateMagicSystem{transform:translateY(-15px) !important;}
+
+/* V22.6i — further procedural-generator clearance */
+#generateMagicSystem{
+  transform:translateY(-20px) !important;
+}
+button[title*="Generate a complete V22 magic world"]{
+  transform:translateY(-20px) !important;
+}
+
+/* V22.7 — Language Preview */
+.language-preview-card{
+  border:1px solid #334964;border-radius:11px;overflow:hidden;
+  background:radial-gradient(circle at 15% 10%,rgba(111,86,170,.12),transparent 36%),linear-gradient(180deg,#0c1724,#08111b)
+}
+.language-preview-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 9px;border-bottom:1px solid #273a51
+}
+.language-preview-head b{display:block;font-size:9px;color:#edf3ff}
+.language-preview-head small{display:block;margin-top:2px;font-size:7px;color:#768aa3}
+.language-preview-head button{
+  flex:0 0 auto;padding:5px 8px;border:1px solid #415b78;border-radius:7px;
+  background:#122033;color:#dce9f8;font-size:7px
+}
+.language-preview-text{
+  min-height:62px;display:flex;align-items:center;justify-content:center;
+  padding:15px;text-align:center;font-size:18px;line-height:1.55;letter-spacing:.08em;
+  color:#e9dcff;text-shadow:0 0 14px rgba(191,151,255,.14);word-break:break-word
+}
+
+/* ==========================================================
+   V22.7a — Viewport-fit scrollable editors
+   ========================================================== */
+
+/* ---------- Manual Timeline Event Creator ---------- */
+body.manual-event-open{
+  overflow:hidden !important;
+}
+
+body.manual-event-open > #manualEventModal{
+  box-sizing:border-box !important;
+  width:100vw !important;
+  height:100dvh !important;
+  max-width:100vw !important;
+  max-height:100dvh !important;
+  padding:clamp(8px,2vh,18px) clamp(8px,2vw,18px) !important;
+  align-items:center !important;
+  justify-content:center !important;
+  overflow:hidden !important;
+}
+
+body.manual-event-open > #manualEventModal .manual-event-card{
+  box-sizing:border-box !important;
+  width:min(860px,100%) !important;
+  max-width:100% !important;
+  height:min(780px,100%) !important;
+  max-height:100% !important;
+  min-height:0 !important;
+  margin:0 auto !important;
+  padding:0 !important;
+  overflow:hidden !important;
+  display:grid !important;
+  grid-template-rows:auto minmax(0,1fr) auto !important;
+}
+
+/* Sticky/always-visible modal header. */
+body.manual-event-open > #manualEventModal .manual-event-card > .modal-head{
+  position:relative !important;
+  z-index:3;
+  padding:12px 14px !important;
+  margin:0 !important;
+  border-bottom:1px solid #2a3e55;
+  background:linear-gradient(180deg,#101c2a,#0b1520);
+}
+
+/* The form itself is the scrolling region. */
+body.manual-event-open > #manualEventModal .manual-event-grid{
+  min-height:0 !important;
+  max-height:none !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+  padding:12px 14px 18px !important;
+  align-content:start;
+}
+
+/* Keep Save / Cancel reachable regardless of form height. */
+body.manual-event-open > #manualEventModal .manual-event-card > .modal-actions{
+  position:relative !important;
+  z-index:3;
+  flex:0 0 auto;
+  margin:0 !important;
+  padding:10px 14px !important;
+  border-top:1px solid #2a3e55;
+  background:linear-gradient(180deg,#0b1520,#09111a);
+}
+
+body.manual-event-open > #manualEventModal .manual-node-picker{
+  max-height:min(220px,26vh) !important;
+  overflow:auto !important;
+}
+
+body.manual-event-open > #manualEventModal textarea{
+  resize:vertical;
+  max-height:30vh;
+}
+
+/* Narrow screens: stop two-column fields from forcing horizontal overflow. */
+@media(max-width:700px){
+  body.manual-event-open > #manualEventModal .manual-event-grid{
+    grid-template-columns:1fr !important;
+  }
+  body.manual-event-open > #manualEventModal .manual-event-grid .full{
+    grid-column:1 !important;
+  }
+  body.manual-event-open > #manualEventModal .manual-node-picker{
+    grid-template-columns:1fr 1fr !important;
+  }
+  body.manual-event-open > #manualEventModal .manual-impact-grid{
+    grid-template-columns:1fr 1fr !important;
+  }
+}
+
+@media(max-width:470px){
+  body.manual-event-open > #manualEventModal .manual-node-picker,
+  body.manual-event-open > #manualEventModal .manual-impact-grid{
+    grid-template-columns:1fr !important;
+  }
+}
+
+/* ---------- Expanded Megastructure Painter ---------- */
+body.mega-painter-open{
+  overflow:hidden !important;
+}
+
+#megaPainterBackdrop{
+  position:fixed !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100dvh !important;
+  z-index:10000 !important;
+}
+
+body > .mega-painter.expanded{
+  box-sizing:border-box !important;
+  position:fixed !important;
+  inset:clamp(8px,2vh,18px) clamp(8px,2vw,18px) !important;
+  width:auto !important;
+  height:auto !important;
+  max-width:none !important;
+  max-height:none !important;
+  margin:0 !important;
+  padding:10px !important;
+  overflow:auto !important;
+  overscroll-behavior:contain;
+  z-index:10010 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:7px !important;
+}
+
+/* Painter controls wrap instead of pushing the editor outside the viewport. */
+body > .mega-painter.expanded .mega-paint-toolbar{
+  flex:0 0 auto;
+  display:flex !important;
+  flex-wrap:wrap !important;
+  gap:4px !important;
+  max-width:100% !important;
+}
+
+body > .mega-painter.expanded .mega-paint-settings{
+  flex:0 0 auto;
+  display:flex !important;
+  flex-wrap:wrap !important;
+  gap:7px 12px !important;
+  max-width:100% !important;
+}
+
+body > .mega-painter.expanded .mega-height-settings{
+  flex:0 0 auto;
+  max-width:100% !important;
+}
+
+/* Workspace gets the available width, and the outer painter can scroll
+   vertically if controls + canvas exceed a short screen. */
+body > .mega-painter.expanded .mega-paint-workspace{
+  flex:1 0 auto !important;
+  width:100% !important;
+  min-width:0 !important;
+  max-width:100% !important;
+  grid-template-columns:minmax(0,1fr) minmax(120px,160px) !important;
+  gap:8px !important;
+}
+
+/* Remove old fixed/max-height constraints that clipped the canvas. */
+body > .mega-painter.expanded .mega-paint-stage{
+  width:100% !important;
+  min-width:0 !important;
+  min-height:280px !important;
+  max-height:none !important;
+  height:min(66vh,760px) !important;
+  overflow:hidden !important;
+}
+
+body > .mega-painter.expanded .mega-paint-stage canvas,
+body > .mega-painter.expanded #megaPaintCanvas,
+body > .mega-painter.expanded #megaPlanetGuide,
+body > .mega-painter.expanded #createdMega3DCanvas{
+  max-width:100% !important;
+  max-height:100% !important;
+}
+
+/* Keep the painter's title/control row visible near the top while scrolling. */
+body > .mega-painter.expanded > .section-title-row{
+  position:sticky !important;
+  top:-10px;
+  z-index:20;
+  flex:0 0 auto;
+  margin:-10px -10px 0 !important;
+  padding:10px 12px 8px !important;
+  background:linear-gradient(180deg,#0f1c29,#09141e);
+  border-bottom:1px solid #294056;
+}
+
+/* On narrower displays the side preview moves below the drawing stage. */
+@media(max-width:760px){
+  body > .mega-painter.expanded .mega-paint-workspace{
+    grid-template-columns:1fr !important;
+  }
+
+  body > .mega-painter.expanded .mega-paint-stage{
+    height:min(58vh,620px) !important;
+    min-height:240px !important;
+  }
+
+  body > .mega-painter.expanded .mega-icon-preview-wrap{
+    width:100% !important;
+    max-width:100% !important;
+  }
+}
+
+/* Short screens reduce canvas height so lower controls remain reachable
+   without requiring huge amounts of scrolling. */
+@media(max-height:700px){
+  body > .mega-painter.expanded .mega-paint-stage{
+    height:50vh !important;
+    min-height:210px !important;
+  }
+}
+
+@media(max-height:520px){
+  body > .mega-painter.expanded .mega-paint-stage{
+    height:44vh !important;
+    min-height:170px !important;
+  }
+}
+
+/* ==========================================================
+   V22.7b — Scrollable Language Editor
+   ========================================================== */
+
+/* The standard node editor must remain inside the viewport when a Language
+   utility is open. The language mapping sections can become very tall. */
+#editorModal:has(#eLanguageMapMode),
+#editorModal:has(.language-map-editor),
+#editModal:has(#eLanguageMapMode),
+#editModal:has(.language-map-editor){
+  overflow:hidden !important;
+  align-items:center !important;
+  box-sizing:border-box !important;
+  padding:clamp(8px,2vh,18px) !important;
+}
+
+/* Support whichever editor-card class the current build uses. */
+#editorModal:has(.language-map-editor) .modal-card,
+#editorModal:has(.language-map-editor) .editor-card,
+#editModal:has(.language-map-editor) .modal-card,
+#editModal:has(.language-map-editor) .editor-card{
+  box-sizing:border-box !important;
+  max-height:calc(100dvh - clamp(16px,4vh,36px)) !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+  display:flex !important;
+  flex-direction:column !important;
+}
+
+/* The editor's generated form/content becomes the scroll region. */
+#editorModal:has(.language-map-editor) .form-grid,
+#editorModal:has(.language-map-editor) .editor-grid,
+#editorModal:has(.language-map-editor) .modal-body,
+#editModal:has(.language-map-editor) .form-grid,
+#editModal:has(.language-map-editor) .editor-grid,
+#editModal:has(.language-map-editor) .modal-body{
+  min-height:0 !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+}
+
+/* Mapping sections themselves no longer force the outer editor taller. */
+.language-map-editor{
+  min-height:0 !important;
+  max-width:100% !important;
+}
+
+.language-map-section{
+  min-width:0 !important;
+}
+
+.language-map-rows{
+  max-height:min(300px,34vh) !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+}
+
+/* Fallback: if this build's generated editor form is the direct child of
+   .modal-card, allow the card itself to scroll rather than clipping. */
+.modal-card:has(.language-map-editor),
+.editor-card:has(.language-map-editor){
+  max-height:calc(100dvh - 24px) !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+}
+
+/* Keep the language preview from becoming excessively tall on short screens. */
+@media(max-height:700px){
+  .language-preview-text{
+    min-height:44px !important;
+    padding:9px !important;
+    font-size:15px !important;
+  }
+  .language-map-rows{
+    max-height:26vh !important;
+  }
+}
+
+/* ==========================================================
+   V22.7d — Fixed-size Language Editor
+   ========================================================== */
+
+/* Language editor is a fixed viewport-contained workspace. */
+#editorModal:has(.language-map-editor){
+  box-sizing:border-box !important;
+  padding:12px !important;
+  overflow:hidden !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+#editorModal:has(.language-map-editor) .modal-card{
+  box-sizing:border-box !important;
+  width:min(900px,calc(100vw - 24px)) !important;
+  height:min(820px,calc(100dvh - 24px)) !important;
+  max-width:calc(100vw - 24px) !important;
+  max-height:calc(100dvh - 24px) !important;
+  padding:0 !important;
+  overflow:hidden !important;
+  display:grid !important;
+  grid-template-rows:auto minmax(0,1fr) auto !important;
+}
+
+/* Header stays visible. */
+#editorModal:has(.language-map-editor) .modal-card > .modal-head{
+  margin:0 !important;
+  padding:12px 14px !important;
+  border-bottom:1px solid #2b3e55;
+  background:linear-gradient(180deg,#101c2a,#0b1520);
+  z-index:4;
+}
+
+/* Entire generated editor body scrolls, never the whole page. */
+#editorModal:has(.language-map-editor) .editor-grid{
+  box-sizing:border-box !important;
+  min-height:0 !important;
+  height:100% !important;
+  margin:0 !important;
+  padding:12px 14px 18px !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+  align-content:start;
+}
+
+/* Save / Inspire / Cancel remain permanently reachable. */
+#editorModal:has(.language-map-editor) .modal-card > .modal-actions{
+  margin:0 !important;
+  padding:10px 14px !important;
+  border-top:1px solid #2b3e55;
+  background:linear-gradient(180deg,#0b1520,#09111a);
+  z-index:4;
+}
+
+/* Mapping lists can also scroll locally when very large. */
+#editorModal:has(.language-map-editor) .language-map-rows{
+  max-height:240px !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+}
+
+/* ==========================================================
+   V22.7d — Actual reusable language symbol palette
+   ========================================================== */
+.language-symbol-palette-card{
+  border:1px solid #344a64;
+  border-radius:10px;
+  background:linear-gradient(180deg,#0d1825,#09121c);
+  overflow:hidden;
+}
+.language-symbol-palette-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 9px;
+  border-bottom:1px solid #293c52;
+}
+.language-symbol-palette-head b{
+  display:block;
+  color:#edf4ff;
+  font-size:9px;
+}
+.language-symbol-palette-head small{
+  display:block;
+  margin-top:2px;
+  color:#758aa3;
+  font-size:7px;
+}
+.language-symbol-palette-head button{
+  flex:0 0 auto;
+  padding:5px 7px;
+  border:1px solid #455f7d;
+  border-radius:7px;
+  background:#132135;
+  color:#dce9f8;
+  font-size:7px;
+}
+.language-symbol-palette{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(72px,1fr));
+  gap:6px;
+  max-height:170px;
+  overflow:auto;
+  padding:8px;
+}
+.language-symbol-pick{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  padding:6px 4px;
+  border:1px solid #2d4159;
+  border-radius:8px;
+  background:#08121c;
+  color:#b8c8db;
+  cursor:pointer;
+}
+.language-symbol-pick:hover{
+  border-color:#6f5d9a;
+  background:#151426;
+}
+.language-symbol-pick img{
+  width:34px;
+  height:34px;
+  object-fit:contain;
+  background:#05090f;
+  border-radius:5px;
+}
+.language-symbol-pick span{
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:6.5px;
+}
+.language-symbol-empty{
+  grid-column:1/-1;
+  padding:12px;
+  text-align:center;
+  color:#73869e;
+  font-size:8px;
+}
+
+/* Symbol tokens render as actual images in the Language Preview. */
+.language-preview-text{
+  flex-wrap:wrap;
+  gap:2px;
+}
+.language-inline-symbol{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:1.35em;
+  height:1.35em;
+  vertical-align:middle;
+  margin:0 .05em;
+}
+.language-inline-symbol img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  filter:drop-shadow(0 0 4px rgba(200,170,255,.16));
+}
+.missing-language-symbol{
+  color:#df8295;
+  font-size:.7em;
+}
+
+@media(max-width:700px){
+  #editorModal:has(.language-map-editor) .modal-card{
+    width:calc(100vw - 12px) !important;
+    height:calc(100dvh - 12px) !important;
+    max-width:calc(100vw - 12px) !important;
+    max-height:calc(100dvh - 12px) !important;
+  }
+  #editorModal:has(.language-map-editor) .language-symbol-palette{
+    grid-template-columns:repeat(auto-fill,minmax(60px,1fr));
+  }
+}
+
+/* V22.7e — Symbol Palette shared by every Civilization Utility */
+.civilization-util-symbol-card{
+  grid-column:1/-1;
+}
+.civilization-util-symbol-card .language-symbol-palette{
+  max-height:140px;
+}
+.civilization-util-symbol-card + .editor-hint{
+  margin-top:2px;
+}
+
+/* ==========================================================
+   V22.7f — Civilization Symbol Palette collapse fix
+   ========================================================== */
+
+/* Explicit intrinsic dimensions stop CSS Grid/flex shrinkage from collapsing
+   the palette to a 1–2px line inside tall Civilization Util editors. */
+#editorModal .civilization-util-symbol-card{
+  display:flex !important;
+  flex-direction:column !important;
+  width:100% !important;
+  min-width:0 !important;
+  min-height:104px !important;
+  height:auto !important;
+  max-height:none !important;
+  flex:0 0 auto !important;
+  align-self:start !important;
+  overflow:hidden !important;
+}
+
+#editorModal .civilization-util-symbol-card .language-symbol-palette-head{
+  flex:0 0 auto !important;
+  min-height:42px !important;
+}
+
+#editorModal .civilization-util-symbol-card .language-symbol-palette{
+  display:grid !important;
+  grid-template-columns:repeat(auto-fill,minmax(68px,1fr)) !important;
+  gap:6px !important;
+  width:100% !important;
+  min-width:0 !important;
+  min-height:58px !important;
+  height:auto !important;
+  max-height:150px !important;
+  padding:8px !important;
+  overflow:auto !important;
+  flex:0 0 auto !important;
+}
+
+#editorModal .civilization-util-symbol-card .language-symbol-pick{
+  min-height:54px !important;
+  height:auto !important;
+}
+
+/* Never let the editor grid compress full-width utility cards. */
+#editorModal .editor-grid > .civilization-util-symbol-card,
+#editorModal .editor-grid > .language-map-editor,
+#editorModal .editor-grid > .language-preview-card,
+#editorModal .editor-grid > .organization-rel-editor{
+  grid-column:1 / -1 !important;
+  min-width:0 !important;
+  flex-shrink:0 !important;
+}
+
+/* V22.7f — inline Civilization symbols inside history */
+.sim-event .language-inline-symbol,
+.event-inspector-body .language-inline-symbol{
+  width:1.15em;
+  height:1.15em;
+  margin:0 .08em;
+  vertical-align:-.16em;
+}
+.sim-event strong .language-inline-symbol{
+  width:1.25em;
+  height:1.25em;
+}
+
+/* ==========================================================
+   V22.7g — Civilization Util editor layout repair
+   ========================================================== */
+
+/*
+  The collapse came from the generic editor card/body using older flex sizing
+  while Civilization Utils now contain much taller full-width blocks.
+
+  Fix the parent layout first: editorBody becomes the single scrolling region,
+  while its internal grid keeps natural row height.
+*/
+#editorModal:has(#eUtilityType) .editor-main-card{
+  display:grid !important;
+  grid-template-rows:auto minmax(0,1fr) auto !important;
+  height:min(840px,calc(100dvh - 24px)) !important;
+  max-height:calc(100dvh - 24px) !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+
+#editorModal:has(#eUtilityType) #editorBody{
+  min-height:0 !important;
+  height:100% !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+}
+
+#editorModal:has(#eUtilityType) .editor-grid{
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  grid-auto-rows:max-content !important;
+  align-content:start !important;
+  align-items:start !important;
+  min-height:max-content !important;
+  height:auto !important;
+  max-height:none !important;
+  overflow:visible !important;
+  padding-bottom:18px !important;
+}
+
+/* Full-width utility blocks are real content rows, never compressible grid tracks. */
+#editorModal:has(#eUtilityType) .editor-grid > .full,
+#editorModal:has(#eUtilityType) .editor-grid > .civilization-util-symbol-card,
+#editorModal:has(#eUtilityType) .editor-grid > .language-map-editor,
+#editorModal:has(#eUtilityType) .editor-grid > .language-preview-card,
+#editorModal:has(#eUtilityType) .editor-grid > .organization-rel-editor{
+  grid-column:1 / -1 !important;
+  min-height:max-content !important;
+  height:auto !important;
+  max-height:none !important;
+  align-self:start !important;
+}
+
+/* The palette gets a concrete usable box. */
+#editorModal:has(#eUtilityType) .civilization-util-symbol-card{
+  display:block !important;
+  min-height:132px !important;
+  height:auto !important;
+  max-height:none !important;
+  overflow:hidden !important;
+}
+
+#editorModal:has(#eUtilityType) .civilization-util-symbol-card .language-symbol-palette-head{
+  min-height:44px !important;
+}
+
+#editorModal:has(#eUtilityType) .civilization-util-symbol-card .language-symbol-palette{
+  display:grid !important;
+  grid-template-columns:repeat(auto-fill,minmax(72px,1fr)) !important;
+  grid-auto-rows:minmax(62px,auto) !important;
+  min-height:78px !important;
+  height:auto !important;
+  max-height:180px !important;
+  overflow:auto !important;
+  padding:8px !important;
+}
+
+/* Make saved-symbol tiles impossible to flatten. */
+#editorModal:has(#eUtilityType) .language-symbol-pick{
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-width:0 !important;
+  min-height:60px !important;
+  height:60px !important;
+  flex:0 0 60px !important;
+}
+
+/* ==========================================================
+   V22.7g — draggable reusable symbols
+   ========================================================== */
+.language-symbol-pick{
+  cursor:grab !important;
+  user-select:none;
+}
+.language-symbol-pick:active,
+.language-symbol-pick.dragging-symbol{
+  cursor:grabbing !important;
+}
+.language-symbol-pick.dragging-symbol{
+  opacity:.5;
+  transform:scale(.96);
+}
+
+#editorModal input.symbol-drop-target,
+#editorModal textarea.symbol-drop-target{
+  outline:2px solid #8d78d9 !important;
+  outline-offset:1px;
+  border-color:#8d78d9 !important;
+  box-shadow:0 0 0 3px rgba(141,120,217,.12) !important;
+}
+
+/* Mobile Civilization Utils collapse to one column. */
+@media(max-width:720px){
+  #editorModal:has(#eUtilityType) .editor-grid{
+    grid-template-columns:1fr !important;
+  }
+
+  #editorModal:has(#eUtilityType) .civilization-util-symbol-card .language-symbol-palette{
+    grid-template-columns:repeat(auto-fill,minmax(62px,1fr)) !important;
+  }
+}

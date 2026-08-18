@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Magic System Sandbox v22.7h</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/graph.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+<audio id="uiClickSound" preload="auto" src="assets/ui-click.mp3"></audio>
+<main class="app">
+  <aside class="sidebar left">
+    <div class="side-title">
+      <div>
+        <div class="eyebrow">Library</div>
+        <h2>Spells</h2>
+      </div>
+      <span id="spellCount" class="count">0</span>
+    </div>
+    <div id="classFilters" class="class-filters"></div>
+    <div id="spellList" class="library-list"></div>
+  </aside>
+
+  <section class="center">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">V22.7h · Living magic graph</div>
+        <h1>Magic System Sandbox</h1>
+      </div>
+      <div class="status">
+        <span id="systemStats">1 node</span>
+      </div>
+    </header>
+
+    <div class="top-actions" aria-label="Project controls">
+        <button id="saveProjectBtn" class="top-action" title="Save graph to a file">⇩<span>Save</span></button>
+        <button id="loadProjectBtn" class="top-action" title="Load a saved graph">⇧<span>Load</span></button>
+        <button id="settingsBtn" class="top-action" title="Settings">⚙<span>Settings</span></button>
+        <input id="loadProjectInput" type="file" accept=".json,.magicgraph" class="hidden">
+      </div>
+      <div class="graph-wrap">
+      <canvas id="graph"></canvas>
+      
+
+      <div class="legend">
+        <span><i class="line mana"></i> Mana</span>
+        <span><i class="line similar"></i> Similar spells</span>
+        <span><i class="line applies"></i> Rule applies</span>
+        <span><i class="line uses"></i> Uses / depends on</span>
+        <span><i class="line technology"></i> Technology</span>
+      </div>
+
+      <div id="selectionCard" class="selection-card hidden"></div>
+
+      <div id="createMenu" class="create-menu hidden">
+        <div class="eyebrow">Create</div>
+        <div class="create-help">
+          Build any part of your magic system here. Fields are intentionally flexible:
+          spell classes can be anything you invent (Charm, Tool, Ritual, Curse, etc.),
+          and names you type into compatibility, composition, source, or requirements can create automatic connections.
+        </div>
+        <div class="create-grid">
+          <button data-create="spell" title="Spell"><b>✦</b><span>Spell</span><small>Castable magic with class, intent, structure, morality and effects.</small></button>
+          <button data-create="rule" title="Rule"><b>◇</b><span>Rule</span><small>Laws, restrictions, exceptions, and class-specific behavior.</small></button>
+          <button data-create="material" title="Material"><b>◆</b><span>Material</span><small>Magical substances, ingredients, metals, woods and crystals.</small></button>
+          <button data-create="magicalObject" title="Magical Object"><b>⌁</b><span>Magical Object</span><small>Wands, artifacts, focuses, enchanted devices and relics.</small></button>
+          <button data-create="technique" title="Technique"><b>⟡</b><span>Technique</span><small>Casting methods, disciplines, movements and trained skills.</small></button>
+          <button data-create="principle" title="Principle"><b>◈</b><span>Principle</span><small>Underlying magical theories and fundamental behavior.</small></button>
+          <button data-create="structure" title="Structure"><b>▦</b><span>Structure</span><small>Schools, governments, guilds, ministries, academies and organizations.</small></button>
+          <button data-create="organization" title="Organization"><b>♜</b><span>Organization</span><small>Empires, governments, guilds, companies, orders, alliances and factions.</small></button>
+          <button id="createCivilizationUtil" title="Civilization Utils"><b>⌘</b><span>Civilization Utils</span><small>Languages, currencies, diseases, and reusable civilization systems.</small></button>
+          <button data-create="life" title="Life"><b>♧</b><span>Life</span><small>Magical species, creatures, plants, beings and magical biology.</small></button>
+          <button data-create="place" title="Place"><b>⌖</b><span>Place</span><small>Cities, settlements, schools, countries, dimensions, buildings, landmarks and magical regions.</small></button>
+        </div>
+        <label class="create-hub-choice">
+          <input id="createHubToggle" type="checkbox">
+          <span><b>Create Hub</b><small>Create an editable category hub instead of a normal node. Spells already organize themselves through Spell Classes.</small></span>
+        </label>
+      </div>
+
+      <div id="civilizationUtilModal" class="modal hidden">
+        <div class="modal-card civ-util-picker">
+          <div class="modal-head">
+            <div><div class="eyebrow">V22 Civilization Utils</div><h2>Create Utility</h2></div>
+            <button id="closeCivilizationUtil" class="icon-btn">×</button>
+          </div>
+          <div class="civ-util-grid">
+            <button data-civ-util="language"><b>文</b><span>Language</span><small>Scripts, sounds, words and translation mappings.</small></button>
+            <button data-civ-util="currency"><b>¤</b><span>Currency</span><small>Symbols, USD equivalents, subdivisions and backing.</small></button>
+            <button data-civ-util="disease"><b>✣</b><span>Disease</span><small>Spread, severity, duration, susceptibility and cures.</small></button>
+            <button data-civ-util="calendar"><b>◷</b><span>Calendar</span><small>Years, months, eras, holidays and dating conventions.</small></button>
+            <button data-civ-util="measurement"><b>↔</b><span>Measurement</span><small>Distance, mass, temperature and civilization-specific units.</small></button>
+            <button data-civ-util="legalCode"><b>§</b><span>Legal Code</span><small>Laws, punishments, rights and legal traditions.</small></button>
+            <button data-civ-util="rankSystem"><b>♛</b><span>Rank System</span><small>Military, guild, government or social ranks.</small></button>
+            <button data-civ-util="communication"><b>⌁</b><span>Communication</span><small>Postal, magical, radio, network or interstellar communication systems.</small></button>
+            <button data-civ-util="naming"><b>A</b><span>Naming System</span><small>Names, titles, family patterns and generated naming conventions.</small></button>
+            <button id="openSymbolLibrary"><b>✎</b><span>Symbol Library</span><small>Draw reusable symbols for languages, currencies and future utilities.</small></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="symbolLibraryModal" class="modal hidden">
+        <div class="modal-card symbol-library-card">
+          <div class="modal-head"><div><div class="eyebrow">V22 Shared Assets</div><h2>Symbol Library</h2></div><button id="closeSymbolLibrary" class="icon-btn">×</button></div>
+          <div class="symbol-workbench">
+            <div class="symbol-painter">
+              <div class="symbol-toolbar">
+                <button class="symbol-tool active" data-symbol-tool="brush" title="Brush">✎</button>
+                <button class="symbol-tool" data-symbol-tool="line" title="Line">╱</button>
+                <button class="symbol-tool" data-symbol-tool="circle" title="Circle">○</button>
+                <button class="symbol-tool" data-symbol-tool="rect" title="Rectangle">□</button>
+                <button class="symbol-tool" data-symbol-tool="fill" title="Fill">▣</button>
+                <button class="symbol-tool" data-symbol-tool="eraser" title="Eraser">⌫</button>
+                <button id="symbolUndo" title="Undo">↶</button>
+                <button id="symbolRedo" title="Redo">↷</button>
+                <button id="symbolImportButton" title="Import image">⇧</button>
+                <input id="symbolImport" type="file" accept="image/*" hidden>
+                <button id="clearSymbol" title="Clear">×</button>
+              </div>
+              <div class="symbol-settings">
+                <label>Color <input id="symbolColor" type="color" value="#f1f5ff"></label>
+                <label>Width <input id="symbolWidth" type="range" min="1" max="40" value="10"></label>
+              </div>
+              <canvas id="symbolCanvas" width="256" height="256"></canvas>
+              <div class="symbol-actions"><button id="saveSymbol" class="primary">Save Symbol</button></div>
+            </div>
+            <div class="symbol-meta">
+              <label>Name<input id="symbolName" placeholder="e.g. Vorian A, Cuple Sign"></label>
+              <p>Draw with the pointer. Saved symbols can be reused by Languages and Currencies.</p>
+              <div id="symbolLibraryList" class="symbol-library-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="editorModal" class="modal hidden">
+        <div class="editor-shell">
+          <div class="modal-card editor-main-card">
+            <div class="modal-head">
+              <div>
+                <div class="eyebrow" id="editorKindLabel">Create</div>
+                <div class="editor-title-line">
+                  <h2 id="editorTitle">New Node</h2>
+                  <button id="previewAutoConnections" class="title-icon-btn" title="Auto-Connections">⌁<span>Auto-Connections</span></button>
+                </div>
+              </div>
+              <button id="closeEditor" class="icon-btn">×</button>
+            </div>
+            <div id="editorBody"></div>
+            <div class="modal-actions editor-actions">
+              <button id="inspireEditor" class="spark-btn" title="Fill blank fields with a coherent example">✦ Inspire</button>
+              <button id="saveEditor" class="primary">Save</button>
+              <button id="cancelEditor" class="ghost">Cancel</button>
+            </div>
+          </div>
+
+          <aside id="planetPalettePanel" class="planet-palette-panel hidden">
+            <div class="auto-panel-head">
+              <div><div class="eyebrow">Planet Place</div><h3>Color Map</h3></div>
+              <button id="closePlanetPalette" class="icon-btn">×</button>
+            </div>
+            <p class="auto-panel-help">Controls the procedural globe used when this Place is entered as a Planet or Moon.</p>
+
+            <div class="planet-body-options">
+              <label class="life-check"><input id="ePlanetIsMoon" type="checkbox"><span><b>Moon</b><small>A planetary-class body orbiting another authored Planet / Moon.</small></span></label>
+              <label id="moonOrbitingWrap" class="moon-orbiting-wrap hidden">Orbiting
+                <select id="eMoonOrbiting"><option value="">Choose parent body…</option></select>
+              </label>
+              <label class="life-check"><input id="ePlanetGasGiant" type="checkbox"><span><b>Gas Giant</b><small>Replace land/ocean terrain with atmospheric gas bands.</small></span></label>
+            </div>
+
+            <div id="terrestrialPaletteControls">
+            <div class="planet-palette-group">
+              <b>Land palette</b>
+              <label>Primary <input id="ePlanetLandColor" type="color" value="#5d8f5a"></label>
+              <label>Secondary <input id="ePlanetLandColor2" type="color" value="#78915b"></label>
+              <label>Accent <input id="ePlanetLandColor3" type="color" value="#8d8655"></label>
+            </div>
+            <div class="planet-palette-group">
+              <b>Ocean palette</b>
+              <label>Primary <input id="ePlanetOceanColor" type="color" value="#315f9f"></label>
+              <label>Deep ocean <input id="ePlanetOceanColor2" type="color" value="#102f58"></label>
+            </div>
+            <div class="planet-coverage">
+              <label>Land amount <output id="ePlanetLandCoverageOut">45%</output>
+                <input id="ePlanetLandCoverage" type="range" min="0" max="100" step="1" value="45">
+              </label>
+              <label>Ocean amount <output id="ePlanetOceanCoverageOut">55%</output>
+                <input id="ePlanetOceanCoverage" type="range" min="0" max="100" step="1" value="55">
+              </label>
+            </div>
+            <label class="life-check"><input id="ePlanetLandEnabled" type="checkbox" checked><span><b>Land enabled</b><small>Disable for ocean worlds.</small></span></label>
+            <label class="life-check"><input id="ePlanetOceanEnabled" type="checkbox" checked><span><b>Oceans enabled</b><small>Disable for dry worlds.</small></span></label>
+            </div>
+
+            <div id="gasGiantPaletteControls" class="gas-giant-palette hidden">
+              <div class="life-role-title">Gas Palette</div>
+              <p class="auto-panel-help">Atmospheric bands wrap around the whole globe.</p>
+              <div class="planet-palette-group">
+                <label>Primary <input id="ePlanetGasColor" type="color" value="#d6b783"></label>
+                <label>Secondary <input id="ePlanetGasColor2" type="color" value="#a87a58"></label>
+                <label>Accent <input id="ePlanetGasColor3" type="color" value="#eee0b5"></label>
+              </div>
+              <label>Band contrast <output id="ePlanetGasContrastOut">55%</output>
+                <input id="ePlanetGasContrast" type="range" min="0" max="100" value="55">
+              </label>
+            </div>
+
+            <div class="planet-cloud-controls">
+              <div class="life-role-title">Cloud Layer</div>
+              <label class="life-check"><input id="ePlanetCloudsEnabled" type="checkbox" checked><span><b>Clouds enabled</b><small>Procedural cloud cover over the planet.</small></span></label>
+              <label>Cloud color <input id="ePlanetCloudColor" type="color" value="#eef8ff"></label>
+              <label>Cloud coverage <output id="ePlanetCloudCoverageOut">45%</output><input id="ePlanetCloudCoverage" type="range" min="0" max="100" value="45"></label>
+              <label>Cloud opacity <output id="ePlanetCloudOpacityOut">38%</output><input id="ePlanetCloudOpacity" type="range" min="0" max="100" value="38"></label>
+            </div>
+          </aside>
+
+          <aside id="solarSystemEditorPanel" class="solar-system-editor-panel hidden">
+            <div class="auto-panel-head">
+              <div><div class="eyebrow">Solar System Place</div><h3>Solar System Editor</h3></div>
+              <button id="closeSolarSystemEditor" class="icon-btn">×</button>
+            </div>
+            <p class="auto-panel-help">Author the important parts of this system. Anything you do not specify remains procedural in the viewer.</p>
+
+            <div class="system-editor-section">
+              <b>Primary Star</b>
+              <label>Star name <input id="eSystemStarName" type="text" placeholder="e.g. Sol, Arcturus, Veyra"></label>
+              <label>Spectral preset
+                <select id="eSystemStarPreset">
+                  <option value="M">M · Red dwarf</option>
+                  <option value="K">K · Orange</option>
+                  <option value="G" selected>G · Yellow</option>
+                  <option value="F">F · Yellow-white</option>
+                  <option value="A">A · White</option>
+                  <option value="B">B · Blue-white</option>
+                  <option value="O">O · Blue</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <div class="star-color-row">
+                <label>Core <input id="eSystemStarColor" type="color" value="#ffe08a"></label>
+                <label>Glow <input id="eSystemStarGlow" type="color" value="#ffbe55"></label>
+              </div>
+            </div>
+
+            <div class="system-editor-section">
+              <div class="section-title-row"><b>Additional Stars</b><small>Binary / multiple-star systems</small></div>
+              <div id="systemAdditionalStars" class="system-additional-stars"></div>
+              <button id="addSystemStar" type="button" class="compact-action">＋ Add Star</button>
+              <small class="side-note">Each additional star is saved as a real Star Place contained by this system.</small>
+            </div>
+
+            <div class="system-editor-section">
+              <div class="section-title-row"><b>Existing members</b><small>Planets / Stars already in your graph</small></div>
+              <div id="systemMemberList" class="system-member-list"></div>
+            </div>
+
+            <div class="system-editor-section">
+              <div class="section-title-row"><b>Procedural planets</b><small>Viewer-only</small></div>
+              <label>Procedural planet count <input id="eSystemGeneratePlanets" type="number" min="0" max="24" step="1" value="0"></label>
+              <small class="side-note">These are generated only in the Solar System viewer. They do not create graph nodes. Authored planets are added on top of this count.</small>
+            </div>
+          </aside>
+
+          <aside id="starEditorPanel" class="star-editor-panel hidden">
+            <div class="auto-panel-head">
+              <div><div class="eyebrow">Star Place</div><h3>Star Editor</h3></div>
+              <button id="closeStarEditor" class="icon-btn">×</button>
+            </div>
+            <p class="auto-panel-help">Choose a spectral preset or customize the star's visible colors.</p>
+            <label>Spectral preset
+              <select id="eStarPreset">
+                <option value="M">M · Red dwarf</option>
+                <option value="K">K · Orange</option>
+                <option value="G">G · Yellow</option>
+                <option value="F">F · Yellow-white</option>
+                <option value="A">A · White</option>
+                <option value="B">B · Blue-white</option>
+                <option value="O">O · Blue</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <div class="star-palette-grid">
+              <label>Core color <input id="eStarColor" type="color" value="#ffe08a"></label>
+              <label>Outer color <input id="eStarColor2" type="color" value="#ffc85a"></label>
+              <label>Glow color <input id="eStarGlow" type="color" value="#ffb347"></label>
+            </div>
+            <label>Relative size <input id="eStarSize" type="range" min="0.4" max="3" step="0.05" value="1"></label>
+            <output id="eStarSizeOut">1.00×</output>
+          </aside>
+
+          <aside id="megastructureEditorPanel" class="megastructure-editor-panel hidden">
+            <div class="auto-panel-head">
+              <div><div class="eyebrow">Structure</div><h3>Megastructure Editor</h3></div>
+              <button id="closeMegastructureEditor" class="icon-btn">×</button>
+            </div>
+            <p id="megaEditorIntro" class="auto-panel-help">Choose how this megastructure exists in the world.</p>
+
+            <div id="megaTypeChooser" class="mega-type-chooser">
+              <div class="life-role-title">Choose type</div>
+              <button id="chooseSeparateMega" type="button">
+                <b>Separate Megastructure</b>
+                <small>An independent constructed object with its own 3D geometry.</small>
+              </button>
+              <button id="chooseAttachedMega" type="button">
+                <b>Attached Megastructure</b>
+                <small>Paints/deforms a Planet, Star, Solar System, or Galaxy host.</small>
+              </button>
+            </div>
+
+            <div id="megaEditorBody" class="hidden">
+            <div class="mega-compact-grid">
+            <label>Megastructure scale
+              <select id="eMegastructureScale">
+                <option value="planetary">Planetary</option>
+                <option value="stellar">Stellar</option>
+                <option value="solar-system">Solar System</option>
+                <option value="galaxy">Galaxy</option>
+              </select>
+            </label>
+
+            <label>Visual mode
+              <select id="eMegaVisualStyle">
+                <option value="surface-paint">Painted Surface</option>
+                <option value="ring">Orbital Ring</option>
+                <option value="shell">Shell / Armor</option>
+                <option value="lattice">Paint + Lattice</option>
+                <option value="spire">Paint + Spire / Beam</option>
+                <option value="swarm">Paint + Swarm</option>
+              </select>
+            </label>
+            </div>
+
+            <div class="mega-palette-grid mega-palette-grid-compact">
+              <label>Primary <input id="eMegaColor" type="color" value="#6fdcff"></label>
+              <label>Secondary <input id="eMegaColor2" type="color" value="#b8f2ff"></label>
+              <label>Glow <input id="eMegaGlow" type="color" value="#73e8ff"></label>
+            </div>
+
+            <div class="mega-dominant-debug-panel" id="megaDominantDebugPanel">
+              <div class="mega-debug-head">
+                <div>
+                  <strong>Dominant Color</strong>
+                  <small>Seam backfill diagnostic</small>
+                </div>
+                <span class="mega-debug-badge" id="megaDominantDebugPercent">—%</span>
+              </div>
+              <div class="mega-debug-body">
+                <div class="mega-debug-swatch" id="megaDominantDebugSwatch"></div>
+                <div class="mega-debug-values">
+                  <b id="megaDominantDebugHex">Not calculated yet</b>
+                  <small id="megaDominantDebugSamples">Waiting for texture analysis</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="mega-painter">
+              <div class="section-title-row"><b>Megastructure Paint</b><small>Saved with this Structure</small></div>
+              <div class="mega-paint-toolbar mega-paint-toolbar-compact">
+                <button type="button" class="mega-paint-tool active" data-tool="brush" title="Brush">✎</button>
+                <button type="button" class="mega-paint-tool" data-tool="line" title="Line">╱</button>
+                <button type="button" class="mega-paint-tool" data-tool="circle" title="Circle">○</button>
+                <button type="button" class="mega-paint-tool" data-tool="rect" title="Rectangle">□</button>
+                <button type="button" class="mega-paint-tool" data-tool="fill" title="Fill">▣</button>
+                <button type="button" class="mega-paint-tool" data-tool="eraser" title="Eraser">⌫</button>
+                <button id="eMegaEraserMode" type="button" title="Eraser mode: Object">Object</button>
+                <button id="eMegaPaintUndo" type="button" title="Undo painter action">↶</button>
+                <button id="eMegaPaintRedo" type="button" title="Redo painter action">↷</button>
+                <button id="eMegaImportButton" type="button" title="Import image">⇧</button>
+                <input id="eMegaImport" type="file" accept="image/*" hidden>
+                <button id="eMegaHeightMode" type="button" title="Toggle Height Map">↕</button>
+                <button id="eMegaExpandPaint" type="button" title="Expand painter">⛶</button>
+                <button id="eMegaClearPaint" type="button" title="Clear current layer">×</button>
+              </div>
+              <div class="mega-paint-settings mega-paint-settings-compact">
+                <label>Paint color <input id="eMegaPaintColor" type="color" value="#6fdcff"></label>
+                <label>Width <input id="eMegaPaintWidth" type="range" min="1" max="40" step="1" value="8"></label>
+                <label>Imported size <input id="eMegaImportScale" type="range" min="10" max="100" step="1" value="45"></label>
+              </div>
+              <div id="megaHeightSettings" class="mega-height-settings hidden">
+                <label>Height / indent <output id="eMegaHeightOut">+25</output>
+                  <input id="eMegaHeight" type="range" min="-100" max="100" step="1" value="25">
+                </label>
+                <small>Positive values raise the surface. Negative values create indents.</small>
+              </div>
+              <div class="mega-paint-workspace">
+                <div class="mega-paint-stage">
+                  <canvas id="megaPaintCanvas" width="768" height="384"></canvas>
+                  <canvas id="megaPlanetGuide" width="768" height="384" aria-hidden="true"></canvas>
+                </div>
+                <div class="mega-icon-preview-wrap">
+                  <b>Solar System icon preview</b>
+                  <canvas id="megaIconPreview" width="120" height="120"></canvas>
+                  <small>The planet guide is visual only — it cannot intercept painting.</small>
+                </div>
+              </div>
+              <small class="side-note">Your paint is baked into one solid texture when saved. Height Map is a separate deformation layer.</small>
+            </div>
+
+            <label>Pattern
+              <select id="eMegaPattern">
+                <option value="solid">Solid</option>
+                <option value="panels">Panels</option>
+                <option value="bands">Bands</option>
+                <option value="grid">Grid</option>
+              </select>
+            </label>
+
+            <label>Coverage / visual size <output id="eMegaCoverageOut">25%</output>
+              <input id="eMegaCoverage" type="range" min="1" max="100" step="1" value="25">
+            </label>
+
+            <label>Opacity <output id="eMegaOpacityOut">80%</output>
+              <input id="eMegaOpacity" type="range" min="10" max="100" step="1" value="80">
+            </label>
+            <label>Detail Level
+              <select id="eMegaDetailLevel">
+                <option value="1">1 · Coarse</option><option value="2">2 · Normal</option>
+                <option value="3" selected>3 · Fine</option><option value="4">4 · Very Fine</option>
+                <option value="5">5 · Extreme</option>
+              </select>
+            </label>
+            <label>Cloud Layering
+              <select id="eMegaCloudLayer">
+                <option value="below">Clouds below megastructure</option>
+                <option value="above" selected>Clouds above megastructure</option>
+              </select>
+            </label>
+
+            <div id="megaAttachmentStatus" class="mega-attachment-status"></div>
+
+            <div id="createdMegastructureControls" class="created-mega-controls hidden">
+              <div class="life-role-title">Separate Megastructure</div>
+              <p class="side-note">This object exists independently. Link it to a Place to anchor it there, or leave it unlinked for procedural placement.</p>
+              <p class="side-note">This megastructure has no same-scale host, so it exists as its own constructed object.</p>
+
+              <label>Created object shape
+                <select id="eCreatedMegaShape">
+                  <option value="sphere">Sphere</option>
+                  <option value="ring">Ring</option>
+                  <option value="disc">Disc</option>
+                  <option value="cube">Cube</option>
+                  <option value="cylinder">Cylinder</option>
+                  <option value="torus">Torus</option>
+                </select>
+              </label>
+
+              <label>Relative object size <output id="eCreatedMegaSizeOut">1.00×</output>
+                <input id="eCreatedMegaSize" type="range" min="0.25" max="4" step="0.05" value="1">
+              </label>
+
+              <div class="created-mega-3d-help">
+                <b>2D Megastructure Blueprint</b>
+                <small>Paint the megastructure as a flat design. The planet outline shows its real relative size.</small>
+              </div>
+              <div class="created-mega-face-title">Surface / Face</div>
+              <div id="createdMegaFaceTabs" class="created-mega-face-tabs"></div>
+            </div>
+
+            <div class="mega-surface-anchor">
+              <b>Planet surface anchor</b>
+              <label>Latitude <output id="eMegaLatOut">0°</output>
+                <input id="eMegaLat" type="range" min="-90" max="90" step="1" value="0">
+              </label>
+              <label>Longitude <output id="eMegaLonOut">0°</output>
+                <input id="eMegaLon" type="range" min="-180" max="180" step="1" value="0">
+              </label>
+              <small>Used by planetary Surface Paint, Lattice, and Spire styles.</small>
+            </div>
+            </div>
+          </aside>
+
+          <aside id="autoConnectionsPanel" class="auto-connections-panel auto-connections-drawer hidden">
+            <div class="auto-panel-head">
+              <div><div class="eyebrow">Before placement</div><h3>Auto-Connections</h3></div>
+              <button id="closeAutoConnections" class="icon-btn">×</button>
+            </div>
+            <p class="auto-panel-help">Review exactly what will be connected when this node is saved. Delete a proposed link or edit it with the same relationship editor used by the Link tool.</p>
+            <div id="autoConnectionsList"></div>
+            <button id="refreshAutoConnections" class="ghost auto-refresh">↻ Recalculate from fields</button>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+
+
+
+
+      <div id="manualEventModal" class="modal hidden">
+        <div class="modal-card manual-event-card">
+          <div class="modal-head"><div><div class="eyebrow">Author History</div><h2>Create Timeline Event</h2></div><button id="closeManualEvent" class="icon-btn">×</button></div>
+          <div class="manual-event-grid">
+            <label>Year<input id="manualEventYear" type="number" step="1"></label>
+            <label>Kind<input id="manualEventKind" value="Historical Event" placeholder="Battle, Discovery, Treaty..."></label>
+            <label class="full">Title<input id="manualEventTitle" placeholder="Luke Skywalker destroys the Death Star"></label>
+            <label class="full">What happens<textarea id="manualEventText" rows="4" placeholder="Luke Skywalker, with help from the Rebel Alliance, destroys the Death Star..."></textarea></label>
+            <label>Tone<select id="manualEventTone"><option value="normal">Neutral</option><option value="breakthrough">Positive</option><option value="crisis">Negative</option><option value="major">Major</option></select></label>
+            <label>Location<select id="manualEventLocation"><option value="">Automatic / none</option></select></label>
+            <div class="full"><b class="manual-subhead">Related nodes / participants</b><div id="manualEventNodes" class="manual-node-picker"></div></div>
+            <div class="full manual-impact-grid">
+              <label>Population %<input id="manualImpactPopulation" type="number" step="1" value="0"></label>
+              <label>Stability<input id="manualImpactStability" type="number" step="1" value="0"></label>
+              <label>Economy<input id="manualImpactEconomy" type="number" step="1" value="0"></label>
+              <label>Knowledge<input id="manualImpactKnowledge" type="number" step="1" value="0"></label>
+              <label>Danger<input id="manualImpactDanger" type="number" step="1" value="0"></label>
+              <label>Technology<input id="manualImpactTechnology" type="number" step="1" value="0"></label>
+            </div>
+          </div>
+          <div class="modal-actions"><button id="saveManualEvent" class="primary">Add to History</button><button id="cancelManualEvent" class="ghost">Cancel</button></div>
+        </div>
+      </div>
+
+      <div id="simulationModal" class="modal hidden worldbuilder-modal v223-fullscreen-sim">
+        <div class="simulation-fullscreen-shell">
+          <header class="sim-topbar sim-topbar-compact">
+            <div class="sim-brand sim-civilization-identity">
+              <div class="eyebrow">V22.6 · Living History</div>
+              <label class="sim-civ-name-field">
+                <span>Civilization</span>
+                <input id="simCivName" value="Aetheria">
+              </label>
+            </div>
+
+            <div class="sim-top-controls sim-top-controls-compact">
+              <label>Starting Era
+                <select id="simEra">
+                  <option>Founding</option>
+                  <option>Early Kingdoms</option>
+                  <option>Arcane Renaissance</option>
+                  <option>Industrial Magic</option>
+                </select>
+              </label>
+
+              <label>Initial Scale
+                <select id="simScale">
+                  <option value="small">Small Realm</option>
+                  <option value="medium" selected>Kingdom</option>
+                  <option value="large">Large Civilization</option>
+                </select>
+              </label>
+
+              <div class="sim-top-runbar sim-top-runbar-compact">
+                <button id="runSimulation" class="primary sim-new-civ-btn">▶ New Civilization</button>
+                <button id="simStep1" class="sim-icon-btn" title="+1 Year">+1</button>
+                <button id="simStep10" class="sim-icon-btn" title="+10 Years">+10</button>
+                <button id="simStep100" class="sim-icon-btn" title="+100 Years">+100</button>
+                <button id="simStep1000" class="sim-icon-btn" title="+1000 Years">+1K</button>
+                <button id="simAuto" class="sim-icon-btn" title="Auto simulation">▶</button>
+                <button id="createTimelineEvent" class="sim-icon-btn" title="Create Timeline Event">＋</button>
+              </div>
+            </div>
+
+            <button id="closeSimulation" class="icon-btn sim-close-fullscreen" title="Close Simulation">×</button>
+          </header>
+
+          <div class="sim-main-layout">
+            <aside class="sim-left-column">
+              <section id="rapidEventsPanel" class="rapid-events-panel v223-rapid">
+                <div class="rapid-events-head">
+                  <div><span>LIVE</span><b>Rapid Events</b></div>
+                  <button id="toggleRapidEvents">−</button>
+                </div>
+                <div id="rapidEventsList" class="rapid-events-list"></div>
+              </section>
+
+              <section id="simMapDock" class="sim-map-dock planet-view-panel permanent-planet">
+                <div class="planet-panel-head sim-map-restored-head">
+                  <div class="sim-map-title-block">
+                    <div class="eyebrow" id="planetScaleEyebrow">Universe</div>
+                    <h3 id="planetName">Universe Map</h3>
+                    <span id="planetMeta">Generating world…</span>
+                    <div id="galacticCoordinates" class="galactic-coordinates"></div>
+
+                    <div id="historyMapControls" class="history-map-controls">
+                      <button id="historyMapToggle" type="button">◷ History</button>
+                      <div id="historyMapScrubber" class="history-map-scrubber hidden">
+                        <button id="historyMapLive" type="button">LIVE</button>
+                        <input id="historyMapYear" type="range" min="0" max="0" value="0">
+                        <output id="historyMapYearOut">Year 0</output>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="planet-panel-actions sim-map-head-actions">
+                    <button id="regenPlanet" class="ghost" title="Regenerate map">↻</button>
+                    <button id="planetHome" class="ghost" title="Center map">◎</button>
+                    <button id="toggleSimMap" type="button" class="ghost" title="Open map fullscreen">▣</button>
+                    <button id="closeSimMapFullscreen" type="button" class="icon-btn hidden" title="Close fullscreen map">×</button>
+                  </div>
+                </div>
+
+                <div class="planet-stage sim-embedded-planet-stage">
+                  <canvas id="planetCanvas"></canvas>
+                  <div class="planet-hint">Drag to navigate · Scroll to zoom</div>
+                  <div id="planetTooltip" class="planet-tooltip hidden"></div>
+                </div>
+              </section>
+            </aside>
+
+            <main class="sim-center-column">
+              <div class="sim-center-header">
+                <div id="simSummary" class="sim-summary"></div>
+
+                <div class="sim-dashboard">
+                  <div class="sim-stat"><b id="simPop">—</b><span>Population</span></div>
+                  <div class="sim-stat"><b id="simStability">—</b><span>Stability</span></div>
+                  <div class="sim-stat"><b id="simKnowledge">—</b><span>Arcane Knowledge</span></div>
+                  <div class="sim-stat"><b id="simEconomy">—</b><span>Magic Economy</span></div>
+                  <div class="sim-stat"><b id="simDanger">—</b><span>Arcane Risk</span></div>
+                  <div class="sim-stat"><b id="simTech">—</b><span>Technology</span></div>
+                </div>
+              </div>
+
+              <section class="sim-timeline-shell">
+                <div class="sim-timeline-head">
+                  <div>
+                    <div class="eyebrow">History</div>
+                    <h3>Timeline</h3>
+                  </div>
+                  <button id="manualEventInline" type="button" class="ghost">＋ Create Event</button>
+                </div>
+                <div id="simTimeline" class="sim-timeline"></div>
+              </section>
+            </main>
+
+            <aside class="sim-right-column">
+              <div class="sim-inspector-fixed-head">
+                <div>
+                  <div class="eyebrow">Simulation Inspector</div>
+                  <h3 id="simInspectorTitle">World Analysis</h3>
+                </div>
+                <span class="sim-inspector-live-dot" title="Live simulation"></span>
+              </div>
+
+              <div class="sim-inspector-tabs">
+                <button class="sim-side-tab active" data-sim-side="world">World State</button>
+                <button class="sim-side-tab" data-sim-side="society">Society</button>
+                <button class="sim-side-tab" data-sim-side="research">Research</button>
+                <button class="sim-side-tab event-tab-button" data-sim-side="event">Event</button>
+              </div>
+
+              <div class="sim-side-content">
+                <div id="simWorld" class="sim-world"></div>
+                <div id="simSociety" class="sim-world hidden"></div>
+                <div id="simResearch" class="sim-world hidden"></div>
+
+                <div id="eventInspector" class="sim-world sim-event-inspector-tab hidden">
+                  <div class="event-tab-toolbar">
+                    <div>
+                      <div class="eyebrow">Historical Event</div>
+                      <b>Event Inspector</b>
+                    </div>
+                    <button id="closeEventInspector" class="icon-btn" title="Back to previous inspector">←</button>
+                  </div>
+                  <div id="eventInspectorBody" class="event-inspector-body"></div>
+                </div>
+              </div>
+
+              <aside id="simulationInspector" class="simulation-inspector-panel hidden">
+                <div class="event-inspector-head">
+                  <div><div class="eyebrow">Live Simulation</div><h3>Node Inspector</h3></div>
+                  <button id="closeSimulationInspector" class="icon-btn">×</button>
+                </div>
+                <div id="simulationInspectorBody" class="event-inspector-body"></div>
+              </aside>
+
+              <aside id="placeInspector" class="place-inspector-panel hidden">
+                <div class="event-inspector-head">
+                  <div><div class="eyebrow">Physical Place</div><h3>Place Inspector</h3></div>
+                  <button id="closePlaceInspector" class="icon-btn">×</button>
+                </div>
+                <div id="placeInspectorBody" class="event-inspector-body"></div>
+              </aside>
+
+              <div id="simRegions" class="sim-world hidden"></div>
+              <div id="simCivGraph" class="sim-civgraph hidden"><canvas id="civGraphCanvas"></canvas></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <div id="auditModal" class="modal hidden">
+        <div class="modal-card">
+          <div class="modal-head">
+            <div>
+              <div class="eyebrow">System analysis</div>
+              <h2>Magic System Audit</h2>
+            </div>
+            <button id="closeAudit" class="icon-btn">×</button>
+          </div>
+          <div id="auditBody" class="audit-body"></div>
+        </div>
+      </div>
+
+      <div id="settingsModal" class="modal hidden">
+        <div class="modal-card link-card">
+          <div class="modal-head">
+            <div>
+              <div class="eyebrow">Graph physics</div>
+              <h2>Settings</h2>
+            </div>
+            <button id="closeSettings" class="icon-btn">×</button>
+          </div>
+          <div class="editor-grid">
+            <label class="full">Node pull strength <span id="pullStrengthValue">100%</span>
+              <input id="pullStrengthSlider" type="range" min="0" max="200" value="100" step="5">
+            </label>
+            <label class="full">Large-graph weakening <span id="largeGraphValue">100%</span>
+              <input id="largeGraphSlider" type="range" min="0" max="200" value="100" step="5">
+            </label>
+            <label>Collision strength
+              <select id="collisionStrength">
+                <option value="0.5">Soft</option>
+                <option value="1" selected>Normal</option>
+                <option value="1.5">Strong</option>
+                <option value="2">Very Strong</option>
+              </select>
+            </label>
+            <label>Global rule pull
+              <select id="globalRulePull">
+                <option value="0.2">Very Weak</option>
+                <option value="0.375" selected>3/8 Default</option>
+                <option value="0.5">Half</option>
+                <option value="0.75">Strong</option>
+                <option value="1">Normal</option>
+              </select>
+            </label>
+          </div>
+          <div class="auto-connection-setting technology-setting">
+            <div>
+              <b>Technology System <small>(Experimental)</small></b>
+              <p>Experimental feature. OFF by default. Enable civilization discoveries, the Technology Tree, and technological Magical Objects. Disabling preserves technology data but removes the live tree from the graph.</p>
+            </div>
+            <button id="technologyToggle" class="toggle-button">ON</button>
+            <div id="technologyStatus" class="full setting-status">Technology simulation is active.</div>
+          </div>
+          <div class="auto-connection-setting">
+            <div>
+              <b>Automatic Connections</b>
+              <p>Let the sandbox infer relationships from names, spell classes, rules, requirements, composition and compatibility.</p>
+            </div>
+            <button id="autoConnectionsToggle" class="toggle-button">ON</button>
+            <div id="autoConnectionStatus" class="full setting-status">Automatic connections are active.</div>
+          </div>
+          <div class="modal-actions">
+            <button id="resetPhysics" class="ghost">Reset physics</button>
+            <button id="saveSettings" class="primary">Save settings</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="autoConnectionModal" class="modal hidden">
+        <div class="modal-card link-card">
+          <div class="modal-head"><div><div class="eyebrow">Connection behavior</div><h2 id="autoConnectionTitle">Automatic Connections</h2></div><button id="closeAutoConnection" class="icon-btn">×</button></div>
+          <p id="autoConnectionExplain" class="decision-copy"></p>
+          <div id="autoConnectionChoices" class="decision-choices"></div>
+        </div>
+      </div>
+
+      <div id="advancementModal" class="modal hidden">
+  <div class="modal-card advancement-card">
+    <div class="modal-head">
+      <div><div class="eyebrow">Technology connection</div><h2>Edit Advancement</h2></div>
+      <button id="closeAdvancement" class="icon-btn">×</button>
+    </div>
+    <div id="advancementPreview" class="link-preview"></div>
+    <div class="advancement-editor">
+      <label class="advancement-number-label">Advancement
+        <input id="advancementValue" type="number" min="0" step="1" value="25" placeholder="e.g. 25, 500, 10000">
+      </label>
+      <small>No upper limit. Higher Advancement sits farther up the technology line; huge values are visually compressed so the tree stays usable.</small>
+    </div>
+    <div class="modal-actions">
+      <button id="cancelAdvancement" class="ghost">Cancel</button>
+      <button id="saveAdvancement" class="primary">Save Advancement</button>
+    </div>
+  </div>
+</div>
+
+<div id="connectionsModal" class="modal hidden">
+        <div class="modal-card link-card">
+          <div class="modal-head">
+            <div>
+              <div class="eyebrow">Selected node</div>
+              <h2>Connections</h2>
+            </div>
+            <button id="closeConnections" class="icon-btn">×</button>
+          </div>
+          <div id="connectionsList" class="connections-list"></div>
+        </div>
+      </div>
+
+      <div id="linkModal" class="modal hidden">
+        <div class="modal-card link-card">
+          <div class="modal-head">
+            <div>
+              <div class="eyebrow">Manual relationship</div>
+              <h2>Create Link</h2>
+            </div>
+            <button id="closeLink" class="icon-btn">×</button>
+          </div>
+          <div class="editor-grid">
+            <label>Relationship label
+              <input id="linkLabel" placeholder="made of, requires, enables, derived from...">
+            </label>
+            <label>Line type
+              <select id="linkType">
+                <option value="direct">Direct</option>
+                <option value="dependency">Dependency</option>
+                <option value="influence">Influence</option>
+                <option value="relationship">Relationship</option>
+                <option value="similarity">Similarity</option>
+                <option value="composition">Composition</option>
+                <option value="restriction">Restriction</option>
+                <option value="opposition">Opposition</option>
+                <option value="flow">Flow</option>
+                <option value="reference">Reference</option>
+                <option value="creation">Creation</option>
+                <option value="transformation">Transformation</option>
+                <option value="containment">Containment</option>
+                <option value="amplification">Amplification</option>
+                <option value="cancellation">Cancellation</option>
+              </select>
+            </label>
+            <div id="linkRelationshipFields" class="full relationship-link-fields hidden">
+              <label>Relationship type
+                <select id="linkRelationshipKind">
+                  <option value="separate">Separate</option>
+                  <option value="worksFor">Works for</option>
+                  <option value="createdBy">Created by</option>
+                </select>
+              </label>
+              <small id="linkRelationshipKindHelp">Independent groups. Positive relations create cooperation; negative relations create disputes, raids, or war.</small>
+              <div class="relationship-slider-head"><b>Relationship</b><output id="linkRelationshipOut">0</output></div>
+              <input id="linkRelationship" class="relationship-slider" type="range" min="-100" max="100" step="1" value="0">
+              <small id="linkRelationshipText">Neutral / mixed relationship.</small>
+            </div>
+            <label>Strength
+              <select id="linkStrength">
+                <option value="solid">Solid</option>
+                <option value="dashed">Dashed</option>
+                <option value="dotted">Dotted</option>
+              </select>
+            </label>
+            <label>Thickness
+              <select id="linkThickness">
+                <option value="1">Thin</option>
+                <option value="1.6" selected>Normal</option>
+                <option value="2.4">Strong</option>
+                <option value="3.2">Heavy</option>
+              </select>
+            </label>
+            <label>Direction
+              <select id="linkDirection">
+                <option value="forward">A → B</option>
+                <option value="backward">A ← B</option>
+                <option value="both">A ↔ B</option>
+                <option value="none">Undirected</option>
+              </select>
+            </label>
+            <div class="full link-preview" id="linkPreview"></div>
+          </div>
+          <div class="modal-actions">
+            <button id="saveLink" class="primary">Create link</button>
+            <button id="cancelLink" class="ghost">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+    <div class="global-generator">
+      <button id="generateMagicSystem" class="global-generator-btn" title="Generate a complete V22 magic world: magic, places, civilizations, organizations, utilities, economy and relationships">✦ Generate Procedural Magic World</button>
+    </div>
+    <div class="toolbar toolbar-v226">
+      <div class="toolbar-wing toolbar-wing-left">
+        <div class="toolbar-cluster toolbar-history-cluster">
+          <button id="undoBtn" class="toolbtn history-btn" title="Undo (Ctrl/Cmd+Z)" disabled>↶<span>Undo</span></button>
+          <button id="redoBtn" class="toolbtn history-btn" title="Redo (Ctrl/Cmd+Y or Cmd+Shift+Z)" disabled>↷<span>Redo</span></button>
+        </div>
+
+        <div class="toolbar-cluster toolbar-edit-cluster">
+          <button id="editBtn" class="toolbtn">✎<span>Edit</span></button>
+          <button id="cloneBtn" class="toolbtn" title="Clone selected node">⧉<span>Clone</span></button>
+          <button id="deleteBtn" class="toolbtn danger-tool">⌫<span>Delete</span></button>
+          <button id="linkBtn" class="toolbtn" title="Drag node → node to connect. Drag empty space → a connection to remove it.">↗<span>Link</span></button>
+          <button id="connectionsBtn" class="toolbtn">≋<span>Connections</span></button>
+        </div>
+      </div>
+
+      <div class="toolbar-create-center">
+        <button id="createBtn" class="create-hex-btn" title="Create">
+          <span class="create-hex-plus">＋</span>
+          <span class="create-hex-label">Create</span>
+        </button>
+      </div>
+
+      <div class="toolbar-wing toolbar-wing-right">
+        <div class="toolbar-cluster toolbar-view-cluster">
+          <button id="organizeBtn" class="toolbtn">⌘<span>Organize</span></button>
+          <button id="fitBtn" class="toolbtn">⊙<span>Fit</span></button>
+          <button id="inspectBtn" class="toolbtn">◉<span>Inspect</span></button>
+          <button id="freezeBtn" class="toolbtn" title="Freeze dynamic movement">❄<span>Freeze</span></button>
+          <button id="pulseBtn" class="toolbtn">◎<span>Pulse Web</span></button>
+        </div>
+
+        <div class="toolbar-cluster toolbar-system-cluster">
+          <button id="auditBtn" class="toolbtn" title="Analyze magic system">⌁<span>Audit</span></button>
+          <button id="simulateBtn" class="toolbtn strong" title="Simulate a civilization using this magic system">▶<span>Simulate</span></button>
+          <button id="resetSystemBtn" class="toolbtn danger-tool" title="Reset magic system to Mana only">↺<span>Reset</span></button>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <aside class="sidebar right">
+    <div class="side-title">
+      <div>
+        <div class="eyebrow">Library</div>
+        <h2>System</h2>
+      </div>
+      <span id="systemCount" class="count">0</span>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="rules">Rules</button>
+      <button class="tab" data-tab="materials">Materials</button>
+      <button class="tab" data-tab="tools">Tools+</button>
+    </div>
+    <div id="systemList" class="library-list"></div>
+  </aside>
+</main>
+<div id="megaPainterBackdrop" class="mega-painter-backdrop hidden"></div>
+<script src="js/data.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/editors.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

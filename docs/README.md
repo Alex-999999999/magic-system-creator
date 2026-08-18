@@ -1,31 +1,35 @@
-# Magic System Sandbox V22.8a — Modern Save Metadata
+# Magic System Sandbox V22.8h — Stable Dragging + Persistent Toolbar
 
-V22.8 adaptive scaling remains intact.
+## Editor dragging fix
 
-## Save/export version
+V22.8g switched panels to `position: fixed` while they were inside a transformed
+editor container. That could make them disappear or jump to unexpected coordinate
+systems.
 
-New save metadata now identifies the project as:
+V22.8h never changes positioning mode.
 
-- `format: "MagicSystemSandbox"`
-- `version: "22.8"`
-- `schemaVersion: 22800`
+Dragging now uses transform offsets:
+- editor shell stays centered in the viewport
+- drag offset is added after the center transform
+- side panels remain in normal flow and use their own transform offsets
+- no fixed-position reparenting or coordinate-space conflicts
 
-Exported project files are now named:
+## Centered spawn
 
-`magic-system-v22.8.magicgraph`
+Every time an editor opens:
+- drag offsets are reset to 0
+- the editor shell starts at exact 50% / 50% viewport center
 
-instead of `magic-system-v15.magicgraph`.
+## Toolbar
 
-## Richer exported saves
+The main toolbar now has a very high z-index and remains:
+- visible while editors are open
+- fully clickable while editors are open
 
-V22.8 exports can also include:
-- technology settings
-- Civilization Symbols
-- world-state cache
-- Simulation state
-- scale-navigation state
+The editor backdrop no longer captures toolbar input.
 
-## Backward compatibility
+## Simulation exception
 
-Older V15/V16/etc. `.magicgraph` files still load. Missing modern fields are
-treated as optional and use the existing legacy-safe reset behavior.
+When Simulate is open, the main toolbar is explicitly hidden.
+
+All V22.8g functionality and earlier systems remain intact.

@@ -1892,7 +1892,255 @@ function unresolvedDescendantsForScale(scale){
 }
 
 
+// ===================== V22.8f CENTERED EDITOR SCALER =====================
+const EDITOR_VIEWPORT_MARGIN=18;
+const EDITOR_MIN_SCALE=.46;
+
+function editorNaturalSize(){
+  const shell=$('editorModal')?.querySelector('.editor-shell');
+  if(!shell)return{width:650,height:720};
+
+  // Measure at 1:1 before applying scale.
+  const previous=shell.style.transform;
+  shell.style.transform='translate(-50%,-50%) scale(1)';
+
+  const width=Math.max(
+    1,
+    shell.scrollWidth,
+    shell.offsetWidth,
+    shell.getBoundingClientRect().width
+  );
+  const height=Math.max(
+    1,
+    shell.scrollHeight,
+    shell.offsetHeight,
+    shell.getBoundingClientRect().height
+  );
+
+  shell.style.transform=previous;
+  return{width,height}
+}
+
+function fitEditorToViewport(){
+  const modal=$('editorModal');
+  const shell=modal?.querySelector('.editor-shell');
+  if(!modal||!shell||modal.classList.contains('hidden'))return;
+
+  // Always anchor the shell at the exact viewport center.
+  shell.style.position='absolute';
+  shell.style.left='50%';
+  shell.style.top='50%';
+  shell.style.right='auto';
+  shell.style.bottom='auto';
+  shell.style.margin='0';
+  shell.style.transformOrigin='center center';
+
+  // First measure the editor at natural authored size.
+  shell.style.transform='translate(-50%,-50%) scale(1)';
+  const natural=editorNaturalSize();
+
+  const availableW=Math.max(1,window.innerWidth-EDITOR_VIEWPORT_MARGIN*2);
+  const availableH=Math.max(1,window.innerHeight-EDITOR_VIEWPORT_MARGIN*2);
+
+  const scale=Math.max(
+    EDITOR_MIN_SCALE,
+    Math.min(
+      1,
+      availableW/natural.width,
+      availableH/natural.height
+    )
+  );
+
+  shell.dataset.editorScale=scale.toFixed(4);
+  shell.style.setProperty('--editor-fit-scale',String(scale));
+}
+
+let editorFitRAF=0;
+function requestEditorFit(){
+  cancelAnimationFrame(editorFitRAF);
+  editorFitRAF=requestAnimationFrame(fitEditorToViewport)
+}
+
+window.addEventListener('resize',requestEditorFit);
+window.addEventListener('orientationchange',()=>setTimeout(requestEditorFit,60));
+const editorLayoutObserver=new MutationObserver(()=>{
+  if(!$('editorModal')?.classList.contains('hidden')){
+    requestEditorFit();
+    requestAnimationFrame(bindDraggableEditorPanels)
+  }
+});
+if($('editorModal')){
+  editorLayoutObserver.observe($('editorModal'),{
+    subtree:true,
+    attributes:true,
+    attributeFilter:['class','style']
+  })
+}
+
+
+// ===================== V22.8h STABLE DRAGGABLE UI PANELS =====================
+const draggablePanelState=new WeakMap();
+
+function panelDragOffset(panel){
+  return{
+    x:+panel.dataset.dragX||0,
+    y:+panel.dataset.dragY||0
+  }
+}
+
+function applyPanelDragTransform(panel){
+  const {x,y}=panelDragOffset(panel);
+  panel.style.setProperty('--panel-drag-x',`${x}px`);
+  panel.style.setProperty('--panel-drag-y',`${y}px`)
+}
+
+function clampPanelDrag(panel,nextX,nextY){
+  const current=panelDragOffset(panel);
+  const rect=panel.getBoundingClientRect();
+
+  // Work out where the panel would land if we change from the current offset
+  // to the proposed offset.
+  let left=rect.left+(nextX-current.x);
+  let top=rect.top+(nextY-current.y);
+  let right=left+rect.width;
+  let bottom=top+rect.height;
+
+  const pad=8;
+  const vw=window.innerWidth;
+  const vh=window.innerHeight;
+
+  if(left<pad)nextX+=pad-left;
+  if(top<pad)nextY+=pad-top;
+  if(right>vw-pad)nextX-=right-(vw-pad);
+  if(bottom>vh-pad)nextY-=bottom-(vh-pad);
+
+  return{x:nextX,y:nextY}
+}
+
+function makePanelDraggable(panel,handle){
+  if(!panel||!handle||draggablePanelState.has(panel))return;
+
+  const state={
+    dragging:false,
+    pointerId:null,
+    startClientX:0,
+    startClientY:0,
+    startOffsetX:0,
+    startOffsetY:0
+  };
+  draggablePanelState.set(panel,state);
+
+  handle.classList.add('drag-handle');
+
+  handle.addEventListener('pointerdown',ev=>{
+    if(ev.button!==0)return;
+    if(ev.target.closest('button,input,select,textarea,a,label'))return;
+
+    const offset=panelDragOffset(panel);
+
+    state.dragging=true;
+    state.pointerId=ev.pointerId;
+    state.startClientX=ev.clientX;
+    state.startClientY=ev.clientY;
+    state.startOffsetX=offset.x;
+    state.startOffsetY=offset.y;
+
+    handle.setPointerCapture?.(ev.pointerId);
+    panel.classList.add('ui-panel-dragging');
+    document.body.classList.add('dragging-ui-panel');
+
+    ev.preventDefault()
+  });
+
+  handle.addEventListener('pointermove',ev=>{
+    if(!state.dragging||ev.pointerId!==state.pointerId)return;
+
+    let nextX=state.startOffsetX+(ev.clientX-state.startClientX);
+    let nextY=state.startOffsetY+(ev.clientY-state.startClientY);
+
+    const clamped=clampPanelDrag(panel,nextX,nextY);
+    panel.dataset.dragX=String(clamped.x);
+    panel.dataset.dragY=String(clamped.y);
+    applyPanelDragTransform(panel)
+  });
+
+  const finish=ev=>{
+    if(!state.dragging)return;
+    if(ev?.pointerId!=null&&ev.pointerId!==state.pointerId)return;
+
+    state.dragging=false;
+    state.pointerId=null;
+    panel.classList.remove('ui-panel-dragging');
+    document.body.classList.remove('dragging-ui-panel')
+  };
+
+  handle.addEventListener('pointerup',finish);
+  handle.addEventListener('pointercancel',finish)
+}
+
+function bindDraggableEditorPanels(){
+  const modal=$('editorModal');
+  if(!modal)return;
+
+  // MAIN EDITOR:
+  // drag the whole shell using the editor card header, not the card itself.
+  // This avoids fixed-position children fighting the centered shell transform.
+  const shell=modal.querySelector('.editor-shell');
+  const main=modal.querySelector('.editor-main-card');
+  const mainHandle=main?.querySelector('.modal-head');
+  if(shell&&mainHandle)makePanelDraggable(shell,mainHandle);
+
+  // Side panels stay in normal layout and move via transform offsets too.
+  const sidePanels=[
+    '.auto-connections-drawer',
+    '.planet-palette-panel',
+    '.solar-system-editor-panel',
+    '.star-editor-panel',
+    '.megastructure-editor-panel'
+  ];
+
+  sidePanels.forEach(sel=>{
+    const panel=modal.querySelector(sel);
+    if(!panel||panel.classList.contains('hidden'))return;
+
+    const handle=
+      panel.querySelector('.section-title-row,.panel-head,.drawer-head,.modal-head,h3,h2')
+      ||panel.firstElementChild;
+
+    if(handle)makePanelDraggable(panel,handle)
+  })
+}
+
+function resetDraggableEditorPanels(){
+  const modal=$('editorModal');
+  if(!modal)return;
+
+  modal.querySelectorAll(
+    '.editor-shell,.auto-connections-drawer,.planet-palette-panel,.solar-system-editor-panel,.star-editor-panel,.megastructure-editor-panel'
+  ).forEach(panel=>{
+    panel.dataset.dragX='0';
+    panel.dataset.dragY='0';
+    panel.style.removeProperty('--panel-drag-x');
+    panel.style.removeProperty('--panel-drag-y');
+    panel.classList.remove('ui-panel-dragging')
+  })
+}
+
+// Resizing keeps moved panels visible without changing positioning mode.
+window.addEventListener('resize',()=>{
+  document.querySelectorAll(
+    '#editorModal .editor-shell,#editorModal .auto-connections-drawer,#editorModal .planet-palette-panel,#editorModal .solar-system-editor-panel,#editorModal .star-editor-panel,#editorModal .megastructure-editor-panel'
+  ).forEach(panel=>{
+    const off=panelDragOffset(panel);
+    const next=clampPanelDrag(panel,off.x,off.y);
+    panel.dataset.dragX=String(next.x);
+    panel.dataset.dragY=String(next.y);
+    applyPanelDragTransform(panel)
+  })
+});
+
 function openEditor(type,node=null){
+  resetDraggableEditorPanels();
   pendingConnectionPlan=null;editingId=node?.id||null;editingType=type;$('editorModal').classList.remove('hidden');$('createMenu').classList.add('hidden');$('editorKindLabel').textContent=node?'Edit':'Create';$('editorTitle').textContent=(node?'Edit ':creatingHub?'New Hub: ':'New ')+(type==='magicalObject'?'Magical Object':type[0].toUpperCase()+type.slice(1));
   const f=E.field.bind(E);let html='<div class="editor-grid">';
   if(type==='mana')html+=`<div class="editor-hint">Mana is the root source of this magical system. You can rename it and define what kind of magical energy it represents without removing its role as the central source.</div>`
@@ -2591,8 +2839,15 @@ $('eCreatedMegaSize')?.addEventListener('input',()=>{renderMegaPlanetGuide();ren
   }
 
   if(type==='spell')requestAnimationFrame(bindMoralitySlider);
+  requestEditorFit();
+  requestAnimationFrame(bindDraggableEditorPanels);
+  requestAnimationFrame(bindDraggableEditorPanels);
 }
-function closeEditor(){if(megaPainterState?.expanded)toggleMegaPainterExpanded(false);$('autoConnectionsPanel').classList.add('hidden');$('planetPalettePanel')?.classList.add('hidden');$('solarSystemEditorPanel')?.classList.add('hidden');$('starEditorPanel')?.classList.add('hidden');$('megastructureEditorPanel')?.classList.add('hidden');$('editorModal').classList.add('hidden');editingId=null;editingType=null;creatingHub=false;pendingConnectionPlan=null}
+
+
+
+function closeEditor(){
+  resetDraggableEditorPanels();if(megaPainterState?.expanded)toggleMegaPainterExpanded(false);$('autoConnectionsPanel').classList.add('hidden');$('planetPalettePanel')?.classList.add('hidden');$('solarSystemEditorPanel')?.classList.add('hidden');$('starEditorPanel')?.classList.add('hidden');$('megastructureEditorPanel')?.classList.add('hidden');$('editorModal').classList.add('hidden');editingId=null;editingType=null;creatingHub=false;pendingConnectionPlan=null}
 const value=id=>$(id)?.value?.trim()||'';
 function saveCivilizationUtilEditor(){
   if(editingType!=='civilizationUtil')return false;
@@ -3279,7 +3534,7 @@ function systemAudit(){
 
 
 
-const WORLD_RENDER_SCHEMA=22802;
+const WORLD_RENDER_SCHEMA=22808;
 try{
   const oldSchema=Number(localStorage.getItem('magicWorldRenderSchema')||0);
   if(oldSchema!==WORLD_RENDER_SCHEMA){

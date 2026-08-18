@@ -5017,3 +5017,500 @@ main.app > .center{
     font-size:9px !important;
   }
 }
+
+/* ==========================================================
+   V22.8c — Create menu viewport fit + internal scrolling
+   ========================================================== */
+
+/* Keep the create menu inside the visible browser area. */
+#createMenu{
+  box-sizing:border-box !important;
+  max-width:min(520px,calc(100vw - 24px)) !important;
+  max-height:calc(100dvh - 24px) !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+
+/* If the menu contains a dedicated inner card/panel, make it a
+   header / scrollable body / actions layout. */
+#createMenu .modal-card,
+#createMenu .create-menu-card,
+#createMenu .create-panel{
+  box-sizing:border-box !important;
+  width:min(520px,100%) !important;
+  max-width:100% !important;
+  max-height:calc(100dvh - 24px) !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+  display:grid !important;
+  grid-template-rows:auto minmax(0,1fr) auto !important;
+}
+
+/* Main generated content is the scroll region. */
+#createMenu .create-menu-body,
+#createMenu .create-grid,
+#createMenu .modal-body,
+#createMenu .menu-body{
+  min-height:0 !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+  padding-bottom:10px;
+}
+
+/* If Create uses a generic editor-grid directly, let that scroll too. */
+#createMenu .editor-grid{
+  min-height:0 !important;
+  max-height:calc(100dvh - 150px) !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  align-content:start !important;
+}
+
+/* Keep bottom actions reachable at all times. */
+#createMenu .modal-actions,
+#createMenu .create-actions,
+#createMenu .menu-actions{
+  position:sticky !important;
+  bottom:0 !important;
+  z-index:5;
+  margin:0 !important;
+  padding:10px !important;
+  border-top:1px solid #2a3e55;
+  background:linear-gradient(180deg,#0b1520,#09111a);
+}
+
+/* Header also stays accessible. */
+#createMenu .modal-head,
+#createMenu .create-menu-head,
+#createMenu .menu-head{
+  position:sticky !important;
+  top:0 !important;
+  z-index:5;
+  background:linear-gradient(180deg,#101c2a,#0b1520);
+}
+
+/* Narrow windows: collapse multi-column Create forms. */
+@media(max-width:700px){
+  #createMenu{
+    max-width:calc(100vw - 12px) !important;
+    max-height:calc(100dvh - 12px) !important;
+  }
+
+  #createMenu .create-grid,
+  #createMenu .editor-grid{
+    grid-template-columns:1fr !important;
+  }
+
+  #createMenu .create-grid > *,
+  #createMenu .editor-grid > *{
+    min-width:0 !important;
+  }
+
+  #createMenu .create-grid > .full,
+  #createMenu .editor-grid > .full{
+    grid-column:1 !important;
+  }
+}
+
+/* Very short windows: reserve more room for Save/Cancel. */
+@media(max-height:560px){
+  #createMenu .create-menu-body,
+  #createMenu .create-grid,
+  #createMenu .modal-body,
+  #createMenu .editor-grid{
+    max-height:calc(100dvh - 120px) !important;
+  }
+}
+
+#createMenu{
+  top:50% !important;
+  left:50% !important;
+  right:auto !important;
+  bottom:auto !important;
+  transform:translate(-50%,-50%) !important;
+}
+
+/* ==========================================================
+   V22.8f — CENTERED, NATURAL-PROPORTION EDITORS
+   Built from V22.8c editor behavior.
+   ========================================================== */
+
+/* Overlay is the real viewport. */
+#editorModal{
+  position:fixed !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100dvh !important;
+  max-width:none !important;
+  max-height:none !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow:hidden !important;
+  display:block !important;
+}
+
+#editorModal.hidden{
+  display:none !important;
+}
+
+/* THE important rule:
+   editor-shell is always anchored to true viewport center.
+   JS only changes the uniform scale value. */
+#editorModal .editor-shell{
+  position:absolute !important;
+  left:50% !important;
+  top:50% !important;
+  right:auto !important;
+  bottom:auto !important;
+
+  margin:0 !important;
+  transform:translate(-50%,-50%) scale(1);
+  transform-origin:center center !important;
+
+  width:max-content !important;
+  max-width:none !important;
+  min-width:0 !important;
+
+  height:max-content !important;
+  max-height:none !important;
+  min-height:0 !important;
+
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:stretch !important;
+  justify-content:center !important;
+  gap:10px !important;
+
+  overflow:visible !important;
+}
+
+/* Restore V22.8c-style authored editor card dimensions.
+   Do NOT stretch to the viewport. */
+#editorModal .editor-main-card{
+  width:min(650px,650px) !important;
+  max-width:650px !important;
+  min-width:650px !important;
+
+  height:auto !important;
+  max-height:86vh !important;
+  min-height:0 !important;
+
+  flex:0 0 650px !important;
+  overflow:hidden !important;
+
+  display:flex !important;
+  flex-direction:column !important;
+}
+
+/* Body scrolls if content is long, preserving editor proportions. */
+#editorModal #editorBody{
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  height:auto !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+}
+
+/* Keep original two-column form layout. */
+#editorModal .editor-grid{
+  grid-template-columns:1fr 1fr !important;
+  grid-auto-rows:max-content !important;
+  width:auto !important;
+  height:auto !important;
+  max-height:none !important;
+  overflow:visible !important;
+  align-content:start !important;
+}
+
+#editorModal .editor-grid > .full{
+  grid-column:1 / -1 !important;
+}
+
+/* Save and Cancel remain part of the natural card and scale with it. */
+#editorModal .editor-main-card > .modal-actions{
+  flex:0 0 auto !important;
+  position:relative !important;
+  bottom:auto !important;
+  margin-top:13px !important;
+}
+
+/* Header behaves normally; it scales with the card. */
+#editorModal .editor-main-card > .modal-head{
+  flex:0 0 auto !important;
+  position:relative !important;
+  top:auto !important;
+}
+
+/* Side drawers keep authored widths and scale with the entire shell. */
+#editorModal .auto-connections-drawer{
+  width:350px !important;
+  max-width:350px !important;
+  min-width:350px !important;
+  max-height:86vh !important;
+  flex:0 0 350px !important;
+  overflow:auto !important;
+}
+
+#editorModal .planet-palette-panel,
+#editorModal .solar-system-editor-panel,
+#editorModal .star-editor-panel,
+#editorModal .megastructure-editor-panel{
+  width:285px !important;
+  max-width:285px !important;
+  min-width:285px !important;
+  max-height:86vh !important;
+  flex:0 0 285px !important;
+  overflow:auto !important;
+}
+
+/* Disable all responsive stacking/stretching from earlier patches.
+   Scaling handles small windows instead. */
+@media(max-width:1000px){
+  #editorModal .editor-shell{
+    flex-direction:row !important;
+    overflow:visible !important;
+  }
+
+  #editorModal .editor-main-card{
+    width:650px !important;
+    max-width:650px !important;
+    min-width:650px !important;
+    flex:0 0 650px !important;
+  }
+
+  #editorModal .auto-connections-drawer{
+    width:350px !important;
+    max-width:350px !important;
+    min-width:350px !important;
+  }
+
+  #editorModal .planet-palette-panel,
+  #editorModal .solar-system-editor-panel,
+  #editorModal .star-editor-panel,
+  #editorModal .megastructure-editor-panel{
+    width:285px !important;
+    max-width:285px !important;
+    min-width:285px !important;
+  }
+}
+
+@media(max-width:720px){
+  #editorModal .editor-grid{
+    grid-template-columns:1fr 1fr !important;
+  }
+
+  #editorModal .editor-grid > .full{
+    grid-column:1 / -1 !important;
+  }
+}
+
+/* Prevent old V22.8c viewport rules from stretching the editor shell/card. */
+#editorModal .editor-shell,
+#editorModal .editor-main-card{
+  box-sizing:border-box !important;
+}
+
+/* Center remains exact even on very short screens. */
+@media(max-height:620px){
+  #editorModal .editor-shell{
+    left:50% !important;
+    top:50% !important;
+  }
+}
+
+/* V22.8f — Create picker remains original bottom-center */
+#createMenu{
+  position:absolute !important;
+  left:50% !important;
+  right:auto !important;
+  top:auto !important;
+  bottom:16px !important;
+  transform:translateX(-50%) !important;
+  width:min(510px,calc(100% - 28px)) !important;
+}
+
+/* ==========================================================
+   V22.8g — Draggable editor panels
+   ========================================================== */
+
+.drag-handle{
+  cursor:grab !important;
+  user-select:none !important;
+  touch-action:none !important;
+}
+
+.ui-panel-dragging .drag-handle,
+.drag-handle:active{
+  cursor:grabbing !important;
+}
+
+body.dragging-ui-panel{
+  user-select:none !important;
+}
+
+#editorModal .editor-main-card,
+#editorModal .auto-connections-drawer,
+#editorModal .planet-palette-panel,
+#editorModal .solar-system-editor-panel,
+#editorModal .star-editor-panel,
+#editorModal .megastructure-editor-panel{
+  z-index:2;
+}
+
+#editorModal .ui-panel-dragging{
+  z-index:999 !important;
+  box-shadow:
+    0 22px 65px rgba(0,0,0,.52),
+    0 0 0 1px rgba(119,154,210,.18) !important;
+}
+
+/* Once dragged, panels should keep their authored size instead of being
+   stretched by their old flex/grid parent. */
+#editorModal .editor-main-card[style*="position: fixed"],
+#editorModal .auto-connections-drawer[style*="position: fixed"],
+#editorModal .planet-palette-panel[style*="position: fixed"],
+#editorModal .solar-system-editor-panel[style*="position: fixed"],
+#editorModal .star-editor-panel[style*="position: fixed"],
+#editorModal .megastructure-editor-panel[style*="position: fixed"]{
+  flex:none !important;
+  transform:none !important;
+}
+
+/* Visible drag affordance */
+#editorModal .modal-head.drag-handle::before,
+#editorModal .section-title-row.drag-handle::before,
+#editorModal .panel-head.drag-handle::before,
+#editorModal .drawer-head.drag-handle::before{
+  content:"⋮⋮";
+  display:inline-block;
+  margin-right:7px;
+  color:#7188a4;
+  letter-spacing:-2px;
+  font-size:11px;
+  vertical-align:middle;
+}
+
+/* Prevent old centered-shell transform from fighting with manually dragged
+   main cards. The shell stays as a backdrop/container. */
+#editorModal .editor-shell{
+  pointer-events:none;
+}
+
+#editorModal .editor-shell > *{
+  pointer-events:auto;
+}
+
+/* ==========================================================
+   V22.8h — Stable transform-based dragging
+   ========================================================== */
+
+#editorModal .editor-shell{
+  /* Spawn exactly in the middle every time. */
+  position:absolute !important;
+  left:50% !important;
+  top:50% !important;
+  right:auto !important;
+  bottom:auto !important;
+  margin:0 !important;
+
+  /* Preserve the normal centering transform and add drag offset afterwards. */
+  transform:
+    translate(-50%,-50%)
+    translate(
+      var(--panel-drag-x,0px),
+      var(--panel-drag-y,0px)
+    ) !important;
+
+  transform-origin:center center !important;
+}
+
+/* Side panels remain in normal flow and are only visually translated.
+   No position:fixed switching, so they can't vanish into a transformed parent. */
+#editorModal .auto-connections-drawer,
+#editorModal .planet-palette-panel,
+#editorModal .solar-system-editor-panel,
+#editorModal .star-editor-panel,
+#editorModal .megastructure-editor-panel{
+  transform:
+    translate(
+      var(--panel-drag-x,0px),
+      var(--panel-drag-y,0px)
+    ) !important;
+}
+
+/* Remove V22.8g fixed-position drag behavior. */
+#editorModal .editor-main-card[style*="position: fixed"],
+#editorModal .auto-connections-drawer[style*="position: fixed"],
+#editorModal .planet-palette-panel[style*="position: fixed"],
+#editorModal .solar-system-editor-panel[style*="position: fixed"],
+#editorModal .star-editor-panel[style*="position: fixed"],
+#editorModal .megastructure-editor-panel[style*="position: fixed"]{
+  position:relative !important;
+  left:auto !important;
+  top:auto !important;
+  right:auto !important;
+  bottom:auto !important;
+}
+
+/* Drag affordance remains. */
+.drag-handle{
+  cursor:grab !important;
+  user-select:none !important;
+  touch-action:none !important;
+}
+.ui-panel-dragging .drag-handle,
+.drag-handle:active{
+  cursor:grabbing !important;
+}
+.ui-panel-dragging{
+  z-index:5000 !important;
+  box-shadow:
+    0 22px 65px rgba(0,0,0,.52),
+    0 0 0 1px rgba(119,154,210,.18) !important;
+}
+
+/* ==========================================================
+   V22.8h — Toolbar above editor overlays
+   ========================================================== */
+
+/* Toolbar stays on top of normal editor/modal workspaces. */
+.toolbar,
+.toolbar.toolbar-v226{
+  position:fixed !important;
+  z-index:2147483200 !important;
+  pointer-events:auto !important;
+}
+
+/* Editor overlay must not swallow toolbar clicks.
+   Only the actual editor panels receive pointer input. */
+#editorModal{
+  pointer-events:none !important;
+}
+
+#editorModal .editor-shell,
+#editorModal .editor-shell *,
+#editorModal .editor-main-card,
+#editorModal .auto-connections-drawer,
+#editorModal .planet-palette-panel,
+#editorModal .solar-system-editor-panel,
+#editorModal .star-editor-panel,
+#editorModal .megastructure-editor-panel{
+  pointer-events:auto !important;
+}
+
+/* Simulate is the one mode where the main graph toolbar disappears. */
+body.simulation-workspace-open .toolbar,
+body.simulation-workspace-open .toolbar.toolbar-v226,
+body:has(#simulationModal:not(.hidden)) .toolbar,
+body:has(#simulationModal:not(.hidden)) .toolbar.toolbar-v226{
+  display:none !important;
+}
+
+/* When Simulation closes, toolbar resumes normal fixed visibility. */
+body:not(.simulation-workspace-open) .toolbar,
+body:not(.simulation-workspace-open) .toolbar.toolbar-v226{
+  visibility:visible;
+}

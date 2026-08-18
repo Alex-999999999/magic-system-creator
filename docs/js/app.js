@@ -86,6 +86,9 @@ function save(){
   };
   const safeSim=typeof simState==='undefined'?null:simState;
   const payload=JSON.stringify({
+    format:'MagicSystemSandbox',
+    version:'22.8',
+    schemaVersion:22800,
     nodes,edges,physicsSettings,autoConnections,technologySettings,
     simState:safeSim,worldStateCache,scaleNav:safeScaleNav
   });
@@ -3276,7 +3279,7 @@ function systemAudit(){
 
 
 
-const WORLD_RENDER_SCHEMA=22708;
+const WORLD_RENDER_SCHEMA=22802;
 try{
   const oldSchema=Number(localStorage.getItem('magicWorldRenderSchema')||0);
   if(oldSchema!==WORLD_RENDER_SCHEMA){
@@ -11296,9 +11299,24 @@ function inspireEditor(){
 }
 
 function exportProject(){
-  const payload={format:'MagicSystemSandbox',version:15,savedAt:new Date().toISOString(),nodes,edges,physicsSettings,autoConnections};
+  const payload={
+    format:'MagicSystemSandbox',
+    version:'22.8',
+    schemaVersion:22800,
+    savedAt:new Date().toISOString(),
+    nodes,edges,physicsSettings,autoConnections,technologySettings,
+    civilizationSymbols,
+    worldStateCache,
+    simState:typeof simState==='undefined'?null:simState,
+    scaleNav:typeof scaleNav==='undefined'?null:{
+      level:scaleNav.level,path:scaleNav.path,camera:scaleNav.camera,selected:scaleNav.selected
+    }
+  };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='magic-system-v15.magicgraph';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)
+  a.href=URL.createObjectURL(blob);
+  a.download='magic-system-v22.8.magicgraph';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),500)
 }
 async function importProject(file){
   try{
@@ -11318,16 +11336,33 @@ async function importProject(file){
 
     physicsSettings={...physicsSettings,...(d.physicsSettings||{})};
     autoConnections={...autoConnections,...(d.autoConnections||{})};
+    technologySettings={...technologySettings,...(d.technologySettings||{})};
 
-    // IMPORTANT: imported graphs must never inherit procedural viewer state
-    // from whatever graph was loaded previously.
-    worldStateCache={maps:{},planets:{}};
+    if(Array.isArray(d.civilizationSymbols)){
+      civilizationSymbols=d.civilizationSymbols;
+      saveCivilizationSymbols()
+    }
 
-    if(typeof simState!=='undefined'){
+    // New V22.8 saves can carry richer simulation/world state, while older
+    // V15/V16/etc. files remain valid because every field is optional.
+    if(d.worldStateCache&&typeof d.worldStateCache==='object'){
+      worldStateCache=d.worldStateCache
+    }
+    if(d.simState&&typeof simState!=='undefined'){
+      Object.assign(simState,d.simState)
+    }
+
+    // Legacy project files did not carry viewer/simulation state, so they
+    // still get the old safe reset behavior. Modern V22.8 exports restore it.
+    if(!d.worldStateCache){
+      worldStateCache={maps:{},planets:{}}
+    }
+
+    if(typeof simState!=='undefined'&&!d.simState){
       simState.spaceMap=null;
       simState.planet=null;
       simState.planetOverride=null;
-      simState.locations=[];
+      simState.locations=[]
     }
 
     if(typeof scaleNav!=='undefined'){
@@ -11808,6 +11843,29 @@ window.addEventListener('keydown',e=>{
 window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(document.body.classList.contains('simulation-map-fullscreen')){setSimulationMapFullscreen(false);return}graph.setLinkMode(false);$('linkBtn').classList.remove('active');document.querySelectorAll('.modal').forEach(m=>m.classList.add('hidden'));document.body.classList.remove('simulation-workspace-open')}if((e.key==='Delete'||e.key==='Backspace')&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){if(selected?.id===TECHNOLOGY_NODE_ID)resetTechnology();else deleteSelected()}});
 
 
+// ===================== V22.8b RESPONSIVE LAYOUT =====================
+// V22.8a used CSS `zoom` on the entire application. That made the app's
+// coordinate system disagree with vw/vh units and caused large empty gutters.
+// V22.8b keeps the document at 1:1 and lets the actual layout respond instead.
+function fitApplicationUI(){
+  const w=window.innerWidth||1366;
+  const h=window.innerHeight||768;
+  document.documentElement.style.setProperty('--viewport-w',`${w}px`);
+  document.documentElement.style.setProperty('--viewport-h',`${h}px`);
+  document.body.classList.toggle('ui-compact',w<1100||h<700);
+  document.body.classList.toggle('ui-small',w<820||h<560);
+  requestAnimationFrame(()=>{
+    graph?.resize?.();
+    if(!$('simulationModal')?.classList.contains('hidden'))requestPlanetDraw?.()
+  })
+}
+let applicationUIResizeRAF=0;
+window.addEventListener('resize',()=>{
+  cancelAnimationFrame(applicationUIResizeRAF);
+  applicationUIResizeRAF=requestAnimationFrame(fitApplicationUI)
+});
+window.addEventListener('orientationchange',()=>setTimeout(fitApplicationUI,60));
+
 function mountSimulationAtViewportRoot(){
   const modal=$('simulationModal');
   if(!modal)return;
@@ -12062,6 +12120,7 @@ $('resetSystemBtn').onclick=()=>{
 };
 
 historyRestoring=true;
-load();graph.setPhysicsSettings(physicsSettings);rebuildEdges();normalizeMoonEdgesVisualOnly();ensureMoonOrbitConnections();if(technologySettings.enabled)ensureTechnologyConnections();renderLibraries();renderTechnologyTree();organize();graph.setData(nodes.filter(n=>!n.hiddenTechnology),edges.filter(e=>!e.blocked&&byId(e.a)&&byId(e.b)&&!byId(e.a)?.hiddenTechnology&&!byId(e.b)?.hiddenTechnology));graph.fit();graph.draw();
+load();graph.setPhysicsSettings(physicsSettings);rebuildEdges();normalizeMoonEdgesVisualOnly();ensureMoonOrbitConnections();if(technologySettings.enabled)ensureTechnologyConnections();fitApplicationUI();
+renderLibraries();renderTechnologyTree();organize();graph.setData(nodes.filter(n=>!n.hiddenTechnology),edges.filter(e=>!e.blocked&&byId(e.a)&&byId(e.b)&&!byId(e.a)?.hiddenTechnology&&!byId(e.b)?.hiddenTechnology));graph.fit();graph.draw();
 historyRestoring=false;undoStack=[];redoStack=[];updateHistoryButtons();
 })();

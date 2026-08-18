@@ -1,47 +1,31 @@
-# Magic System Sandbox V22.7h — Dedicated Civilization Util Save Path
+# Magic System Sandbox V22.8a — Modern Save Metadata
 
-Civilization Utils no longer rely on the generic node-editor save routine.
+V22.8 adaptive scaling remains intact.
 
-## Dedicated saving
+## Save/export version
 
-`saveCivilizationUtilEditor()` now handles Civilization Utils directly.
+New save metadata now identifies the project as:
 
-It supports:
-- Language
-- Currency
-- Disease
-- Calendar
-- Measurement System
-- Legal Code
-- Rank System
-- Communication System
-- Naming System
+- `format: "MagicSystemSandbox"`
+- `version: "22.8"`
+- `schemaVersion: 22800`
 
-It handles both:
-- creating a new Civilization Util
-- editing an existing Civilization Util
+Exported project files are now named:
 
-## Save ordering
+`magic-system-v22.8.magicgraph`
 
-The node is now:
-1. created/updated
-2. subtype data is copied from the form
-3. Life access links are synchronized
-4. unrelated Organization/Material/Currency links are preserved
-5. graph data is rebuilt
-6. local save/storage is written
-7. only then is the editor closed
+instead of `magic-system-v15.magicgraph`.
 
-This prevents editor cleanup from clearing editing state before the utility is
-persisted.
+## Richer exported saves
 
-## Defensive routing
+V22.8 exports can also include:
+- technology settings
+- Civilization Symbols
+- world-state cache
+- Simulation state
+- scale-navigation state
 
-The Save button capture handler directly calls the dedicated Civilization Util
-save routine.
+## Backward compatibility
 
-The generic `saveEditor()` also delegates to the same routine if it is ever
-called while a Civilization Util is active.
-
-V22.7g draggable symbols, palette sizing, Language timeline events and earlier
-features remain intact.
+Older V15/V16/etc. `.magicgraph` files still load. Missing modern fields are
+treated as optional and use the existing legacy-safe reset behavior.

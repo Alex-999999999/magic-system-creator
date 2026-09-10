@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Magic System Sandbox v22.8h</title>
-<link rel="stylesheet" href="css/base.css?v=22.8h">
-<link rel="stylesheet" href="css/graph.css?v=22.8h">
-<link rel="stylesheet" href="css/components.css?v=22.8h">
+<title>Creator Sandbox v28.7bl</title>
+<link rel="stylesheet" href="css/base.css?v=28.7bl">
+<link rel="stylesheet" href="css/graph.css?v=28.7bl">
+<link rel="stylesheet" href="css/components.css?v=28.7bl">
 </head>
 <body>
 <audio id="uiClickSound" preload="auto" src="assets/ui-click.mp3"></audio>
@@ -15,7 +15,7 @@
     <div class="side-title">
       <div>
         <div class="eyebrow">Library</div>
-        <h2>Spells</h2>
+        <h2 id="leftLibraryTitle">Spells</h2>
       </div>
       <span id="spellCount" class="count">0</span>
     </div>
@@ -26,8 +26,8 @@
   <section class="center">
     <header class="topbar">
       <div>
-        <div class="eyebrow">V22.8h · Living magic graph</div>
-        <h1>Magic System Sandbox</h1>
+        <div class="eyebrow" id="creatorVersionLabel">V28.7bl · Creator framework</div>
+        <h1 id="creatorSystemTitle">Magic System Sandbox</h1>
       </div>
       <div class="status">
         <span id="systemStats">1 node</span>
@@ -37,8 +37,11 @@
     <div class="top-actions" aria-label="Project controls">
         <button id="saveProjectBtn" class="top-action" title="Save graph to a file">⇩<span>Save</span></button>
         <button id="loadProjectBtn" class="top-action" title="Load a saved graph">⇧<span>Load</span></button>
+        <button id="addonsBtn" class="top-action addons-action" title="Addons and Creator Editor">✦<strong>Addons</strong><span>Addons</span></button>
+        <button id="convertSaveBtn" class="top-action readable-action" title="Convert a .magicgraph save into readable text">⇄<span>Convert</span></button>
         <button id="settingsBtn" class="top-action" title="Settings">⚙<span>Settings</span></button>
         <input id="loadProjectInput" type="file" accept=".json,.magicgraph" class="hidden">
+        <input id="convertSaveInput" type="file" accept=".json,.magicgraph" class="hidden">
       </div>
       <div class="graph-wrap">
       <canvas id="graph"></canvas>
@@ -106,24 +109,32 @@
           <div class="modal-head"><div><div class="eyebrow">V22 Shared Assets</div><h2>Symbol Library</h2></div><button id="closeSymbolLibrary" class="icon-btn">×</button></div>
           <div class="symbol-workbench">
             <div class="symbol-painter">
-              <div class="symbol-toolbar">
+              <div class="symbol-toolbar painter-tool-rail">
                 <button class="symbol-tool active" data-symbol-tool="brush" title="Brush">✎</button>
                 <button class="symbol-tool" data-symbol-tool="line" title="Line">╱</button>
                 <button class="symbol-tool" data-symbol-tool="circle" title="Circle">○</button>
                 <button class="symbol-tool" data-symbol-tool="rect" title="Rectangle">□</button>
                 <button class="symbol-tool" data-symbol-tool="fill" title="Fill">▣</button>
                 <button class="symbol-tool" data-symbol-tool="eraser" title="Eraser">⌫</button>
+                <button class="symbol-tool" data-symbol-tool="select" title="Select">⌖</button>
                 <button id="symbolUndo" title="Undo">↶</button>
                 <button id="symbolRedo" title="Redo">↷</button>
                 <button id="symbolImportButton" title="Import image">⇧</button>
                 <input id="symbolImport" type="file" accept="image/*" hidden>
                 <button id="clearSymbol" title="Clear">×</button>
               </div>
-              <div class="symbol-settings">
-                <label>Color <input id="symbolColor" type="color" value="#f1f5ff"></label>
-                <label>Width <input id="symbolWidth" type="range" min="1" max="40" value="10"></label>
+              <div class="symbol-settings painter-options-rail">
+                <label data-symbol-tools="brush,line,rect,circle,fill">Color <input id="symbolColor" type="color" value="#f1f5ff"></label>
+                <label data-symbol-tools="brush,line,rect,circle,eraser">Thickness <output id="symbolWidthOut">10 px</output><input id="symbolWidth" type="range" min="1" max="48" value="10"></label>
+                <label class="symbol-toggle" data-symbol-tools="brush,line,rect,circle"><input id="symbolPixelate" type="checkbox" checked> Pixelate</label>
+                <label data-symbol-tools="brush,line,rect,circle">Pixel size <input id="symbolPixelSize" type="range" min="1" max="24" value="8"></label>
+                <label class="symbol-toggle" data-symbol-tools="brush,line,rect,circle"><input id="symbolSnap" type="checkbox"> Snap</label>
+                <label class="symbol-toggle" data-symbol-tools="circle"><input id="symbolCircleCenter" type="checkbox"> Circle from center</label>
+                <label data-symbol-tools="brush,eraser">Brush shape <output id="symbolBrushShapeOut">50%</output><input id="symbolBrushShape" type="range" min="0" max="100" value="50"><small>Circle ← → Square</small></label>
+                <label data-symbol-tools="select">Selection mode <select id="symbolSelectMode"><option value="rect">Rectangle</option><option value="lasso">Lasso</option></select></label>
+                <button type="button" id="symbolDeleteSelection" data-symbol-tools="select" class="danger ghost">Delete selection</button>
               </div>
-              <canvas id="symbolCanvas" width="256" height="256"></canvas>
+              <div class="symbol-canvas-stack"><canvas id="symbolCanvas" width="256" height="256"></canvas><canvas id="symbolOverlayCanvas" width="256" height="256" aria-hidden="true"></canvas></div>
               <div class="symbol-actions"><button id="saveSymbol" class="primary">Save Symbol</button></div>
             </div>
             <div class="symbol-meta">
@@ -145,7 +156,7 @@
                   <button id="previewAutoConnections" class="title-icon-btn" title="Auto-Connections">⌁<span>Auto-Connections</span></button>
                 </div>
               </div>
-              <button id="closeEditor" class="icon-btn">×</button>
+              <div class="editor-window-actions"><button id="minimizeEditor" class="icon-btn" type="button" title="Minimize editor">—</button><button id="closeEditor" class="icon-btn">×</button></div>
             </div>
             <div id="editorBody"></div>
             <div class="modal-actions editor-actions">
@@ -157,10 +168,11 @@
 
           <aside id="planetPalettePanel" class="planet-palette-panel hidden">
             <div class="auto-panel-head">
-              <div><div class="eyebrow">Planet Place</div><h3>Color Map</h3></div>
+              <div><div class="eyebrow">Planet Place</div><h3>Planet Color Palette</h3></div>
               <button id="closePlanetPalette" class="icon-btn">×</button>
             </div>
-            <p class="auto-panel-help">Controls the procedural globe used when this Place is entered as a Planet or Moon.</p>
+            <p class="auto-panel-help">Controls the actual globe palette used by this Planet or Moon, including the colors sampled by the Landscape Editor.</p>
+            <div class="planet-palette-savebar"><button type="button" id="savePlanetPalette" class="primary">Save Palette</button><small id="planetPaletteSaveStatus">Save the palette before authoring sampled-color landscapes.</small></div>
 
             <div class="planet-body-options">
               <label class="life-check"><input id="ePlanetIsMoon" type="checkbox"><span><b>Moon</b><small>A planetary-class body orbiting another authored Planet / Moon.</small></span></label>
@@ -205,6 +217,18 @@
               <label>Band contrast <output id="ePlanetGasContrastOut">55%</output>
                 <input id="ePlanetGasContrast" type="range" min="0" max="100" value="55">
               </label>
+            </div>
+
+            <div class="planet-border-controls">
+              <div class="life-role-title">Country Borders</div>
+              <label class="life-check"><input id="ePlanetCountryBordersEnabled" type="checkbox" checked><span><b>Show country borders</b><small>Render authored Country border paintings as white lines on the globe.</small></span></label>
+              <label class="life-check"><input id="ePlanetProceduralBorders" type="checkbox"><span><b>Procedural fallback borders</b><small>Countries without painted borders receive a generated outline around their map position.</small></span></label>
+            </div>
+
+            <div class="planet-sky-controls">
+              <div class="life-role-title">Surface Sky</div>
+              <label>Sky color <input id="ePlanetSkyColor" type="color" value="#8fc8ee"></label>
+              <p class="auto-panel-help">Used as the sky/background when you enter this planet and inside its Landscape modeller.</p>
             </div>
 
             <div class="planet-cloud-controls">
@@ -356,14 +380,21 @@
             </div>
 
             <div class="mega-painter">
-              <div class="section-title-row"><b>Megastructure Paint</b><small>Saved with this Structure</small></div>
-              <div class="mega-paint-toolbar mega-paint-toolbar-compact">
+              <div class="section-title-row">
+                <b>Megastructure Paint</b>
+                <div class="mega-expanded-title-actions">
+                  <small>Saved with this Structure</small>
+                  <button id="eMegaExpandedClose" class="mega-expanded-close" type="button" title="Close expanded painter">×</button>
+                </div>
+              </div>
+              <div class="mega-paint-toolbar mega-paint-toolbar-compact painter-tool-rail">
                 <button type="button" class="mega-paint-tool active" data-tool="brush" title="Brush">✎</button>
                 <button type="button" class="mega-paint-tool" data-tool="line" title="Line">╱</button>
                 <button type="button" class="mega-paint-tool" data-tool="circle" title="Circle">○</button>
                 <button type="button" class="mega-paint-tool" data-tool="rect" title="Rectangle">□</button>
                 <button type="button" class="mega-paint-tool" data-tool="fill" title="Fill">▣</button>
                 <button type="button" class="mega-paint-tool" data-tool="eraser" title="Eraser">⌫</button>
+                <button type="button" class="mega-paint-tool" data-tool="select" title="Select">⌖</button>
                 <button id="eMegaEraserMode" type="button" title="Eraser mode: Object">Object</button>
                 <button id="eMegaPaintUndo" type="button" title="Undo painter action">↶</button>
                 <button id="eMegaPaintRedo" type="button" title="Redo painter action">↷</button>
@@ -373,10 +404,17 @@
                 <button id="eMegaExpandPaint" type="button" title="Expand painter">⛶</button>
                 <button id="eMegaClearPaint" type="button" title="Clear current layer">×</button>
               </div>
-              <div class="mega-paint-settings mega-paint-settings-compact">
-                <label>Paint color <input id="eMegaPaintColor" type="color" value="#6fdcff"></label>
-                <label>Width <input id="eMegaPaintWidth" type="range" min="1" max="40" step="1" value="8"></label>
-                <label>Imported size <input id="eMegaImportScale" type="range" min="10" max="100" step="1" value="45"></label>
+              <div class="mega-paint-settings mega-paint-settings-compact painter-options-rail">
+                <label data-mega-tools="brush,line,circle,rect,fill">Paint color <input id="eMegaPaintColor" type="color" value="#6fdcff"></label>
+                <label data-mega-tools="brush,line,circle,rect,eraser">Thickness <output id="eMegaPaintWidthOut">8 px</output><input id="eMegaPaintWidth" type="range" min="1" max="40" step="1" value="8"></label>
+                <label data-mega-tools="brush,line,circle,rect" >Edge sharpness <output id="eMegaBlockinessOut">0%</output><input id="eMegaBlockiness" type="range" min="0" max="100" step="1" value="0"><small>Rounds or sharpens stroke corners without changing the path.</small></label>
+                <label class="mega-inline-toggle mega-snap-toggle" data-mega-tools="brush,line,circle,rect"><input id="eMegaSnapGrid" type="checkbox"> Snap to grid</label>
+                <label id="eMegaSnapGridSizeWrap" class="mega-grid-size-control is-disabled" data-mega-tools="brush,line,circle,rect">Grid size <output id="eMegaSnapGridSizeOut">24px</output><input id="eMegaSnapGridSize" type="range" min="4" max="64" step="4" value="24"></label>
+                <label class="mega-inline-toggle" data-mega-tools="circle"><input id="eMegaCircleCenter" type="checkbox"> Circle from center</label>
+                <label data-mega-tools="brush,eraser">Brush shape <output id="eMegaBrushShapeOut">50%</output><input id="eMegaBrushShape" type="range" min="0" max="100" value="50"><small>Circle ← → Square</small></label>
+                <label data-mega-tools="select">Selection mode <select id="eMegaSelectMode"><option value="rect">Rectangle</option><option value="lasso">Lasso</option></select></label>
+                <button type="button" id="eMegaDeleteSelection" data-mega-tools="select" class="danger ghost">Delete selection</button>
+                <label class="mega-import-option">Imported size <input id="eMegaImportScale" type="range" min="10" max="100" step="1" value="45"></label>
               </div>
               <div id="megaHeightSettings" class="mega-height-settings hidden">
                 <label>Height / indent <output id="eMegaHeightOut">+25</output>
@@ -476,7 +514,7 @@
               <div><div class="eyebrow">Before placement</div><h3>Auto-Connections</h3></div>
               <button id="closeAutoConnections" class="icon-btn">×</button>
             </div>
-            <p class="auto-panel-help">Review exactly what will be connected when this node is saved. Delete a proposed link or edit it with the same relationship editor used by the Link tool.</p>
+            <p class="auto-panel-help">Review exactly what will be connected when this node is saved — and why. Each proposal now exposes the rule or field match that caused it. Delete a proposed link or edit it with the same relationship editor used by the Link tool.</p>
             <div id="autoConnectionsList"></div>
             <button id="refreshAutoConnections" class="ghost auto-refresh">↻ Recalculate from fields</button>
           </aside>
@@ -586,6 +624,8 @@
                   <div class="planet-panel-actions sim-map-head-actions">
                     <button id="regenPlanet" class="ghost" title="Regenerate map">↻</button>
                     <button id="planetHome" class="ghost" title="Center map">◎</button>
+                    <button id="togglePlaceCaptions" class="ghost active" title="Toggle Place / Structure captions">Aa</button>
+                    <button id="togglePoliticalMap" class="ghost" title="Political view: country borders and country names">⚐ Political</button>
                     <button id="toggleSimMap" type="button" class="ghost" title="Open map fullscreen">▣</button>
                     <button id="closeSimMapFullscreen" type="button" class="icon-btn hidden" title="Close fullscreen map">×</button>
                   </div>
@@ -694,6 +734,74 @@
         </div>
       </div>
 
+      <div id="addonsModal" class="modal hidden">
+        <div class="modal-card addons-card">
+          <div class="modal-head">
+            <div><div class="eyebrow">V25.3h framework</div><h2>Addons</h2></div>
+            <button id="closeAddons" class="icon-btn">×</button>
+          </div>
+          <p class="addons-intro">Extend the sandbox itself. Addons can enable major systems or change what kind of creator this project is.</p>
+          <div class="addon-grid">
+            <article class="addon-tile technology-addon">
+              <div class="addon-icon">⌁</div>
+              <div class="addon-copy"><b>Technology</b><small>Civilization discoveries, the Technology Tree, and technological Magical Objects.</small></div>
+              <button id="technologyToggle" class="toggle-button">OFF</button>
+              <div id="technologyStatus" class="setting-status">Technology is preserved but ignored by simulation.</div>
+            </article>
+            <article class="addon-tile creator-addon">
+              <div class="addon-icon">✦</div>
+              <div class="addon-copy"><b>Creator Editor</b><small>Turn the sandbox into a creator for machinery, biology, politics, technology, or something entirely new.</small></div>
+              <button id="openCreatorEditor" class="primary addon-open">Open Editor</button>
+              <div class="setting-status">Current preset: <b id="activeCreatorPresetName">Magic System</b></div>
+            </article>
+          </div>
+        </div>
+      </div>
+
+      <div id="creatorEditorModal" class="modal hidden">
+        <div class="modal-card creator-editor-card">
+          <div class="modal-head creator-editor-head">
+            <div><div class="eyebrow">Addon · Creator Editor</div><h2>Creator Definition</h2></div>
+            <div class="creator-head-actions"><button id="creatorResetPreset" class="ghost">Reset to Magic preset</button><button id="closeCreatorEditor" class="icon-btn">×</button></div>
+          </div>
+          <div class="creator-hero">
+            <label>Creator name<input id="creatorName" placeholder="Magic System"></label>
+            <label>Workspace title<input id="creatorTitle" placeholder="Magic System Sandbox"></label>
+            <label>Preset<select id="creatorPreset"><option value="magic">Magic System (current sandbox)</option><option value="custom">Custom creator</option></select></label>
+            <button id="duplicateCreatorPreset" class="primary">Duplicate preset → Custom</button>
+          </div>
+          <div class="creator-tabs" role="tablist">
+            <button class="active" data-creator-tab="types">Create</button>
+            <button data-creator-tab="categories">Categories</button>
+            <button data-creator-tab="links">Links</button>
+            <button data-creator-tab="timeline">Timeline</button>
+            <button data-creator-tab="advanced">Advanced</button>
+          </div>
+          <section id="creatorTabTypes" class="creator-tab-panel">
+            <div class="creator-section-head"><div><b>Node types & generated editors</b><small>Rename, hide, or create node types. Turn on Generated Editor to replace a built-in form with your own schema.</small></div><button id="addCreatorType" class="primary">+ Node Type</button></div>
+            <div id="creatorTypesList" class="creator-list"></div>
+          </section>
+          <section id="creatorTabCategories" class="creator-tab-panel hidden">
+            <div class="creator-section-head"><div><b>Creator categories</b><small>Group node types and connection types however you want. Categories can branch into subcategories using a parent category, and can still be renamed, recolored, or removed.</small></div><button id="addCreatorCategory" class="primary">+ Category</button></div>
+            <div id="creatorCategoriesList" class="creator-list"></div>
+          </section>
+          <section id="creatorTabLinks" class="creator-tab-panel hidden">
+            <div class="creator-section-head"><div><b>Link types</b><small>These appear in the manual Link editor alongside relationship behavior.</small></div><button id="addCreatorLink" class="primary">+ Link Type</button></div>
+            <div id="creatorLinksList" class="creator-list"></div>
+          </section>
+          <section id="creatorTabTimeline" class="creator-tab-panel hidden">
+            <div class="creator-section-head"><div><b>Timeline events & causes</b><small>Rules become possible simulation events when their source node type exists. Templates support {node}, {year}, and {civilization}.</small></div><button id="addCreatorTimelineRule" class="primary">+ Event Rule</button></div>
+            <div id="creatorTimelineList" class="creator-list"></div>
+          </section>
+          <section id="creatorTabAdvanced" class="creator-tab-panel hidden">
+            <div class="creator-section-head"><div><b>Advanced definition</b><small>Edit the complete project creator schema. This is the exact definition stored in saves.</small></div><button id="formatCreatorJson" class="ghost">Format JSON</button></div>
+            <textarea id="creatorDefinitionJson" class="creator-json" spellcheck="false"></textarea>
+            <div id="creatorJsonStatus" class="setting-status">Valid creator definition.</div>
+          </section>
+          <div class="creator-footer"><span id="creatorDirtyStatus">Changes apply when saved.</span><div><button id="cancelCreatorChanges" class="ghost">Cancel</button><button id="saveCreatorDefinition" class="primary">Save Creator</button></div></div>
+        </div>
+      </div>
+
       <div id="settingsModal" class="modal hidden">
         <div class="modal-card link-card">
           <div class="modal-head">
@@ -727,14 +835,6 @@
                 <option value="1">Normal</option>
               </select>
             </label>
-          </div>
-          <div class="auto-connection-setting technology-setting">
-            <div>
-              <b>Technology System <small>(Experimental)</small></b>
-              <p>Experimental feature. OFF by default. Enable civilization discoveries, the Technology Tree, and technological Magical Objects. Disabling preserves technology data but removes the live tree from the graph.</p>
-            </div>
-            <button id="technologyToggle" class="toggle-button">ON</button>
-            <div id="technologyStatus" class="full setting-status">Technology simulation is active.</div>
           </div>
           <div class="auto-connection-setting">
             <div>
@@ -910,18 +1010,19 @@
           <button id="resetSystemBtn" class="toolbtn danger-tool" title="Reset magic system to Mana only">↺<span>Reset</span></button>
         </div>
       </div>
-    </div></div>
+    </div>
+    <button id="openMaterialUpgradeCompare" class="top-upgrade-button" type="button" title="Upgrade" aria-label="Upgrade">⟰</button></div>
   </section>
 
   <aside class="sidebar right">
     <div class="side-title">
       <div>
         <div class="eyebrow">Library</div>
-        <h2>System</h2>
+        <h2 id="rightLibraryTitle">System</h2>
       </div>
       <span id="systemCount" class="count">0</span>
     </div>
-    <div class="tabs">
+    <div id="systemLibraryTabs" class="tabs">
       <button class="tab active" data-tab="rules">Rules</button>
       <button class="tab" data-tab="materials">Materials</button>
       <button class="tab" data-tab="tools">Tools+</button>
@@ -930,9 +1031,9 @@
   </aside>
 </main>
 <div id="megaPainterBackdrop" class="mega-painter-backdrop hidden"></div>
-<script src="js/data.js?v=22.8h"></script>
-<script src="js/graph.js?v=22.8h"></script>
-<script src="js/editors.js?v=22.8h"></script>
-<script src="js/app.js?v=22.8h"></script>
-</body>
+<script src="js/data.js?v=28.7bl"></script>
+<script src="js/graph.js?v=28.7bl"></script>
+<script src="js/editors.js?v=28.7bl"></script>
+<script src="js/app.js?v=28.7bl"></script>
+<div id="minimizedEditorsTray" aria-label="Minimized editors"></div></body>
 </html>

@@ -4,6 +4,34 @@ let nodes=[],edges=[],selected=null,activeSpellClass='All',activeSystemTab='rule
 let physicsSettings={pullStrength:1,largeGraphScale:1,collisionStrength:1,globalRulePull:.375};
 let autoConnections={enabled:true,restoreMode:'all'};
 let technologySettings={enabled:false};
+const MAGIC_CREATOR_TYPES=[
+  ['spell','Spell','✦','Castable magic with class, intent, structure, morality and effects.'],
+  ['rule','Rule','◇','Laws, restrictions, exceptions, and class-specific behavior.'],
+  ['material','Material','◆','Magical substances, ingredients, metals, woods and crystals.'],
+  ['magicalObject','Magical Object','⌁','Wands, artifacts, focuses, enchanted devices and relics.'],
+  ['technique','Technique','⟡','Casting methods, disciplines, movements and trained skills.'],
+  ['principle','Principle','◈','Underlying magical theories and fundamental behavior.'],
+  ['structure','Structure','▦','Schools, governments, guilds, ministries, academies and organizations.'],
+  ['organization','Organization','♜','Empires, governments, guilds, companies, orders, alliances and factions.'],
+  ['civilizationUtil','Civilization Utils','⌘','Languages, currencies, diseases, calendars, measurements, laws, ranks and shared systems.'],
+  ['life','Life','♧','Magical species, creatures, plants, beings and magical biology.'],
+  ['place','Place','⌖','Cities, worlds, dimensions, buildings, landmarks and regions.']
+];
+const MAGIC_LINK_TYPES=['direct','dependency','influence','relationship','similarity','composition','restriction','opposition','flow','reference','creation','transformation','containment','amplification','cancellation'];
+function freshMagicCreator(){return {
+  preset:'magic',name:'Magic System',title:'Magic System Sandbox',version:1,
+  categories:[
+    {id:'magic',label:'Magic',color:'#8aa4ff'},
+    {id:'world',label:'World',color:'#78d7b0'},
+    {id:'society',label:'Society',color:'#e5b86a'},
+    {id:'connections',label:'Connections',color:'#b59cff'}
+  ],
+  nodeTypes:MAGIC_CREATOR_TYPES.map(([id,label,icon,description])=>({id,label,icon,description,enabled:true,builtin:true,useGeneratedEditor:false,fields:[],category:['spell','rule','technique','principle'].includes(id)?'magic':['structure','organization','civilizationUtil'].includes(id)?'society':'world'})),
+  linkTypes:MAGIC_LINK_TYPES.map(id=>({id,label:id[0].toUpperCase()+id.slice(1),enabled:true,category:'connections',style:'solid',thickness:1.6,color:'#cfd7ff',matchMode:'contains'})),
+  timelineRules:[]
+}}
+let creatorSettings=freshMagicCreator();
+let creatorDraft=null;
 const graph=new window.MagicGraph($('graph'));
 
 const HISTORY_LIMIT=100;
@@ -15,6 +43,7 @@ function historyState(){
     edges:JSON.parse(JSON.stringify(edges)),
     physicsSettings:JSON.parse(JSON.stringify(physicsSettings)),
     autoConnections:JSON.parse(JSON.stringify(autoConnections)),
+    creatorSettings:JSON.parse(JSON.stringify(creatorSettings)),
     selectedId:selected?.id||null
   };
 }
@@ -44,11 +73,14 @@ function checkpointHistory(){
 }
 function restoreHistoryState(state){
   if(!state)return;
-  historyRestoring=true;
+  
+
+historyRestoring=true;
   nodes=JSON.parse(JSON.stringify(state.nodes||[]));
   edges=JSON.parse(JSON.stringify(state.edges||[]));
   physicsSettings={...physicsSettings,...(state.physicsSettings||{})};
   autoConnections={...autoConnections,...(state.autoConnections||{})};
+  if(state.creatorSettings)creatorSettings=normalizeCreatorSettings(state.creatorSettings);
   selected=state.selectedId?nodes.find(n=>n.id===state.selectedId)||null:null;
   graph.selected=selected;
   graph.setPhysicsSettings(physicsSettings);
@@ -60,6 +92,118 @@ function restoreHistoryState(state){
   historyRestoring=false;
   updateHistoryButtons();
 }
+function upgradeCandidateNodes(){
+  return nodes.filter(n=>!n.isHub&&(n.type==='material'||n.type==='magicalObject'||n.type==='tool'))
+}
+function upgradeItemKind(n){
+  if(!n)return 'Item';
+  if(n.type==='material')return 'Material';
+  if(n.isComponent)return 'Component';
+  if(n.type==='tool')return 'Tool';
+  return 'Magical Object'
+}
+function upgradeRelationMessages(kind){
+  const map={
+    Upgrade:['upgrades into','upgraded from'],
+    Refinement:['refines into','refined from'],
+    Enchantment:['enchants into','enchanted from'],
+    Infusion:['infuses into','infused from'],
+    Transmutation:['transmutes into','transmuted from'],
+    Empowerment:['empowers into','empowered from'],
+    Evolution:['evolves into','evolved from'],
+    Modification:['modifies into','modified from']
+  };
+  return map[kind]||['becomes','comes from']
+}
+function ensureMaterialUpgradeComparePanel(){
+  let p=$('materialUpgradeComparePanel');if(p)return p;
+  p=document.createElement('aside');p.id='materialUpgradeComparePanel';p.className='material-upgrade-compare-panel detached-editor-panel hidden';
+  p.innerHTML=`<div class="material-upgrade-compare-head"><div><div class="eyebrow">Progression tools</div><h3>Upgrade</h3></div><button id="closeMaterialUpgradeCompare" class="icon-btn">×</button></div>
+    <p>Select one or more predecessors and successors. Every predecessor will link into every successor, so several inputs can converge on the same result.</p>
+    <div class="upgrade-multi-grid">
+      <label><span>Predecessors</span><select id="upgradePredecessors" multiple size="7"></select><small>Ctrl/Cmd-click to select several.</small></label>
+      <div class="upgrade-flow-mark">→</div>
+      <label><span>Successors</span><select id="upgradeSuccessors" multiple size="7"></select><small>Ctrl/Cmd-click to select several.</small></label>
+    </div>
+    <label class="upgrade-relation-kind">Relationship<select id="upgradeRelationKind"><option value="Upgrade">Upgrade</option><option value="Refinement">Refinement</option><option value="Enchantment">Enchantment</option><option value="Infusion">Infusion</option><option value="Transmutation">Transmutation</option><option value="Empowerment">Empowerment</option><option value="Evolution">Evolution</option><option value="Modification">Modification</option></select></label>
+    <div id="upgradeSingleMessageWrap" class="upgrade-single-message">
+      <label>Connection message<input id="upgradeSingleMessage" type="text" maxlength="80" placeholder="upgrades into"></label>
+    </div>
+    <div id="upgradeDualMessageWrap" class="upgrade-message-grid hidden">
+      <label>Predecessor-side message<input id="upgradePredecessorMessage" type="text" maxlength="80" placeholder="upgrades into"></label>
+      <label>Successor-side message<input id="upgradeSuccessorMessage" type="text" maxlength="80" placeholder="upgraded from"></label>
+    </div>
+    <div id="materialUpgradeCompareResult" class="material-upgrade-compare-result"></div>
+    <div class="material-upgrade-actions"><button id="createUpgradeLink" class="primary">Link Selected</button><button id="clearPairUpgrade" class="ghost">Unlink Selected</button></div>`;
+  document.body.appendChild(p);prepareDetachedEditorPanel(p,p.querySelector('.material-upgrade-compare-head'));
+  $('closeMaterialUpgradeCompare').onclick=()=>p.classList.add('hidden');
+  $('upgradePredecessors').onchange=renderMaterialUpgradeCompare;$('upgradeSuccessors').onchange=renderMaterialUpgradeCompare;
+  $('upgradeRelationKind').onchange=()=>{applyUpgradeMessageDefaults(true);renderMaterialUpgradeCompare()};
+  $('upgradeSingleMessage').oninput=renderMaterialUpgradeCompare;$('upgradePredecessorMessage').oninput=renderMaterialUpgradeCompare;$('upgradeSuccessorMessage').oninput=renderMaterialUpgradeCompare;
+  $('createUpgradeLink').onclick=createMaterialUpgradeLink;$('clearPairUpgrade').onclick=clearMaterialUpgradePair;
+  return p
+}
+function selectedUpgradeIds(id){
+  const el=$(id);return el?[...el.selectedOptions].map(o=>o.value).filter(Boolean):[]
+}
+function applyUpgradeMessageDefaults(force=false){
+  const relation=$('upgradeRelationKind')?.value||'Upgrade',defs=upgradeRelationMessages(relation),single=$('upgradeSingleMessage'),a=$('upgradePredecessorMessage'),b=$('upgradeSuccessorMessage');
+  if(single&&(force||!single.value.trim()))single.value=defs[0];
+  if(a&&(force||!a.value.trim()))a.value=defs[0];
+  if(b&&(force||!b.value.trim()))b.value=defs[1]
+}
+function populateMaterialUpgradeCompare(){
+  const items=upgradeCandidateNodes(),opts=items.map(n=>`<option value="${n.id}">${E.esc(n.name||'Unnamed')} · ${E.esc(upgradeItemKind(n))}</option>`).join('');
+  const a=$('upgradePredecessors'),b=$('upgradeSuccessors'),oldA=new Set(selectedUpgradeIds('upgradePredecessors')),oldB=new Set(selectedUpgradeIds('upgradeSuccessors'));
+  a.innerHTML=opts;b.innerHTML=opts;
+  if(oldA.size)[...a.options].forEach(o=>o.selected=oldA.has(o.value));else if(a.options[0])a.options[0].selected=true;
+  if(oldB.size)[...b.options].forEach(o=>o.selected=oldB.has(o.value));else if(b.options[1])b.options[1].selected=true;else if(b.options[0])b.options[0].selected=true;
+  applyUpgradeMessageDefaults(false);renderMaterialUpgradeCompare()
+}
+function upgradeSelectedGroups(){
+  const predecessors=selectedUpgradeIds('upgradePredecessors').map(byId).filter(Boolean),successors=selectedUpgradeIds('upgradeSuccessors').map(byId).filter(Boolean);
+  const pairs=[];for(const base of predecessors)for(const up of successors)if(base.id!==up.id)pairs.push({base,up});
+  return {predecessors,successors,pairs}
+}
+function renderMaterialUpgradeCompare(){
+  const host=$('materialUpgradeCompareResult');if(!host)return;const g=upgradeSelectedGroups();
+  const oneToOne=g.predecessors.length===1&&g.successors.length===1&&g.pairs.length===1;
+  $('upgradeSingleMessageWrap')?.classList.toggle('hidden',!oneToOne);
+  $('upgradeDualMessageWrap')?.classList.toggle('hidden',oneToOne);
+  if(!g.predecessors.length||!g.successors.length){host.innerHTML='<strong>Select both sides.</strong><small>Choose at least one predecessor and one successor.</small>';return}
+  if(!g.pairs.length){host.innerHTML='<strong>No valid links.</strong><small>The same item cannot link to itself.</small>';return}
+  const relation=$('upgradeRelationKind')?.value||'Upgrade',defs=upgradeRelationMessages(relation),single=$('upgradeSingleMessage')?.value.trim()||defs[0],pm=$('upgradePredecessorMessage')?.value.trim()||defs[0],sm=$('upgradeSuccessorMessage')?.value.trim()||defs[1];
+  const left=g.predecessors.map(n=>E.esc(n.name)).join(', '),right=g.successors.map(n=>E.esc(n.name)).join(', ');
+  host.innerHTML=oneToOne
+    ?`<strong>1 connection will be created.</strong><small>${left} → ${right} · ${E.esc(relation)}</small><div class="upgrade-chain">Message: <b>${E.esc(single)}</b></div>`
+    :`<strong>${g.pairs.length} connections will be created.</strong><small>${left} → ${right} · ${E.esc(relation)}</small><div class="upgrade-chain">Near predecessor: <b>${E.esc(pm)}</b> · Near successor: <b>${E.esc(sm)}</b></div>`
+}
+function createMaterialUpgradeLink(){
+  const g=upgradeSelectedGroups();if(!g.pairs.length)return;checkpointHistory();
+  const oneToOne=g.predecessors.length===1&&g.successors.length===1&&g.pairs.length===1;
+  const relation=$('upgradeRelationKind')?.value||'Upgrade',defs=upgradeRelationMessages(relation),single=$('upgradeSingleMessage')?.value.trim()||defs[0],pm=$('upgradePredecessorMessage')?.value.trim()||defs[0],sm=$('upgradeSuccessorMessage')?.value.trim()||defs[1];
+  const pairKeys=new Set(g.pairs.map(({base,up})=>`${base.id}::${up.id}`));
+  edges=edges.filter(e=>!((e.type==='materialUpgrade'||e.type==='upgrade'||e.progressionRelation)&&pairKeys.has(`${e.a}::${e.b}`)));
+  for(const {base,up} of g.pairs){
+    const edge={id:uid(),a:base.id,b:up.id,type:'upgrade',progressionRelation:true,upgradeRelation:relation,linkType:'relationship',label:oneToOne?single:relation,direction:'forward',manual:true,strength:'solid',thickness:1.8};
+    if(!oneToOne){edge.predecessorMessage=pm;edge.successorMessage=sm}
+    edges.push(edge)
+  }
+  for(const up of g.successors){
+    const ids=g.predecessors.filter(n=>n.id!==up.id).map(n=>n.id);up.upgradeFromIds=[...new Set([...(Array.isArray(up.upgradeFromIds)?up.upgradeFromIds:[]),...ids])];
+    if(ids.length===1){up.upgradeFromId=ids[0];up.upgradeRelation=relation;if(up.type==='material'){up.materialUpgradeFromId=ids[0];up.materialUpgradeQty=Math.max(1,+up.materialUpgradeQty||1)}}
+    else if(ids.length>1){up.upgradeFromId='';if(up.type==='material')up.materialUpgradeFromId=''}
+  }
+  pruneGenericRelatedToEdges();save();graph.setData(nodes.filter(n=>!n.hiddenTechnology),edges.filter(e=>!e.blocked&&byId(e.a)&&byId(e.b)));graph.draw();renderMaterialUpgradeCompare()
+}
+function clearMaterialUpgradePair(){
+  const g=upgradeSelectedGroups();if(!g.pairs.length)return;checkpointHistory();const pairKeys=new Set(g.pairs.map(({base,up})=>`${base.id}::${up.id}`));
+  edges=edges.filter(e=>!((e.type==='materialUpgrade'||e.type==='upgrade'||e.progressionRelation)&&pairKeys.has(`${e.a}::${e.b}`)));
+  for(const up of g.successors){const remove=new Set(g.predecessors.map(n=>n.id));up.upgradeFromIds=(Array.isArray(up.upgradeFromIds)?up.upgradeFromIds:[]).filter(id=>!remove.has(id));if(remove.has(up.upgradeFromId)){up.upgradeFromId='';up.upgradeRelation=''}if(up.type==='material'&&remove.has(up.materialUpgradeFromId))up.materialUpgradeFromId=''}
+  save();graph.setData(nodes.filter(n=>!n.hiddenTechnology),edges.filter(e=>!e.blocked&&byId(e.a)&&byId(e.b)));graph.draw();renderMaterialUpgradeCompare()
+}
+$('openMaterialUpgradeCompare')?.addEventListener('click',()=>{const p=ensureMaterialUpgradeComparePanel();p.classList.remove('hidden');populateMaterialUpgradeCompare();requestAnimationFrame(()=>keepDetachedPanelOnscreen(p))});
+
 function undoHistory(){
   if(!undoStack.length)return;
   redoStack.push(historyState());
@@ -76,6 +220,15 @@ const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 const byId=id=>nodes.find(n=>n.id===id),ofType=t=>nodes.filter(n=>n.type===t),spells=()=>ofType('spell'),rules=()=>ofType('rule');
 const tokenize=v=>String(v||'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 let worldStateCache={maps:{},planets:{}};
+function v287pProjectNodesForSave(){
+  return nodes.map(n=>{
+    const out=deepCloneState(n);
+    if(out?.type==='structure'&&!out.isMegastructure&&out.structureModel){
+      out.structureModel=scene3DModelForSave(normalizeScene3DModel(out.structureModel))
+    }
+    return out
+  })
+}
 function save(){
   const safeScaleNav=typeof scaleNav==='undefined'?null:{
     level:scaleNav.level,
@@ -87,9 +240,9 @@ function save(){
   const safeSim=typeof simState==='undefined'?null:simState;
   const payload=JSON.stringify({
     format:'MagicSystemSandbox',
-    version:'22.8',
-    schemaVersion:22800,
-    nodes,edges,physicsSettings,autoConnections,technologySettings,
+    version:'28.7bl',
+    schemaVersion:28950,
+    nodes:v287pProjectNodesForSave(),edges,physicsSettings,autoConnections,technologySettings,creatorSettings,
     simState:safeSim,worldStateCache,scaleNav:safeScaleNav
   });
   try{
@@ -107,6 +260,7 @@ function load(){
       if(d.physicsSettings)physicsSettings={...physicsSettings,...d.physicsSettings};
       if(d.autoConnections)autoConnections={...autoConnections,...d.autoConnections};
       if(d.technologySettings)technologySettings={...technologySettings,...d.technologySettings};
+      if(d.creatorSettings)creatorSettings=normalizeCreatorSettings(d.creatorSettings);
       if(d.worldStateCache)worldStateCache=d.worldStateCache;
       restoredWorldState={simState:d.simState||null,scaleNav:d.scaleNav||null};
     }
@@ -138,7 +292,7 @@ function ruleApplies(rule,spell){
   const hay=[spell.name,cls,intent,structure,output,target,source,spell.extra].join(' ').toLowerCase();
   const toks=tokenize(scope).filter(t=>!['all','magic','spell','spells','type','class','category'].includes(t));return toks.length?toks.every(t=>hay.includes(t)):false
 }
-function mentions(a,b){const hay=[a.name,a.description,a.property,a.category,a.interaction,a.composition,a.requirements,a.method,a.theory,a.extra,a.source,a.output,a.structure,a.uses,a.sourceDetail].join(' ').toLowerCase();return tokenize(b.name).some(t=>hay.includes(t))}
+function mentions(a,b){const hay=[a.name,a.description,a.property,a.category,a.interaction,a.composition,a.requirements,a.method,a.theory,a.extra,a.source,a.output,a.structure,a.uses,a.sourceDetail,...Object.values(a.creatorFields||{})].join(' ').toLowerCase();return tokenize(b.name).some(t=>hay.includes(t))}
 function placeRank(n){
   return PLACE_LEVELS.findIndex(([v])=>v===String(n?.placeScale||inferPlaceScale(n?.placeType||n?.category||'')).toLowerCase())
 }
@@ -211,8 +365,8 @@ function semanticScore(a,b){
   if(!a||!b||a===b)return 0;
   let score=0;
   const an=String(a.name||'').toLowerCase(),bn=String(b.name||'').toLowerCase();
-  const aText=[a.description,a.property,a.category,a.interaction,a.composition,a.requirements,a.method,a.theory,a.extra,a.source,a.output,a.structure,a.uses,a.sourceDetail].join(' ').toLowerCase();
-  const bText=[b.description,b.property,b.category,b.interaction,b.composition,b.requirements,b.method,b.theory,b.extra,b.source,b.output,b.structure,b.uses,b.sourceDetail].join(' ').toLowerCase();
+  const aText=[a.description,a.property,a.category,a.interaction,a.composition,a.requirements,a.method,a.theory,a.extra,a.source,a.output,a.structure,a.uses,a.sourceDetail,...Object.values(a.creatorFields||{})].join(' ').toLowerCase();
+  const bText=[b.description,b.property,b.category,b.interaction,b.composition,b.requirements,b.method,b.theory,b.extra,b.source,b.output,b.structure,b.uses,b.sourceDetail,...Object.values(b.creatorFields||{})].join(' ').toLowerCase();
   if(an&&bText.includes(an))score+=5;
   if(bn&&aText.includes(bn))score+=5;
   if(a.category&&b.category&&String(a.category).toLowerCase()===String(b.category).toLowerCase())score+=1.5;
@@ -229,12 +383,31 @@ function relationLabel(a,b){
     if(placeRank(b)>placeRank(a)&&placeMentionsPlace(b,a))return 'located in';
   }
   if(a.type==='magicalObject'&&b.type==='material'&&String(a.composition||'').toLowerCase().includes(String(b.name||'').toLowerCase()))return 'made of';
+  if(a.type==='material'&&a.variantOfMaterialId===b.id)return 'variant of';
+  if(b.type==='material'&&b.variantOfMaterialId===a.id)return 'has variant';
+  if(a.type==='life'&&a.individual&&[a.familyParent1Id,a.familyParent2Id].includes(b.id))return 'family: child of';
+  if(b.type==='life'&&b.individual&&[b.familyParent1Id,b.familyParent2Id].includes(a.id))return 'family: parent of';
+  if(a.type==='life'&&a.familyPartnerId===b.id)return 'family: partner';
   if(b.type==='magicalObject'&&a.type==='material'&&String(b.composition||'').toLowerCase().includes(String(a.name||'').toLowerCase()))return 'made of';
   if((a.type==='technique'&&b.type==='principle')||(b.type==='technique'&&a.type==='principle'))return 'based on';
   if((a.type==='principle'&&b.type==='magicalObject')||(b.type==='principle'&&a.type==='magicalObject'))return 'governs';
   if((a.type==='magicalObject'&&b.type==='technique')||(b.type==='magicalObject'&&a.type==='technique'))return 'used by';
   return 'related to';
 }
+function pruneGenericRelatedToEdges(){
+  const norm=v=>String(v||'').trim().toLowerCase();
+  const pairKey=e=>[String(e.a||''),String(e.b||'')].sort().join('::');
+  const specificPairs=new Set();
+  for(const e of edges){
+    if(!e||e.blocked)continue;
+    if(norm(e.label)!=='related to')specificPairs.add(pairKey(e));
+  }
+  edges=edges.filter(e=>{
+    if(!e||e.blocked)return true;
+    return !(norm(e.label)==='related to'&&specificPairs.has(pairKey(e)));
+  });
+}
+
 function isBlockedAutomatic(a,b,type){
   return edges.some(e=>{
     if(!e.manual||!e.blocked)return false;
@@ -361,6 +534,7 @@ function placeHierarchySignature(){
     .join('|')
 }
 function rebuildEdges(){
+  syncNodeCategoryHierarchy();
   const hierarchySignature=placeHierarchySignature();
   if(lastPlaceHierarchySignature&&hierarchySignature!==lastPlaceHierarchySignature){
     worldStateCache={maps:{},planets:{}};
@@ -512,7 +686,7 @@ function rebuildEdges(){
     }
   }
 
-  const extras=nodes.filter(n=>['material','magicalObject','technique','principle','structure','life','place'].includes(n.type));
+  const extras=nodes.filter(n=>!['mana','spell','rule','classPoint','technologyRoot'].includes(n.type)&&!n.virtual);
 
   // Other concept types:
   // if exact compatibility field targets a WHOLE class, route to point.
@@ -587,6 +761,8 @@ function rebuildEdges(){
     }
   }
 
+  applyCreatorAutomaticLinks();
+
   // A connection plan chosen in the Create editor overrides automatic
   // connections touching that node, so the preview matches what gets placed.
   for(const n of nodes.filter(n=>Array.isArray(n.connectionPlan))){
@@ -639,18 +815,53 @@ function rebuildEdges(){
     return !technologicalIds.has(e.a)&&!technologicalIds.has(e.b);
   });
 
+  // V28.3: Planet-position links are authoritative graph relationships.
+  // rebuildEdges used to discard the v28.2 edge immediately after Save.
+  edges=edges.filter(e=>!e.placePlanetLocation);
+  for(const place of nodes.filter(n=>n.type==='place'&&n.surfacePlanetId)){
+    const planet=byId(place.surfacePlanetId);
+    if(!planet||planet.type!=='place'||planet.id===place.id)continue;
+    edges.push({id:uid(),a:place.id,b:planet.id,type:'relationship',linkType:'relationship',label:'Is located in',direction:'forward',manual:false,strength:'solid',thickness:1.6,placePlanetLocation:true});
+  }
+  edges=edges.filter(e=>!e.placeStructureRepeatLink);
+  for(const place of nodes.filter(n=>n.type==='place')){
+    const included=new Set([...(place.placeStructureIds||[]),...v283PlaceStructurePool(place).map(s=>s.id)]);
+    for(const sid of included){
+      const structure=byId(sid);if(!structure||structure.type!=='structure')continue;
+      edges.push({id:uid(),a:place.id,b:structure.id,type:'relationship',linkType:'relationship',label:'Repeats structure',direction:'forward',manual:false,strength:'solid',thickness:1.45,placeStructureRepeatLink:true})
+    }
+  }
+
+  // Generic "related to" is only a fallback. If the same pair has any
+  // more specific visible relationship, keep the specific label and remove
+  // the generic one so labels never overlap or compete.
+  pruneGenericRelatedToEdges();
   graph.setData(nodes,edges.filter(e=>!e.blocked));save();updateStats();
 }
 function classNames(){return [...new Set(spells().map(s=>s.spellClass||'Unclassified'))].sort()}
 function renderLibraries(){
+  const customMode=creatorSettings.preset!=='magic';
+  const leftTitle=$('leftLibraryTitle'),rightTitle=$('rightLibraryTitle'),tabs=$('systemLibraryTabs'),filters=$('classFilters'),list=$('spellList'),sys=$('systemList');
+  if(customMode){
+    if(leftTitle)leftTitle.textContent='Creator Nodes';if(rightTitle)rightTitle.textContent='All Nodes';if(tabs)tabs.classList.add('hidden');if(filters)filters.classList.add('hidden');
+    const authored=nodes.filter(n=>!['mana','classPoint','technologyRoot'].includes(n.type)&&!n.virtual);
+    $('spellCount').textContent=authored.length;$('systemCount').textContent=authored.length;
+    list.innerHTML='';authored.forEach(n=>{const el=document.createElement('div');el.className='library-item'+(selected===n?' selected':'');el.innerHTML=`<strong>${E.esc(n.name)}</strong><small>${E.esc(creatorType(n.type)?.label||n.type)}</small>`;el.onclick=()=>selectNode(n);el.ondblclick=()=>openEditor(n.type,n);list.appendChild(el)});
+    sys.innerHTML='';creatorSettings.nodeTypes.filter(t=>t.enabled!==false).forEach(t=>{const count=nodes.filter(n=>n.type===t.id&&!n.isHub&&!n.virtual).length;const el=document.createElement('div');el.className='library-item creator-type-summary';el.innerHTML=`<strong>${E.esc(t.icon||'◆')} ${E.esc(t.label)}</strong><small>${count} node${count===1?'':'s'} · ${t.useGeneratedEditor||!t.builtin?'Generated editor':'Native editor'}</small>`;sys.appendChild(el)});
+    return
+  }
+  if(leftTitle)leftTitle.textContent='Spells';if(rightTitle)rightTitle.textContent='System';if(tabs)tabs.classList.remove('hidden');if(filters)filters.classList.remove('hidden');
   $('spellCount').textContent=spells().length;$('systemCount').textContent=nodes.filter(n=>!['mana','spell','classPoint'].includes(n.type)).length;
-  const filters=$('classFilters');filters.innerHTML='';['All',...classNames()].forEach(c=>{const b=document.createElement('button');b.className='class-chip'+(activeSpellClass===c?' active':'');b.textContent=c;b.onclick=()=>{activeSpellClass=c;renderLibraries()};filters.appendChild(b)});
-  const list=$('spellList');list.innerHTML='';spells().filter(s=>activeSpellClass==='All'||(s.spellClass||'Unclassified')===activeSpellClass).forEach(s=>{const el=document.createElement('div');el.className='library-item'+(selected===s?' selected':'');el.innerHTML=`<strong>${E.esc(s.name)}</strong><small>${E.esc(s.spellClass||'Unclassified')} · ${E.esc(s.intent||'No intent')}</small>`;el.onclick=()=>selectNode(s);el.ondblclick=()=>openEditor('spell',s);list.appendChild(el)});
+  filters.innerHTML='';['All',...classNames()].forEach(c=>{const b=document.createElement('button');b.className='class-chip'+(activeSpellClass===c?' active':'');b.textContent=c;b.onclick=()=>{activeSpellClass=c;renderLibraries()};filters.appendChild(b)});
+  list.innerHTML='';spells().filter(s=>activeSpellClass==='All'||(s.spellClass||'Unclassified')===activeSpellClass).forEach(s=>{const el=document.createElement('div');el.className='library-item'+(selected===s?' selected':'');el.innerHTML=`<strong>${E.esc(s.name)}</strong><small>${E.esc(s.spellClass||'Unclassified')} · ${E.esc(s.intent||'No intent')}</small>`;el.onclick=()=>selectNode(s);el.ondblclick=()=>openEditor('spell',s);list.appendChild(el)});
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===activeSystemTab));
-  const sys=$('systemList');sys.innerHTML='';let shown=activeSystemTab==='rules'?rules():activeSystemTab==='materials'?ofType('material'):nodes.filter(n=>['magicalObject','technique','principle','structure','organization','civilizationUtil','life','place'].includes(n.type));
-  shown.forEach(n=>{const el=document.createElement('div');el.className='library-item'+(selected===n?' selected':'');el.innerHTML=`<strong>${E.esc(n.name)}</strong><small>${E.esc(n.type)}${n.strength?' · '+E.esc(n.strength):''}</small>`;el.onclick=()=>selectNode(n);el.ondblclick=()=>openEditor(n.type,n);sys.appendChild(el)})
+  sys.innerHTML='';let shown=activeSystemTab==='rules'?rules():activeSystemTab==='materials'?ofType('material'):nodes.filter(n=>['magicalObject','technique','principle','structure','organization','civilizationUtil','life','place'].includes(n.type));
+  shown.forEach(n=>{const el=document.createElement('div');el.className='library-item'+(selected===n?' selected':'');el.innerHTML=`<strong>${E.esc(n.name)}</strong><small>${E.esc(creatorType(n.type)?.label||n.type)}${n.strength?' · '+E.esc(n.strength):''}</small>`;el.onclick=()=>selectNode(n);el.ondblclick=()=>openEditor(n.type,n);sys.appendChild(el)})
 }
-function updateStats(){$('systemStats').textContent=`${nodes.filter(n=>n.type!=='classPoint').length} concepts · ${edges.length} links · ${classNames().length} spell classes`}
+function updateStats(){
+  const concepts=nodes.filter(n=>n.type!=='classPoint').length;
+  $('systemStats').textContent=creatorSettings.preset==='magic'?`${concepts} concepts · ${edges.length} links · ${classNames().length} spell classes`:`${concepts} nodes · ${edges.length} links · ${creatorSettings.nodeTypes.filter(t=>t.enabled!==false).length} node types`
+}
 function selectNode(n){selected=n;graph.selected=n;showSelection();renderLibraries()}
 function showSelection(){
   const box=$('selectionCard');if(!selected){box.classList.add('hidden');return}box.classList.remove('hidden');
@@ -668,7 +879,7 @@ function showSelection(){
     return
   }
   if(selected.type==='mana'){box.innerHTML=`<h3>${E.esc(selected.name||'MANA')}</h3>${selected.nature?`<p><b>Nature:</b> ${E.esc(selected.nature)}</p>`:''}<p>${E.esc(selected.description)}</p><p>${spells().length} spells · ${rules().length} rules</p>`;return}
-  if(selected.type==='spell'){box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Class:</b> ${E.esc(selected.spellClass||'Unclassified')}</p><p><b>Intent:</b> ${E.esc(selected.intent)}</p><p><b>Structure:</b> ${E.esc(selected.structure)}</p><p><b>Output:</b> ${E.esc(selected.output)}</p><p><b>Target:</b> ${E.esc(selected.target)}</p><p><b>Good / Bad:</b> ${(selected.morality??0)>0?'+':''}${selected.morality??0}</p>`;return}
+  if(selected.type==='spell'){box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Class:</b> ${E.esc(selected.spellClass||'Unclassified')}</p><p><b>Intent:</b> ${E.esc(selected.intent)}</p><p><b>Structure:</b> ${E.esc(selected.structure)}</p><p><b>Output:</b> ${E.esc(selected.output)}</p>${selected.failOutput?`<p><b>Fail output:</b> ${E.esc(selected.failOutput)}</p>`:''}<p><b>Target:</b> ${E.esc(selected.target)}</p><p><b>Good / Bad:</b> ${(selected.morality??0)>0?'+':''}${selected.morality??0}</p>`;return}
   if(selected.type==='rule'){const names=(selected.spellIds||[]).map(id=>byId(id)?.name).filter(Boolean);box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p>${E.esc(selected.text)}</p><p><b>Applies:</b> ${names.length?E.esc(names.join(', ')):E.esc(selected.scope||'All magic')}</p><p><b>Exceptions:</b> ${E.esc(selected.exceptions||'None')}</p>`;return}
   if(selected.type==='technologyRoot'){
     const techs=technologyNodes();
@@ -680,7 +891,11 @@ function showSelection(){
       ? (selected.main?'Individual · Main':selected.sentient?'Individual · Sentient':'Individual')
       : (selected.main?'Main civilization species':selected.sentient?'Sentient species':'Non-sentient life');
     const morality=selected.individual?`<p><b>Morality:</b> ${(selected.individualMorality??0)>0?'+':''}${selected.individualMorality??0}</p>`:'';
-    box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Life role:</b> ${E.esc(role)}</p>${morality}<p><b>Category:</b> ${E.esc(selected.category||'Life')}</p><p>${E.esc(selected.description||selected.property||'')}</p><button class="selection-inspect-btn" data-sim-inspect="${selected.id}">Simulation Inspector</button>`;
+    const parents=[selected.familyParent1Id,selected.familyParent2Id].map(byId).filter(Boolean);
+    const partner=selected.familyPartnerId?byId(selected.familyPartnerId):null;
+    const children=nodes.filter(x=>x.type==='life'&&x.individual&&(x.familyParent1Id===selected.id||x.familyParent2Id===selected.id));
+    const family=selected.individual&&selected.familyEnabled?`<div class="selection-family"><p><b>Family:</b></p>${parents.length?`<p><b>Parent${parents.length>1?'s':''}:</b> ${E.esc(parents.map(x=>x.name).join(', '))}</p>`:''}${partner?`<p><b>Partner:</b> ${E.esc(partner.name)}</p>`:''}${children.length?`<p><b>Children:</b> ${E.esc(children.map(x=>x.name).join(', '))}</p>`:''}${!parents.length&&!partner&&!children.length?'<p>No family links yet.</p>':''}</div>`:'';
+    box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Life role:</b> ${E.esc(role)}</p>${morality}<p><b>Category:</b> ${E.esc(selected.category||'Life')}</p>${family}<p>${E.esc(selected.description||selected.property||'')}</p><button class="selection-inspect-btn" data-sim-inspect="${selected.id}">Simulation Inspector</button>`;
     box.querySelector('[data-sim-inspect]')?.addEventListener('click',()=>openSimulationInspector(selected));
     return
   }
@@ -694,10 +909,30 @@ function showSelection(){
     box.querySelector('[data-sim-inspect]')?.addEventListener('click',()=>openSimulationInspector(selected));
     return
   }
+  if(selected.type==='civilizationUtil'){
+    const subtype=utilitySubtypeLabel(selected.utilityType||'Utility');
+    const genome=selected.utilityType==='disease'&&(selected.diseaseKind||'Disease')==='Disease'?normalizePathogenGenome(selected.diseaseGenome||''):'';
+    box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>${E.esc(subtype)}${selected.utilityType==='disease'?' · '+E.esc(selected.diseaseKind||'Disease'):''}</b></p>${selected.utilityType==='disease'?`<p><b>Severity:</b> ${E.esc(selected.diseaseSeverity||'—')} · <b>Spread:</b> ${E.esc(selected.diseaseSpread||'—')}</p>${genome?`<p><b>Genetic structure:</b></p><div class="dna-viewer-six">${pathogenGeneChunks(genome).map((x,i)=>`<span class="dna-viewer-strand"><small>${i+1}</small>${pathogenViewerHelixMarkup(x,pathogenGeneChunks(pathogenComplement(genome))[i])}</span>`).join('')}</div><p class="dna-viewer-flaws">${(()=>{const st=pathogenGenomeStats(genome);return `<b>${st.flaws}</b> genetic flaws · ${st.missing} missing · ${st.corrupt} corrupted U`})()}</p>`:''}`:''}<p>${E.esc(selected.description||'')}</p>`;
+    return
+  }
   if(selected.type==='place'){
-    box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Place type:</b> ${E.esc(selected.placeType||selected.category||'Place')}</p><p><b>Inhabitants:</b> ${E.esc(selected.inhabitants||'Unspecified')}</p><p><b>Authority:</b> ${E.esc(selected.government||'Unspecified')}</p><p>${E.esc(selected.description||'')}</p><button class="selection-inspect-btn" data-sim-inspect="${selected.id}">Simulation Inspector</button>`;
+    const base=selected.variantOfPlaceId?byId(selected.variantOfPlaceId):null,model=normalizeScene3DModel(selected.placeModel),instances=scene3DRepeatInstances(model).length;
+    box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Place type:</b> ${E.esc(selected.placeType||selected.category||'Place')}</p>${base?`<p><b>Variant of:</b> ${E.esc(base.name)}</p>`:''}<p><b>3D model:</b> ${model.variants.length} variant${model.variants.length===1?'':'s'} · ${instances} instance${instances===1?'':'s'} · ${E.esc(model.environment)}</p><p><b>Inhabitants:</b> ${E.esc(selected.inhabitants||'Unspecified')}</p><p><b>Authority:</b> ${E.esc(selected.government||'Unspecified')}</p><p>${E.esc(selected.description||'')}</p><button class="selection-inspect-btn" data-sim-inspect="${selected.id}">Simulation Inspector</button>`;
     box.querySelector('[data-sim-inspect]')?.addEventListener('click',()=>openSimulationInspector(selected));
     return
+  }
+  if(selected.type==='material'){
+    const texPreview=materialTexturePreviewPixels(selected.materialTexture,32),px=texPreview.pixels,rar=materialRarityInfo(selected.materialRarity??55,selected.name||'This material');
+    const variantBase=selected.variantOfMaterialId?byId(selected.variantOfMaterialId):null;
+    box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Material</b> · ${E.esc(selected.category||'Uncategorized')} · <b>${E.esc(rar.tier)}</b></p>${variantBase?`<p><b>Variant of:</b> ${E.esc(variantBase.name)}</p>`:''}<div class="material-texture-mini" style="--material-preview-size:${texPreview.size}">${px.map(c=>`<i style="background:${/^#[0-9a-f]{6}$/i.test(c)?c:'transparent'}"></i>`).join('')}</div><p class="material-rarity-inspect">${E.esc(rar.comparison)}</p><p>${E.esc(selected.description||selected.property||'')}</p>`;return
+  }
+  if(selected.type==='magicalObject'){
+    const recipe=selected.craftingRecipe||{ingredients:[]},names=(recipe.ingredients||[]).map(i=>{const n=byId(i.nodeId);return n?`${compactMaterialQuantity(i.qty||1)}× ${n.name}`:''}).filter(Boolean);
+    box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Magical Object${selected.isComponent?' · Component':''}</b>${selected.technological?' · Technological':''}</p>${names.length?`<p><b>Crafting:</b> ${E.esc(names.join(' + '))}</p>`:''}<p>${E.esc(selected.description||selected.property||'')}</p>`;return
+  }
+  if(selected.type==='structure'&&!selected.isMegastructure){
+    const base=selected.variantOfStructureId?byId(selected.variantOfStructureId):null,model=normalizeScene3DModel(selected.structureModel),instances=scene3DRepeatInstances(model).length;
+    box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Structure</b></p>${base?`<p><b>Variant of:</b> ${E.esc(base.name)}</p>`:''}<p><b>3D model:</b> ${model.variants.length} variant${model.variants.length===1?'':'s'} · ${instances} instance${instances===1?'':'s'} · ${E.esc(model.environment)}</p><p>${E.esc(selected.description||selected.property||'')}</p>`;return
   }
   box.innerHTML=`<h3>${E.esc(selected.name)}</h3><p><b>Type:</b> ${E.esc(selected.type)}</p><p>${E.esc(selected.description||selected.property||'')}</p>`
 }
@@ -1173,7 +1408,7 @@ function editorDraft(){
   const type=editingType;
   if(!type)return null;
   const d={id:editingId||'__draft__',type,name:value('eName')||'New '+type};
-  if(type==='spell')Object.assign(d,{spellClass:value('eClass')||'Unclassified',intent:value('eIntent'),structure:value('eStructure'),target:value('eTarget'),output:value('eOutput'),duration:value('eDuration'),range:value('eRange'),source:value('eSource')||'Mana',extra:value('eExtra')});
+  if(type==='spell')Object.assign(d,{spellClass:value('eClass')||'Unclassified',intent:value('eIntent'),structure:value('eStructure'),target:value('eTarget'),output:value('eOutput'),duration:value('eDuration'),range:value('eRange'),source:value('eSource')||'Mana',failOutput:value('eFailOutput'),extra:value('eExtra')});
   else if(type==='rule')Object.assign(d,{spellClass:value('eRuleClass'),scope:value('eScope')||'All magic',spellIds:[...document.querySelectorAll('.rule-spell-check:checked')].map(x=>x.value)});
   else if(type==='civilizationUtil')Object.assign(d,{
     utilityType:value('eUtilityType')||'language',
@@ -1222,28 +1457,28 @@ function editorDraft(){
 function plannedTarget(id){return id==='mana'?byId('mana'):byId(id)}
 function inferDraftConnections(){
   const d=editorDraft();if(!d||d.type==='mana')return [];
-  const plan=[],add=(target,label,type='uses')=>{
+  const plan=[],add=(target,label,type='uses',reason='Matched the information in this node with an existing graph concept.')=>{
     if(!target||target.id===editingId||plan.some(p=>p.targetId===target.id&&p.label===label))return;
-    plan.push({targetId:target.id,label,type,direction:'forward'});
+    plan.push({targetId:target.id,label,type,direction:'forward',reason});
   };
   const mana=byId('mana');
   const mentionsMana=[d.uses,d.compatibility,d.requirements,d.composition,d.source].some(v=>fieldParts(v).includes('mana')||String(v||'').trim().toLowerCase()==='mana');
-  if(d.type==='spell'||mentionsMana)add(mana,d.type==='spell'?'derived from Mana':'compatible with Mana',d.type==='spell'?'mana':'uses');
+  if(d.type==='spell'||mentionsMana)add(mana,d.type==='spell'?'derived from Mana':'compatible with Mana',d.type==='spell'?'mana':'uses',d.type==='spell'?'Every Spell is automatically rooted in Mana.':'A field explicitly mentions Mana, so the sandbox treats Mana as a dependency/compatibility source.');
 
   if(d.type==='spell'){
     const cls=String(d.spellClass||'Unclassified').toLowerCase();
-    for(const s of spells())if(s.id!==editingId&&String(s.spellClass||'Unclassified').toLowerCase()===cls)add(s,'same Spell Class: '+d.spellClass,'similar');
+    for(const s of spells())if(s.id!==editingId&&String(s.spellClass||'Unclassified').toLowerCase()===cls)add(s,'same Spell Class: '+d.spellClass,'similar',`Both spells use the Spell Class “${d.spellClass||'Unclassified'}”, so they are grouped as class-similar.`);
   }else if(d.type==='rule'){
     const hub=hubForName(d.spellClass)||hubForName(d.scope);
-    if(hub)add(hub,'governs '+hub.name,'applies');
+    if(hub)add(hub,'governs '+hub.name,'applies',`The Rule's class/scope exactly matches the Hub “${hub.name}”.`);
     else{
       const cp=classPointFor(d.spellClass);
-      if(cp)add(cp,'governs entire Spell Class','applies');
-      else for(const id of d.spellIds||[])add(byId(id),'governs selected spell','applies');
+      if(cp)add(cp,'governs entire Spell Class','applies',`The Rule targets the entire “${d.spellClass}” Spell Class, so it connects to that class point instead of every spell individually.`);
+      else for(const id of d.spellIds||[])add(byId(id),'governs selected spell','applies','This spell was explicitly selected in the Rule editor.');
     }
   }else{
     const hub=hubForName(d.category)||hubForName(d.uses)||hubForName(d.compatibility);
-    if(hub)add(hub,fieldParts(d.category).includes(String(hub.name).toLowerCase())?'category: '+hub.name:'compatible with '+hub.name,'hubmember');
+    if(hub)add(hub,fieldParts(d.category).includes(String(hub.name).toLowerCase())?'category: '+hub.name:'compatible with '+hub.name,'hubmember',fieldParts(d.category).includes(String(hub.name).toLowerCase())?`Category exactly matches the Hub “${hub.name}”.`:`A relationship field explicitly references the Hub “${hub.name}”.`);
 
     if(d.type==='place'){
       for(const p of ofType('place')){
@@ -1253,14 +1488,18 @@ function inferDraftConnections(){
         if(!mentioned)continue;
         const draftRank=PLACE_LEVELS.findIndex(([v])=>v===String(d.placeScale||inferPlaceScale(d.placeType)).toLowerCase());
         const targetRank=placeRank(p);
-        if(draftRank>targetRank)add(p,'contains','contains');
-        else if(targetRank>draftRank)add(p,'located in','contains');
+        if(draftRank>targetRank)add(p,'contains','contains',`“${p.name}” is mentioned by this Place and is a smaller place scale, so it is inferred to be contained here.`);
+        else if(targetRank>draftRank)add(p,'located in','contains',`“${p.name}” is mentioned by this Place and is a larger place scale, so this Place is inferred to be located inside it.`);
       }
     }
 
     for(const n of nodes){
       if(n.id===editingId||n.type==='classPoint'||n.type==='mana'||n.isHub)continue;
-      if(resourceRelation(d,n)||semanticScore(d,n)>=4)add(n,relationLabel(d,n),'related');
+      if(resourceRelation(d,n)||semanticScore(d,n)>=4){
+        const resource=resourceRelation(d,n);
+        const score=semanticScore(d,n);
+        add(n,relationLabel(d,n),'related',resource?`A resource/requirement/usage field directly overlaps with “${n.name}”.`:`Semantic match score ${score} reached the auto-link threshold of 4 from shared terms across description, category, composition, requirements, uses, or interaction.`);
+      }
     }
   }
   return plan;
@@ -1287,6 +1526,7 @@ function renderConnectionPlan(){
         <span>${E.esc(p.label||'related to')}</span>
         <strong>${E.esc(targetName)}</strong>
       </div>
+      <div class="auto-connection-reason"><span>WHY</span>${E.esc(p.reason||'Matched the current node fields to this graph concept using the automatic connection rules.')}</div>
       <div class="auto-connection-actions">
         <button class="danger auto-plan-delete" data-plan-delete="${i}">Delete</button>
         <button class="ghost auto-plan-edit" data-plan-edit="${i}">Edit</button>
@@ -1309,7 +1549,7 @@ function openAutoConnections(){
 
 const PLACE_LEVELS=[['house','House'],['building','Building / Facility'],['settlement','Settlement'],['city','City'],['region','Region'],['country','Country'],['planet','Planet'],['star','Star'],['solar-system','Solar System'],['galaxy','Galaxy']];
 function systemScale(){return byId('mana')?.systemScale||'planet'}
-function systemScaleLabel(){return({planet:'Planet',solar:'Solar System',galaxy:'Galaxy',universe:'Universe'})[systemScale()]||'Planet'}
+function systemScaleLabel(level=systemScale()){return({planet:'Planet',solar:'Solar System',galaxy:'Galaxy',universe:'Universe',surface:'Surface',place:'Place'})[level]||'Planet'}
 function maxPlaceLevel(){return({planet:'country',solar:'planet',galaxy:'solar-system',universe:'galaxy'})[systemScale()]||'country'}
 const STAR_PRESETS={
   M:{core:'#ff8b68',outer:'#d94b37',glow:'#ff5a45',size:.65},
@@ -1795,7 +2035,13 @@ function allowedPlaceLevels(){
   return PLACE_LEVELS.slice(0,mi+1)
 }
 function placeScaleOptions(current=''){
-  return allowedPlaceLevels().map(([v,l])=>`<option value="${v}" ${String(current).toLowerCase()===v?'selected':''}>${l}</option>`).join('');
+  const cur=String(current||'').toLowerCase(),
+        allowed=allowedPlaceLevels(),
+        currentRank=PLACE_LEVELS.findIndex(x=>x[0]===cur),
+        allowedRank=allowed.length?PLACE_LEVELS.findIndex(x=>x[0]===allowed[allowed.length-1][0]):-1,
+        levels=currentRank>allowedRank?PLACE_LEVELS.slice(0,currentRank+1):allowed;
+  // Never silently downgrade an existing large Place just because the current creation cap is lower.
+  return levels.map(([v,l])=>`<option value="${v}" ${cur===v?'selected':''}>${l}</option>`).join('');
 }
 function inferPlaceScale(text=''){
   const t=String(text).toLowerCase();
@@ -1812,6 +2058,10 @@ function inferPlaceScale(text=''){
   return 'building';
 }
 
+function placeAllows3DModel(place){
+  const scale=String(place?.placeScale||inferPlaceScale(place?.placeType||place?.category||'')).toLowerCase(),country=PLACE_LEVELS.findIndex(x=>x[0]==='country'),rank=PLACE_LEVELS.findIndex(x=>x[0]===scale);
+  return rank<0||rank<country
+}
 function placeLevelRank(p){const t=String(p?.placeScale||inferPlaceScale(p?.placeType||'')).toLowerCase(),i=PLACE_LEVELS.findIndex(x=>x[0]===t);return i<0?1:i}
 function topLevelPlaces(){const rank=PLACE_LEVELS.findIndex(x=>x[0]===maxPlaceLevel());return ofType('place').filter(p=>placeLevelRank(p)>=Math.max(0,rank-1))}
 function placesForMapScale(scale){
@@ -1966,7 +2216,8 @@ window.addEventListener('orientationchange',()=>setTimeout(requestEditorFit,60))
 const editorLayoutObserver=new MutationObserver(()=>{
   if(!$('editorModal')?.classList.contains('hidden')){
     requestEditorFit();
-    requestAnimationFrame(bindDraggableEditorPanels)
+    requestAnimationFrame(bindDraggableEditorPanels);
+    requestAnimationFrame(bindGlobalDraggableMenus)
   }
 });
 if($('editorModal')){
@@ -1976,6 +2227,10 @@ if($('editorModal')){
     attributeFilter:['class','style']
   })
 }
+
+const globalMenuDragObserver=new MutationObserver(()=>requestAnimationFrame(bindGlobalDraggableMenus));
+globalMenuDragObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+requestAnimationFrame(bindGlobalDraggableMenus);
 
 
 // ===================== V22.8h STABLE DRAGGABLE UI PANELS =====================
@@ -2017,6 +2272,749 @@ function clampPanelDrag(panel,nextX,nextY){
   return{x:nextX,y:nextY}
 }
 
+
+/* ===== v28 floating role controller + detached editor focus ===== */
+function ensureHubRolePanel(){
+  let panel=$('hubRolePanel');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='hubRolePanel';panel.className='hub-role-panel detached-editor-panel hidden';
+  panel.innerHTML=`
+    <div class="hub-role-panel-head"><div><div class="eyebrow">Node Role</div><b>Graph Level</b></div><button type="button" id="closeHubRolePanel" class="icon-btn" title="Hide role controller">×</button></div>
+    <div id="hubRoleRail" class="hub-role-rail" data-role="normal">
+      <div class="hub-role-rail-label hub-label">Hub</div>
+      <div class="hub-role-track">
+        <button type="button" class="hub-role-stop stop-hub" data-hub-role="hub" aria-label="Hub"></button>
+        <button type="button" class="hub-role-stop stop-semi" data-hub-role="semi" aria-label="Semi-Hub"></button>
+        <button type="button" class="hub-role-stop stop-normal" data-hub-role="normal" aria-label="Node"></button>
+        <div id="hubRoleThumb" class="hub-role-thumb" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="2" aria-valuenow="0" aria-label="Node role"></div>
+      </div>
+      <div class="hub-role-rail-label semi-label">Semi-Hub</div>
+      <div class="hub-role-rail-label node-label">Node</div>
+    </div>
+    <small class="hub-role-panel-help">Drag this window anywhere. The slider changes the currently edited node between Hub, Semi-Hub, and Node.</small>`;
+  document.body.appendChild(panel);
+  makePanelDraggable(panel,panel.querySelector('.hub-role-panel-head'));
+  $('closeHubRolePanel').onclick=()=>panel.classList.add('hidden');
+  return panel
+}
+function showHubRolePanel(role='normal'){
+  const panel=ensureHubRolePanel(),rail=$('hubRoleRail');panel.classList.remove('hidden');panel.dataset.dragX=panel.dataset.dragX||'0';panel.dataset.dragY=panel.dataset.dragY||'0';
+  rail.dataset.role=role;rail.style.removeProperty('--hub-role-drag-y');
+  const thumb=$('hubRoleThumb'),order=['normal','semi','hub'],idx=Math.max(0,order.indexOf(role));thumb?.setAttribute('aria-valuenow',String(idx));thumb?.setAttribute('aria-valuetext',role==='hub'?'Hub':role==='semi'?'Semi-Hub':'Node');
+  rail.querySelectorAll('[data-hub-role]').forEach(stop=>stop.classList.toggle('active',stop.dataset.hubRole===role));
+  requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel));return panel
+}
+function hideHubRolePanel(){$('hubRolePanel')?.classList.add('hidden')}
+function installDetachedEditorFocus(panel,head){
+  if(!panel||!head||panel.dataset.focusInstalled==='1')return;panel.dataset.focusInstalled='1';
+  const actions=head.querySelector('.special-editor-window-actions')||head.querySelector('.editor-window-actions')||head;
+  const button=document.createElement('button');button.type='button';button.className='icon-btn detached-focus-btn';button.title='Focus / fullscreen';button.textContent='⛶';
+  button.onclick=e=>{e.stopPropagation();panel.classList.toggle('detached-editor-maximized');button.textContent=panel.classList.contains('detached-editor-maximized')?'🗗':'⛶';panel.dataset.dragX='0';panel.dataset.dragY='0';applyPanelDragTransform(panel);requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel))};
+  const close=actions.querySelector('button:last-child');if(close&&actions!==head)actions.insertBefore(button,close);else actions.appendChild(button)
+}
+function prepareDetachedEditorPanel(panel,head){
+  if(!panel)return panel;if(head){makePanelDraggable(panel,head);head.addEventListener('dblclick',e=>{if(e.target.closest('button,input,select,textarea'))return;const b=panel.querySelector('.detached-focus-btn');b?.click()})}installDetachedEditorFocus(panel,head);return panel
+}
+
+
+
+/* ============================ V28 SHARED 3D SCENE MODELLER ============================ */
+/*
+  This is a real WebGL modelling viewport shared by Places and non-megastructure
+  Structures.  It deliberately stays dependency-free so exported projects keep
+  working offline.
+*/
+let placeModelDraft=null,structureModelDraft=null;
+let scene3DModel=null,scene3DTargetNode=null,scene3DTargetType='place',scene3DSelected=null;
+let scene3DCamera={yaw:.72,pitch:.42,distance:28,target:[0,2,0]};
+let scene3DGL=null,scene3DProgram=null,scene3DGeometryCache=new Map(),scene3DDrag=null,scene3DKeyMode='';
+let scene3DLastViewProj=null;
+// v28.7ap — Wedge primitive + repaired in-viewport part dragging. Landscape coordinates
+// remain the same as the actual Surface loader. One modeller unit = one Surface world unit.
+const LANDSCAPE_SURFACE_SIZE=360,LANDSCAPE_SURFACE_HALF=LANDSCAPE_SURFACE_SIZE/2;
+let sceneLandscapeWeatherDraft={skyColor:'#8fc8ee',type:'none',weatherSkyColor:'#56616b',intensity:.82,preview:true};
+
+function scene3DEnvironmentPreset(env='grass'){
+  if(env==='desert')return{sky:[.49,.70,.86,1],ground:'#c7a15a',grid:'#6f5a37'};
+  if(env==='gas')return{sky:[.53,.41,.66,1],ground:'#9b7f98',grid:'#645067'};
+  return{sky:[.42,.67,.86,1],ground:'#5d8b4b',grid:'#365a32'}
+}
+function scene3DPartDefaults(kind='Cube'){
+  const defaults={
+    Cube:{color:'#9aa6b2',sx:2.8,sy:2.8,sz:2.8},
+    Wedge:{color:'#a6b0bb',sx:3.4,sy:2.8,sz:4.2},
+    Building:{color:'#aeb9c4',sx:4,sy:4.5,sz:4},
+    Tower:{color:'#b9c5d1',sx:2.8,sy:8,sz:2.8},
+    Cylinder:{color:'#9fb6c6',sx:3,sy:4,sz:3},
+    Sphere:{color:'#8eafd0',sx:3,sy:3,sz:3},
+    Dome:{color:'#7ea9c8',sx:4,sy:2.2,sz:4},
+    Cone:{color:'#b99576',sx:3.5,sy:5,sz:3.5},
+    Pyramid:{color:'#bea77d',sx:4,sy:4,sz:4},
+    Tree:{color:'#4f8b48',sx:3,sy:5,sz:3},
+    Rock:{color:'#777b80',sx:3.5,sy:2.5,sz:3.1},
+    Monument:{color:'#c9b780',sx:2.5,sy:7,sz:2.5}
+  };
+  const d=defaults[kind]||defaults.Cube;
+  return{id:'mesh-'+uid(),kind,label:kind,color:d.color,x:0,y:d.sy/2,z:0,rx:0,ry:0,rz:0,sx:d.sx,sy:d.sy,sz:d.sz}
+}
+function normalizeScene3DModel(model){
+  const src=model&&typeof model==='object'?deepCloneState(model):{};
+  const legacyParts=Array.isArray(src.parts)?src.parts.map(p=>({
+    ...scene3DPartDefaults(p.kind||'Building'),
+    ...p,
+    x:Number(p.x)||0,y:Number.isFinite(+p.y)?+p.y:(Number(p.h)||Number(p.sy)||3)/2,z:Number(p.z)||0,
+    sx:Number(p.sx)||Number(p.w)||2.8,sy:Number(p.sy)||Number(p.h)||3,sz:Number(p.sz)||Number(p.d)||2.8,
+    rx:Number(p.rx)||0,ry:Number(p.ry)||Number(p.rotation||0)*Math.PI/180,rz:Number(p.rz)||0
+  })) : [];
+  let variants=Array.isArray(src.variants)?src.variants.map((v,i)=>({
+    id:v.id||'variant-'+uid(),name:String(v.name||`Variant ${i+1}`),
+    parts:Array.isArray(v.parts)?v.parts.map(p=>({...scene3DPartDefaults(p.kind||'Cube'),...p})):[]
+  })) : [];
+  if(!variants.length)variants=[{id:'default',name:'Default',parts:legacyParts}];
+  if(legacyParts.length&&!variants.some(v=>v.parts?.length)){
+    const target=variants.find(v=>v.id===src.activeVariantId)||variants[0];target.parts=legacyParts
+  }
+  const drawableVariant=variants.find(v=>v.parts?.length),requested=variants.find(v=>v.id===src.activeVariantId);
+  const activeVariantId=(requested?.parts?.length?requested:drawableVariant||requested||variants[0]).id;
+  const rawR=src.repetition||{};
+  return{
+    environment:['grass','desert','gas'].includes(src.environment)?src.environment:'grass',
+    groundColor:src.groundColor||scene3DEnvironmentPreset(src.environment||'grass').ground,
+    skyColor:v287zNormHex(src.skyColor)||src.skyColor||'',
+    variants,activeVariantId,
+    parts:variants.find(v=>v.id===activeVariantId)?.parts||[],
+    repetition:{
+      enabled:!!rawR.enabled,
+      mode:['grid','line','radial','area'].includes(rawR.mode)?rawR.mode:'grid',
+      countX:Math.max(1,Math.min(50,+rawR.countX||1)),
+      countZ:Math.max(1,Math.min(50,+rawR.countZ||1)),
+      count:Math.max(1,Math.min(400,+rawR.count||6)),
+      spacingX:Math.max(.5,Math.min(200,+rawR.spacingX||8)),
+      spacingZ:Math.max(.5,Math.min(200,+rawR.spacingZ||8)),
+      radius:Math.max(1,Math.min(400,+rawR.radius||14)),
+      areaWidth:Math.max(1,Math.min(300,+rawR.areaWidth||70)),
+      areaDepth:Math.max(1,Math.min(300,+rawR.areaDepth||70)),
+      scaleVariation:Math.max(0,Math.min(80,+rawR.scaleVariation||0)),
+      variantMode:['active','cycle','random'].includes(rawR.variantMode)?rawR.variantMode:'active'
+    }
+  }
+}
+function scene3DActiveVariant(model=scene3DModel){
+  if(!model)return null;
+  const vars=Array.isArray(model.variants)?model.variants:[],active=vars.find(v=>v.id===model.activeVariantId);
+  // v28.7c: loaded models can retain an empty active variant while their real geometry lives in another variant.
+  // Rendering that empty variant produced labels with no buildings. Prefer the active variant only when it has geometry.
+  return (active?.parts?.length?active:null)||vars.find(v=>v?.parts?.length)||active||vars[0]||null
+}
+function syncScene3DLegacyParts(model=scene3DModel){
+  if(!model)return model;const v=scene3DActiveVariant(model);model.parts=v?v.parts:[];return model
+}
+function scene3DModelForSave(model=scene3DModel){return deepCloneState(syncScene3DLegacyParts(model))}
+function scene3DRepeatInstances(model=scene3DModel,seedKey='default'){
+  if(!model)return[];
+  const R=model.repetition||{},vars=Array.isArray(model.variants)?model.variants:[],drawable=vars.filter(v=>Array.isArray(v?.parts)&&v.parts.some(p=>p&&!p.hidden)),active=scene3DActiveVariant(model);
+  if(!drawable.length)return[];
+  const num=(v,d,min,max)=>Math.max(min,Math.min(max,Number.isFinite(+v)?+v:d)),
+        mode=['grid','line','radial','area'].includes(R.mode)?R.mode:'grid',
+        countX=Math.round(num(R.countX,1,1,50)),countZ=Math.round(num(R.countZ,1,1,50)),count=Math.round(num(R.count,6,1,400)),
+        spacingX=num(R.spacingX,8,.1,200),spacingZ=num(R.spacingZ,8,.1,200),radius=num(R.radius,14,.1,400),
+        areaWidth=num(R.areaWidth,70,1,300),areaDepth=num(R.areaDepth,70,1,300),variation=num(R.scaleVariation,0,0,80)/100;
+  const rand=(i,s='')=>v283Hash(`land-repeat:${seedKey}:${i}:${s}`);
+  const choose=i=>{if(R.variantMode==='cycle')return drawable[i%drawable.length];if(R.variantMode==='random')return drawable[Math.floor(rand(i,'variant')*drawable.length)%drawable.length];return drawable.includes(active)?active:drawable[0]};
+  const scaleFor=i=>variation?1+(rand(i,'scale')*2-1)*variation:1;
+  if(!R.enabled)return[{variant:drawable.includes(active)?active:drawable[0],ox:0,oz:0,index:0,key:`${seedKey}:repeat:0`,scale:1}];
+  const out=[];
+  if(mode==='radial'){
+    for(let i=0;i<count;i++){const jitter=(rand(i,'angle')-.5)*(.32/count*Math.PI*2),t=i/count*Math.PI*2+jitter,rr=radius*(.86+rand(i,'radius')*.28);out.push({variant:choose(i),ox:Math.cos(t)*rr,oz:Math.sin(t)*rr,index:i,key:`${seedKey}:repeat:${i}`,scale:scaleFor(i)})}
+  }else if(mode==='line'){
+    for(let i=0;i<count;i++)out.push({variant:choose(i),ox:(i-(count-1)/2)*spacingX,oz:0,index:i,key:`${seedKey}:repeat:${i}`,scale:scaleFor(i)})
+  }else if(mode==='area'){
+    // v28.7ak: stratified 2D scatter. Every Area layout occupies both axes instead
+    // of occasionally looking like a noisy line, while still remaining procedural.
+    const aspect=Math.max(.15,areaWidth/Math.max(1,areaDepth)),cols=Math.max(1,Math.ceil(Math.sqrt(count*aspect))),rows=Math.max(1,Math.ceil(count/cols));
+    for(let i=0;i<count;i++){const col=i%cols,row=Math.floor(i/cols),jx=(rand(i,'x')-.5)*.82,jz=(rand(i,'z')-.5)*.82;out.push({variant:choose(i),ox:(((col+.5+jx)/cols)-.5)*areaWidth,oz:(((row+.5+jz)/rows)-.5)*areaDepth,index:i,key:`${seedKey}:repeat:${i}`,scale:scaleFor(i)})}
+  }else{
+    let i=0;for(let z=0;z<countZ;z++)for(let x=0;x<countX;x++,i++)out.push({variant:choose(i),ox:(x-(countX-1)/2)*spacingX,oz:(z-(countZ-1)/2)*spacingZ,index:i,key:`${seedKey}:repeat:${i}`,scale:scaleFor(i)})
+  }
+  return out
+}
+function scene3DBakeRepetition(){
+  if(!scene3DModel?.repetition?.enabled)return;
+  const active=scene3DActiveVariant();if(!active)return;
+  const baked=[];
+  for(const inst of scene3DRepeatInstances(scene3DModel)){
+    for(const src of inst.variant?.parts||[]){
+      if(src.hidden)continue;
+      const p=deepCloneState(src);p.id='mesh-'+uid();p.x=(p.x||0)*inst.scale+inst.ox;p.y=(p.y||0)*inst.scale;p.z=(p.z||0)*inst.scale+inst.oz;p.sx=(p.sx||1)*inst.scale;p.sy=(p.sy||1)*inst.scale;p.sz=(p.sz||1)*inst.scale;p.label=(p.label||p.kind)+(inst.index?` ${inst.index+1}`:'');baked.push(p)
+    }
+  }
+  active.parts=baked;scene3DModel.repetition.enabled=false;scene3DSelected=baked[0]?.id||null;syncScene3DLegacyParts();scene3DSyncRepeatUI();scene3DSyncInspector();scene3DRenderViewport()
+}
+function scene3DRepetitionAgain(){
+  if(!scene3DModel?.repetition)return;scene3DModel.repetition.enabled=true;scene3DSyncRepeatUI();scene3DRenderViewport()
+}
+/* ---- tiny matrix library ---- */
+function m4Identity(){return[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]}
+function m4Mul(a,b){const o=new Array(16).fill(0);for(let c=0;c<4;c++)for(let r=0;r<4;r++)for(let k=0;k<4;k++)o[c*4+r]+=a[k*4+r]*b[c*4+k];return o}
+function m4Translate(x,y,z){const m=m4Identity();m[12]=x;m[13]=y;m[14]=z;return m}
+function m4Scale(x,y,z){const m=m4Identity();m[0]=x;m[5]=y;m[10]=z;return m}
+function m4RotX(a){const c=Math.cos(a),s=Math.sin(a),m=m4Identity();m[5]=c;m[6]=s;m[9]=-s;m[10]=c;return m}
+function m4RotY(a){const c=Math.cos(a),s=Math.sin(a),m=m4Identity();m[0]=c;m[2]=-s;m[8]=s;m[10]=c;return m}
+function m4RotZ(a){const c=Math.cos(a),s=Math.sin(a),m=m4Identity();m[0]=c;m[1]=s;m[4]=-s;m[5]=c;return m}
+function m4Perspective(fov,aspect,near,far){const f=1/Math.tan(fov/2),nf=1/(near-far);return[f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*nf,-1,0,0,2*far*near*nf,0]}
+function v3Sub(a,b){return[a[0]-b[0],a[1]-b[1],a[2]-b[2]]}
+function v3Cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}
+function v3Norm(a){const d=Math.hypot(...a)||1;return a.map(v=>v/d)}
+function v3Dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
+function m4LookAt(eye,target,up=[0,1,0]){const z=v3Norm(v3Sub(eye,target)),x=v3Norm(v3Cross(up,z)),y=v3Cross(z,x);return[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-v3Dot(x,eye),-v3Dot(y,eye),-v3Dot(z,eye),1]}
+function m4TransformPoint(m,p){const x=p[0],y=p[1],z=p[2],w=p[3]??1;return[m[0]*x+m[4]*y+m[8]*z+m[12]*w,m[1]*x+m[5]*y+m[9]*z+m[13]*w,m[2]*x+m[6]*y+m[10]*z+m[14]*w,m[3]*x+m[7]*y+m[11]*z+m[15]*w]}
+function scene3DModelMatrix(p,ox=0,oz=0){
+  let m=m4Translate((p.x||0)+ox,p.y||0,(p.z||0)+oz);
+  m=m4Mul(m,m4RotY(p.ry||0));m=m4Mul(m,m4RotX(p.rx||0));m=m4Mul(m,m4RotZ(p.rz||0));m=m4Mul(m,m4Scale(p.sx||1,p.sy||1,p.sz||1));return m
+}
+function scene3DHexRgb(hex){const m=/^#?([0-9a-f]{6})$/i.exec(String(hex||''));if(!m)return[.65,.7,.75,1];const n=parseInt(m[1],16);return[((n>>16)&255)/255,((n>>8)&255)/255,(n&255)/255,1]}
+
+/* ---- geometry ---- */
+function scene3DGeometry(kind){
+  const key=kind||'Cube';if(scene3DGeometryCache.has(key))return scene3DGeometryCache.get(key);
+  const pos=[],nor=[];
+  const tri=(a,b,c,n)=>{pos.push(...a,...b,...c);nor.push(...n,...n,...n)};
+  if(['Cube','Building','Rock','Monument'].includes(key)){
+    const V=[[-.5,-.5,-.5],[.5,-.5,-.5],[.5,.5,-.5],[-.5,.5,-.5],[-.5,-.5,.5],[.5,-.5,.5],[.5,.5,.5],[-.5,.5,.5]];
+    for(const [a,b,c,d,n] of [[0,1,2,3,[0,0,-1]],[5,4,7,6,[0,0,1]],[4,0,3,7,[-1,0,0]],[1,5,6,2,[1,0,0]],[3,2,6,7,[0,1,0]],[4,5,1,0,[0,-1,0]]]){tri(V[a],V[b],V[c],n);tri(V[a],V[c],V[d],n)}
+  }else if(key==='Wedge'){
+    // Triangular prism: low edge at -Z, tall vertical edge at +Z.
+    // This is real geometry, so the same Wedge appears in the modeller and Surface loader.
+    const LF=[-.5,-.5,-.5],RF=[.5,-.5,-.5],LB=[-.5,-.5,.5],RB=[.5,-.5,.5],LT=[-.5,.5,.5],RT=[.5,.5,.5];
+    tri(LF,RF,RB,[0,-1,0]);tri(LF,RB,LB,[0,-1,0]);                    // bottom
+    tri(LB,RB,RT,[0,0,1]);tri(LB,RT,LT,[0,0,1]);                     // tall back
+    tri(LF,LB,LT,[-1,0,0]);                                         // left triangle
+    tri(RF,RT,RB,[1,0,0]);                                          // right triangle
+    const slope=v3Norm([0,1,-1]);tri(LF,RT,RF,slope);tri(LF,LT,RT,slope); // slope
+  }else if(key==='Pyramid'){
+    const A=[-.5,-.5,-.5],B=[.5,-.5,-.5],C=[.5,-.5,.5],D=[-.5,-.5,.5],T=[0,.5,0];tri(A,C,B,[0,-1,0]);tri(A,D,C,[0,-1,0]);tri(A,B,T,[0,.45,-.89]);tri(B,C,T,[.89,.45,0]);tri(C,D,T,[0,.45,.89]);tri(D,A,T,[-.89,.45,0])
+  }else{
+    const seg=key==='Sphere'?18:24;
+    if(key==='Sphere'||key==='Dome'){
+      const latN=key==='Dome'?7:12,latMax=key==='Dome'?Math.PI/2:Math.PI;
+      for(let y=0;y<latN;y++){const a0=y/latN*latMax-(key==='Dome'?0:Math.PI/2),a1=(y+1)/latN*latMax-(key==='Dome'?0:Math.PI/2);for(let i=0;i<seg;i++){const t0=i/seg*Math.PI*2,t1=(i+1)/seg*Math.PI*2;const q=(a,t)=>[Math.cos(a)*Math.cos(t)*.5,Math.sin(a)*.5,Math.cos(a)*Math.sin(t)*.5],A=q(a0,t0),B=q(a0,t1),C=q(a1,t1),D=q(a1,t0);tri(A,B,C,v3Norm(A));tri(A,C,D,v3Norm(A))}}
+    }else{
+      const cone=key==='Cone'||key==='Tree',topR=cone?0:.5,bottomR=.5;
+      for(let i=0;i<seg;i++){const t0=i/seg*Math.PI*2,t1=(i+1)/seg*Math.PI*2,A=[Math.cos(t0)*bottomR,-.5,Math.sin(t0)*bottomR],B=[Math.cos(t1)*bottomR,-.5,Math.sin(t1)*bottomR],C=[Math.cos(t1)*topR,.5,Math.sin(t1)*topR],D=[Math.cos(t0)*topR,.5,Math.sin(t0)*topR],n=v3Norm([Math.cos((t0+t1)/2),cone?.45:0,Math.sin((t0+t1)/2)]);tri(A,B,C,n);tri(A,C,D,n);tri([0,-.5,0],B,A,[0,-1,0]);if(!cone)tri([0,.5,0],D,C,[0,1,0])}
+    }
+  }
+  const geo={positions:new Float32Array(pos),normals:new Float32Array(nor)};scene3DGeometryCache.set(key,geo);return geo
+}
+function scene3DShader(gl,type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s}
+function scene3DInitGL(canvas){
+  const gl=canvas.getContext('webgl',{antialias:true,alpha:false,preserveDrawingBuffer:false});if(!gl)return null;
+  const vs=scene3DShader(gl,gl.VERTEX_SHADER,`attribute vec3 aPosition;attribute vec3 aNormal;uniform mat4 uMVP;uniform mat4 uModel;varying vec3 vN;varying vec3 vW;varying vec3 vLP;varying vec3 vLN;void main(){vec4 w=uModel*vec4(aPosition,1.0);vW=w.xyz;vN=normalize(mat3(uModel)*aNormal);vLP=aPosition;vLN=aNormal;gl_Position=uMVP*vec4(aPosition,1.0);}`);
+  const fs=scene3DShader(gl,gl.FRAGMENT_SHADER,`precision mediump float;uniform vec4 uColor;uniform vec3 uLight;uniform bool uUseTexture;uniform sampler2D uTexture;uniform int uFace;uniform bool uTileTexture;uniform vec2 uTileRepeat;varying vec3 vN;varying vec3 vW;varying vec3 vLP;varying vec3 vLN;const float PI=3.14159265;void main(){vec4 base=uColor;if(uUseTexture){vec2 uv=vec2(.5);bool ok=false;if(uFace==0){ok=vLN.z>.55;uv=vLP.xy+.5;}else if(uFace==1){ok=vLN.z<-.55;uv=vec2(-vLP.x,vLP.y)+.5;}else if(uFace==2){ok=vLN.x<-.55;uv=vec2(vLP.z,vLP.y)+.5;}else if(uFace==3){ok=vLN.x>.55;uv=vec2(-vLP.z,vLP.y)+.5;}else if(uFace==4){ok=vLN.y>.55;uv=vLP.xz+.5;}else if(uFace==5){ok=vLN.y<-.55;uv=vec2(vLP.x,-vLP.z)+.5;}else{ok=abs(vLN.y)<.72;uv=vec2(atan(vLP.z,vLP.x)/(2.0*PI)+.5,vLP.y+.5);}if(!ok)discard;vec2 sampleUV=uTileTexture?fract(uv*uTileRepeat):clamp(uv,vec2(.001),vec2(.999));base=texture2D(uTexture,sampleUV);}float d=max(0.0,dot(normalize(vN),normalize(uLight)));float amb=.32;float shade=amb+d*.68;float fog=clamp((length(vW)-25.0)/85.0,0.0,.52);vec3 c=base.rgb*shade;c=mix(c,vec3(.56,.69,.79),fog);gl_FragColor=vec4(c,base.a);}`);
+  const pr=gl.createProgram();gl.attachShader(pr,vs);gl.attachShader(pr,fs);gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(pr));
+  return{gl,program:pr,textureCache:new Map(),loc:{p:gl.getAttribLocation(pr,'aPosition'),n:gl.getAttribLocation(pr,'aNormal'),mvp:gl.getUniformLocation(pr,'uMVP'),model:gl.getUniformLocation(pr,'uModel'),color:gl.getUniformLocation(pr,'uColor'),light:gl.getUniformLocation(pr,'uLight'),useTexture:gl.getUniformLocation(pr,'uUseTexture'),texture:gl.getUniformLocation(pr,'uTexture'),face:gl.getUniformLocation(pr,'uFace'),tileTexture:gl.getUniformLocation(pr,'uTileTexture'),tileRepeat:gl.getUniformLocation(pr,'uTileRepeat')}}
+}
+function scene3DDrawMesh(renderer,kind,model,vp,color){
+  const {gl,program,loc}=renderer,geo=scene3DGeometry(kind);gl.useProgram(program);
+  if(!geo._buffers)geo._buffers=new WeakMap();let buf=geo._buffers.get(gl);if(!buf){buf={p:gl.createBuffer(),n:gl.createBuffer()};gl.bindBuffer(gl.ARRAY_BUFFER,buf.p);gl.bufferData(gl.ARRAY_BUFFER,geo.positions,gl.STATIC_DRAW);gl.bindBuffer(gl.ARRAY_BUFFER,buf.n);gl.bufferData(gl.ARRAY_BUFFER,geo.normals,gl.STATIC_DRAW);geo._buffers.set(gl,buf)}
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf.p);gl.enableVertexAttribArray(loc.p);gl.vertexAttribPointer(loc.p,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,buf.n);gl.enableVertexAttribArray(loc.n);gl.vertexAttribPointer(loc.n,3,gl.FLOAT,false,0,0);
+  gl.uniformMatrix4fv(loc.model,false,new Float32Array(model));gl.uniformMatrix4fv(loc.mvp,false,new Float32Array(m4Mul(vp,model)));gl.uniform4fv(loc.color,new Float32Array(scene3DHexRgb(color)));gl.uniform3fv(loc.light,new Float32Array([.55,.85,.4]));gl.uniform1i(loc.useTexture,0);gl.drawArrays(gl.TRIANGLES,0,geo.positions.length/3)
+}
+
+function scene3DGLTexture(renderer,data){
+  if(!data)return null;if(renderer.textureCache.has(data))return renderer.textureCache.get(data);
+  const {gl}=renderer,rec={texture:gl.createTexture(),ready:false};renderer.textureCache.set(data,rec);gl.bindTexture(gl.TEXTURE_2D,rec.texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([180,180,180,255]));gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  const img=new Image();img.onload=()=>{gl.bindTexture(gl.TEXTURE_2D,rec.texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);rec.ready=true;scene3DRenderViewport()};img.src=data;return rec
+}
+function scene3DTextureRepeatForFace(p,face,t){
+  const tileSize=Math.max(.25,Math.min(100,Number(t?.tileSize)||2.5)),
+        sx=Math.max(.1,Math.abs(Number(p?.sx)||1)),
+        sy=Math.max(.1,Math.abs(Number(p?.sy)||1)),
+        sz=Math.max(.1,Math.abs(Number(p?.sz)||1));
+  let w=sx,h=sy;
+  if(face==='left'||face==='right'){w=sz;h=sy}
+  else if(face==='top'||face==='bottom'){w=sx;h=sz}
+  else if(face==='wrap'){w=Math.PI*(sx+sz)*.5;h=sy}
+  return[
+    Math.max(1,w/tileSize),
+    Math.max(1,h/tileSize)
+  ]
+}
+function scene3DDrawTexturedFace(renderer,p,kind,model,vp,t,face){
+  const rec=scene3DGLTexture(renderer,t?.data);if(!rec)return;
+  const {gl,program,loc}=renderer,geo=scene3DGeometry(kind);gl.useProgram(program);const buf=geo._buffers?.get(gl);if(!buf)return;
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf.p);gl.enableVertexAttribArray(loc.p);gl.vertexAttribPointer(loc.p,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf.n);gl.enableVertexAttribArray(loc.n);gl.vertexAttribPointer(loc.n,3,gl.FLOAT,false,0,0);
+  gl.uniformMatrix4fv(loc.model,false,new Float32Array(model));gl.uniformMatrix4fv(loc.mvp,false,new Float32Array(m4Mul(vp,model)));
+  gl.uniform4fv(loc.color,new Float32Array([1,1,1,1]));gl.uniform3fv(loc.light,new Float32Array([.55,.85,.4]));
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,rec.texture);gl.uniform1i(loc.texture,0);
+  gl.uniform1i(loc.face,{front:0,back:1,left:2,right:3,top:4,bottom:5,wrap:6}[face]??0);
+  const tiled=t?.mode==='tile',repeat=scene3DTextureRepeatForFace(p,face,t);
+  gl.uniform1i(loc.tileTexture,tiled?1:0);gl.uniform2fv(loc.tileRepeat,new Float32Array(repeat));
+  gl.uniform1i(loc.useTexture,1);gl.depthFunc(gl.LEQUAL);gl.depthMask(false);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);
+  gl.drawArrays(gl.TRIANGLES,0,geo.positions.length/3);
+  gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.uniform1i(loc.useTexture,0)
+}
+function scene3DRenderFaceTextures(renderer,p,kind,model,vp){
+  for(const [face,t] of Object.entries(p.faceTextures||{}))if(t?.data)scene3DDrawTexturedFace(renderer,p,kind,model,vp,t,face)
+}
+function scene3DRenderPart(renderer,p,vp,ox=0,oz=0){
+  if(p.kind==='Tree'){
+    const trunk={...p,kind:'Cylinder',color:'#6e5035',sx:(p.sx||3)*.26,sy:(p.sy||5)*.55,sz:(p.sz||3)*.26,y:(p.y||0)-(p.sy||5)*.20};
+    const crown={...p,kind:'Sphere',sx:p.sx||3,sy:(p.sy||5)*.65,sz:p.sz||3,y:(p.y||0)+(p.sy||5)*.18};
+    scene3DDrawMesh(renderer,'Cylinder',scene3DModelMatrix(trunk,ox,oz),vp,trunk.color);scene3DDrawMesh(renderer,'Sphere',scene3DModelMatrix(crown,ox,oz),vp,p.color);return
+  }
+  const kind=p.kind==='Tower'?'Cylinder':p.kind,model=scene3DModelMatrix(p,ox,oz);scene3DDrawMesh(renderer,kind,model,vp,p.color);scene3DRenderFaceTextures(renderer,p,kind,model,vp)
+}
+function scene3DCameraMatrices(canvas){
+  const c=scene3DCamera,cp=Math.cos(c.pitch),eye=[c.target[0]+Math.sin(c.yaw)*cp*c.distance,c.target[1]+Math.sin(c.pitch)*c.distance,c.target[2]+Math.cos(c.yaw)*cp*c.distance],aspect=Math.max(.2,canvas.width/canvas.height);
+  const view=m4LookAt(eye,c.target,[0,1,0]),proj=m4Perspective(Math.PI/4,aspect,.1,500);return{eye,view,proj,vp:m4Mul(proj,view)}
+}
+function scene3DProject(world,canvas,vp=scene3DLastViewProj){
+  if(!vp)return null;const q=m4TransformPoint(vp,[...world,1]);if(!q[3])return null;const x=q[0]/q[3],y=q[1]/q[3],z=q[2]/q[3];return{x:(x*.5+.5)*canvas.width,y:(1-(y*.5+.5))*canvas.height,z,w:q[3]}
+}
+function scene3DPartWorldCenter(p,ox=0,oz=0){return[(p.x||0)+ox,p.y||0,(p.z||0)+oz]}
+
+function scene3DSoftwareFallback(canvas,overlay,W,H){
+  const ctx=canvas.getContext('2d');if(!ctx)return false;
+  const env=scene3DEnvironmentPreset(scene3DModel.environment),landscapeMode=scene3DTargetType==='landscape',skyHex=landscapeMode?v287alScenePreviewSky():'',skyRgb=skyHex?v271ParseHex(skyHex):null,rgb=skyRgb?[skyRgb.r,skyRgb.g,skyRgb.b,1]:env.sky.map((v,i)=>i<3?Math.round(v*255):v),grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`);grad.addColorStop(.58,landscapeMode?`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`:`rgb(${Math.min(255,rgb[0]+35)},${Math.min(255,rgb[1]+35)},${Math.min(255,rgb[2]+35)})`);grad.addColorStop(.581,scene3DModel.groundColor||env.ground);grad.addColorStop(1,scene3DModel.groundColor||env.ground);ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+  const {vp}=scene3DCameraMatrices(canvas);scene3DLastViewProj=vp;canvas._scenePick=[];
+  ctx.strokeStyle='rgba(255,255,255,.09)';ctx.lineWidth=1;
+  if(!landscapeMode)for(let i=-20;i<=20;i+=2){const A=scene3DProject([i,0,-20],canvas,vp),B=scene3DProject([i,0,20],canvas,vp),C=scene3DProject([-20,0,i],canvas,vp),D=scene3DProject([20,0,i],canvas,vp);if(A&&B){ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke()}if(C&&D){ctx.beginPath();ctx.moveTo(C.x,C.y);ctx.lineTo(D.x,D.y);ctx.stroke()}}
+  for(const inst of scene3DRepeatInstances(scene3DModel)){
+    for(const p of inst.variant?.parts||[]){
+      if(p.hidden)continue;
+      const P=scene3DProject([(p.x||0)+inst.ox,p.y||0,(p.z||0)+inst.oz],canvas,vp);if(!P||P.w<=0)continue;const size=Math.max(5,520/Math.max(.8,P.w)),ww=Math.max(5,(p.sx||1)*size),hh=Math.max(7,(p.sy||1)*size);
+      ctx.save();ctx.globalAlpha=inst.index===0?1:.72;ctx.fillStyle=p.color||'#9aa6b2';ctx.strokeStyle='rgba(0,0,0,.35)';
+      if(['Sphere','Dome'].includes(p.kind)){ctx.beginPath();ctx.ellipse(P.x,P.y,ww*.48,hh*.48,0,0,Math.PI*2);ctx.fill();ctx.stroke()}
+      else if(['Cylinder','Tower'].includes(p.kind)){ctx.fillRect(P.x-ww*.4,P.y-hh*.5,ww*.8,hh);ctx.beginPath();ctx.ellipse(P.x,P.y-hh*.5,ww*.4,Math.max(2,ww*.12),0,0,Math.PI*2);ctx.fill()}
+      else if(['Cone','Pyramid','Tree','Rock'].includes(p.kind)){ctx.beginPath();ctx.moveTo(P.x,P.y-hh*.55);ctx.lineTo(P.x-ww*.48,P.y+hh*.45);ctx.lineTo(P.x+ww*.48,P.y+hh*.45);ctx.closePath();ctx.fill();ctx.stroke()}
+      else{ctx.fillRect(P.x-ww*.5,P.y-hh*.5,ww,hh);ctx.strokeRect(P.x-ww*.5,P.y-hh*.5,ww,hh)}
+      ctx.restore();if(inst.index===0)canvas._scenePick.push({part:p,x:P.x,y:P.y,r:Math.max(18,Math.min(70,Math.max(ww,hh)*.55))})
+    }
+  }
+  scene3DDrawGizmo(canvas,overlay,vp);return true
+}
+function scene3DRenderViewport(){
+  const canvas=$('scene3DCanvas'),overlay=$('scene3DGizmo');if(!canvas||!scene3DModel)return;
+  const rect=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,1.75),W=Math.max(2,Math.round(rect.width*d)),H=Math.max(2,Math.round(rect.height*d));if(canvas.width!==W||canvas.height!==H){canvas.width=W;canvas.height=H;overlay.width=W;overlay.height=H}
+  let renderer=canvas._sceneRenderer;
+  if(renderer===undefined){renderer=scene3DInitGL(canvas);canvas._sceneRenderer=renderer||false}
+  if(!renderer){
+    scene3DSoftwareFallback(canvas,overlay,W,H);
+    const v=scene3DActiveVariant(),rep=scene3DModel.repetition;$('scene3DStatus').textContent=`Software fallback · ${v?.parts.length||0} object${(v?.parts.length||0)===1?'':'s'} · ${scene3DModel.variants.length} variant${scene3DModel.variants.length===1?'':'s'}${rep.enabled?` · repeated ${scene3DRepeatInstances(scene3DModel).length}×`:''}`;return
+  }
+  const {gl}=renderer,env=scene3DEnvironmentPreset(scene3DModel.environment),landscapeMode=scene3DTargetType==='landscape',skyHex=landscapeMode?v287alScenePreviewSky():'',skyRgb=skyHex?v271ParseHex(skyHex):null,clearSky=skyRgb?[skyRgb.r/255,skyRgb.g/255,skyRgb.b/255,1]:env.sky;gl.viewport(0,0,W,H);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(...clearSky);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const {vp}=scene3DCameraMatrices(canvas);scene3DLastViewProj=vp;
+  // Landscape authoring uses the EXACT 360 × 360 world-space baseplate used by
+  // surface3DDrawLandscape(). The grid is an editor guide only and is never loaded
+  // as scenery. This makes every X/Z position directly match the visited Surface.
+  const ground={x:0,y:-.32,z:0,rx:0,ry:0,rz:0,sx:landscapeMode?LANDSCAPE_SURFACE_SIZE:90,sy:landscapeMode?.55:.2,sz:landscapeMode?LANDSCAPE_SURFACE_SIZE:90};
+  scene3DDrawMesh(renderer,'Cube',scene3DModelMatrix(ground),vp,scene3DModel.groundColor||env.ground);
+  if(landscapeMode){
+    const guide='#455465';
+    for(let i=-LANDSCAPE_SURFACE_HALF;i<=LANDSCAPE_SURFACE_HALF;i+=20){
+      scene3DDrawMesh(renderer,'Cube',scene3DModelMatrix({x:i,y:.002,z:0,sx:.08,sy:.018,sz:LANDSCAPE_SURFACE_SIZE}),vp,guide);
+      scene3DDrawMesh(renderer,'Cube',scene3DModelMatrix({x:0,y:.003,z:i,sx:LANDSCAPE_SURFACE_SIZE,sy:.018,sz:.08}),vp,guide)
+    }
+    // Bright boundary = the exact loader edge.
+    for(const edge of [
+      {x:-LANDSCAPE_SURFACE_HALF,z:0,sx:.28,sz:LANDSCAPE_SURFACE_SIZE},
+      {x: LANDSCAPE_SURFACE_HALF,z:0,sx:.28,sz:LANDSCAPE_SURFACE_SIZE},
+      {x:0,z:-LANDSCAPE_SURFACE_HALF,sx:LANDSCAPE_SURFACE_SIZE,sz:.28},
+      {x:0,z: LANDSCAPE_SURFACE_HALF,sx:LANDSCAPE_SURFACE_SIZE,sz:.28}
+    ])scene3DDrawMesh(renderer,'Cube',scene3DModelMatrix({...edge,y:.018,sy:.028}),vp,'#9fdcff')
+  }else for(let i=-20;i<=20;i+=2){scene3DDrawMesh(renderer,'Cube',scene3DModelMatrix({x:i,y:.005,z:0,sx:.018,sy:.012,sz:40}),vp,env.grid);scene3DDrawMesh(renderer,'Cube',scene3DModelMatrix({x:0,y:.006,z:i,sx:40,sy:.012,sz:.018}),vp,env.grid)}
+  // v28.1 backdrop is Structure-only. A Landscape literally IS the environment.
+  const backdropSeed=(i,s=0)=>{const n=Math.sin(i*71.37+s*39.11)*43758.5453;return n-Math.floor(n)};
+  if(!landscapeMode&&(scene3DModel.environment==='grass'||scene3DModel.environment==='desert')){
+    const desert=scene3DModel.environment==='desert';
+    for(let i=0;i<16;i++){
+      const x=(backdropSeed(i,1)-.5)*72,z=24+backdropSeed(i,2)*30,w=5+backdropSeed(i,3)*10,h=(desert?.45:.75)*(4+backdropSeed(i,4)*10),col=desert?'#c9a45c':'#6f9657';
+      scene3DDrawMesh(renderer,'Dome',scene3DModelMatrix({x,y:-.08,z,sx:w*1.7,sy:h,sz:w,rx:0,ry:0,rz:0}),vp,col)
+    }
+    for(let i=0;i<12;i++){
+      const x=-58+i*10+(backdropSeed(i,5)-.5)*5,z=58+backdropSeed(i,6)*20,w=9+backdropSeed(i,7)*12,h=18+backdropSeed(i,8)*24,col=desert?'#8f6948':'#52634e';
+      scene3DDrawMesh(renderer,'Cone',scene3DModelMatrix({x,y:h*.48-1,z,sx:w,sy:h,sz:w*.82,rx:0,ry:backdropSeed(i,9)*.4,rz:0}),vp,col)
+    }
+  }else if(!landscapeMode&&scene3DModel.environment==='gas'){
+    for(let i=0;i<26;i++){const x=(backdropSeed(i,10)-.5)*75,z=22+backdropSeed(i,11)*38,s=5+backdropSeed(i,12)*9;scene3DDrawMesh(renderer,'Sphere',scene3DModelMatrix({x,y:-1+backdropSeed(i,13)*5,z,sx:s*1.8,sy:s*.42,sz:s,rx:0,ry:0,rz:0}),vp,i%2?'#a98ca5':'#c3a6bb')}
+  }
+  canvas._scenePick=[];
+  for(const inst of scene3DRepeatInstances(scene3DModel)){
+    for(const p of inst.variant?.parts||[]){
+      if(p.hidden)continue;
+      scene3DRenderPart(renderer,{...p,x:(p.x||0)*inst.scale,y:(p.y||0)*inst.scale,z:(p.z||0)*inst.scale,sx:(p.sx||1)*inst.scale,sy:(p.sy||1)*inst.scale,sz:(p.sz||1)*inst.scale},vp,inst.ox,inst.oz);
+      if(inst.index===0){const P=scene3DProject(scene3DPartWorldCenter(p),canvas,vp);if(P&&P.w>0)canvas._scenePick.push({part:p,x:P.x,y:P.y,r:Math.max(18,Math.min(65,900/P.w*Math.max(p.sx||1,p.sy||1,p.sz||1)))})}
+    }
+  }
+  scene3DDrawGizmo(canvas,overlay,vp);v287alDrawSceneWeatherPreview(overlay);
+  const v=scene3DActiveVariant(),rep=scene3DModel.repetition;$('scene3DStatus').textContent=`${scene3DTargetType==='landscape'?`Surface footprint ${LANDSCAPE_SURFACE_SIZE}×${LANDSCAPE_SURFACE_SIZE} · `:''}${v?.parts.length||0} object${(v?.parts.length||0)===1?'':'s'} · ${scene3DModel.variants.length} variant${scene3DModel.variants.length===1?'':'s'}${rep.enabled?` · repeated ${scene3DRepeatInstances(scene3DModel).length}×`:''}`
+}
+function scene3DGizmoWorldHandles(p){
+  const x=p.x||0,y=p.y||0,z=p.z||0,sx=p.sx||1,sy=p.sy||1,sz=p.sz||1,c=scene3DCamera,cp=Math.cos(c.pitch),eye=[c.target[0]+Math.sin(c.yaw)*cp*c.distance,c.target[1]+Math.sin(c.pitch)*c.distance,c.target[2]+Math.cos(c.yaw)*cp*c.distance];
+  const signX=eye[0]>=x?1:-1,signZ=eye[2]>=z?1:-1;
+  return[{axis:'x',kind:'scale',world:[x+signX*(sx*.65+1),y,z],color:'#ff5a65',label:'X'},{axis:'y',kind:'scale',world:[x,y+sy*.65+1,z],color:'#67e56f',label:'Y'},{axis:'z',kind:'scale',world:[x,y,z+signZ*(sz*.65+1)],color:'#5a8cff',label:'Z'},{axis:'lift',kind:'lift',world:[x,y+sy*.65+3,z],color:'#5de2ff',label:'↑'},{axis:'move',kind:'move',world:[x,y,z],color:'#ffffff',label:'•'}]
+}
+function scene3DDrawGizmo(canvas,overlay,vp){
+  const ctx=overlay.getContext('2d');ctx.clearRect(0,0,overlay.width,overlay.height);overlay._handles=[];const p=scene3DActiveVariant()?.parts.find(x=>x.id===scene3DSelected);if(!p)return;
+  const C=scene3DProject([p.x||0,p.y||0,p.z||0],canvas,vp);if(!C)return;ctx.lineWidth=3;
+  for(const H of scene3DGizmoWorldHandles(p)){const P=scene3DProject(H.world,canvas,vp);if(!P)continue;ctx.strokeStyle=H.color;ctx.beginPath();ctx.moveTo(C.x,C.y);ctx.lineTo(P.x,P.y);ctx.stroke();ctx.fillStyle=H.color;ctx.strokeStyle='#0a0d12';ctx.lineWidth=2;ctx.beginPath();ctx.rect(P.x-7,P.y-7,14,14);ctx.fill();ctx.stroke();ctx.fillStyle='#07111c';ctx.font='700 8px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(H.label,P.x,P.y);overlay._handles.push({...H,x:P.x,y:P.y,cx:C.x,cy:C.y,ux:(P.x-C.x)/(Math.hypot(P.x-C.x,P.y-C.y)||1),uy:(P.y-C.y)/(Math.hypot(P.x-C.x,P.y-C.y)||1)})}
+  // rotation ring, intentionally subtle
+  ctx.strokeStyle='rgba(255,215,90,.72)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(C.x,C.y,36,0,Math.PI*2);ctx.stroke();overlay._rotationRing={x:C.x,y:C.y,r:36}
+}
+
+function scene3DSyncOutliner(){
+  const host=$('scene3DOutliner'),v=scene3DActiveVariant();if(!host||!v)return;
+  $('scene3DOutlinerCount').textContent=String(v.parts.length);
+  host.innerHTML=v.parts.map(p=>`<div class="scene3d-outliner-row ${p.id===scene3DSelected?'active':''}" data-scene-object="${p.id}"><button type="button" class="scene3d-eye" title="${p.hidden?'Show':'Hide'}">${p.hidden?'○':'◉'}</button><span>${E.esc(p.label||p.kind)}</span><small>${E.esc(p.kind)}</small></div>`).join('');
+  host.querySelectorAll('[data-scene-object]').forEach(row=>{row.onclick=e=>{const id=row.dataset.sceneObject,p=v.parts.find(x=>x.id===id);if(e.target.closest('.scene3d-eye')){p.hidden=!p.hidden;scene3DRenderViewport();scene3DSyncOutliner();return}scene3DSelected=id;scene3DSyncInspector();scene3DRenderViewport()}})
+}
+
+function scene3DAlignOptions(axis){
+  const v=scene3DActiveVariant(),p=v?.parts.find(x=>x.id===scene3DSelected);
+  return `<option value="">Match ${axis.toUpperCase()} to…</option>`+(v?.parts||[]).filter(x=>x!==p).map(x=>`<option value="${x.id}">${E.esc(x.label||x.kind)}</option>`).join('')
+}
+function scene3DAlignAxis(axis,otherId){
+  const v=scene3DActiveVariant(),p=v?.parts.find(x=>x.id===scene3DSelected),q=v?.parts.find(x=>x.id===otherId);if(!p||!q)return;
+  p[axis]=Number(q[axis])||0;scene3DSyncInspector();scene3DRenderViewport()
+}
+function v284V3Add(a,b){return[a[0]+b[0],a[1]+b[1],a[2]+b[2]]}
+function v284V3Scale(a,s){return[a[0]*s,a[1]*s,a[2]*s]}
+function scene3DClientToCanvas(canvas,cx,cy){const r=canvas.getBoundingClientRect();return{x:(cx-r.left)/r.width*canvas.width,y:(cy-r.top)/r.height*canvas.height}}
+function scene3DUnprojectRay(canvas,cx,cy){
+  const pt=scene3DClientToCanvas(canvas,cx,cy),{eye}=scene3DCameraMatrices(canvas),target=scene3DCamera.target;
+  const forward=v3Norm(v3Sub(target,eye)),right=v3Norm(v3Cross(forward,[0,1,0])),up=v3Norm(v3Cross(right,forward)),aspect=canvas.width/canvas.height,tan=Math.tan(Math.PI/8),nx=pt.x/canvas.width*2-1,ny=1-pt.y/canvas.height*2;
+  return{origin:eye,dir:v3Norm(v284V3Add(forward,v284V3Add(v284V3Scale(right,nx*aspect*tan),v284V3Scale(up,ny*tan))))}
+}
+function scene3DRayPlaneY(canvas,cx,cy,y=0){
+  const ray=scene3DUnprojectRay(canvas,cx,cy);if(Math.abs(ray.dir[1])<1e-5)return null;const t=(y-ray.origin[1])/ray.dir[1];if(t<=0)return null;return v284V3Add(ray.origin,v284V3Scale(ray.dir,t))
+}
+function scene3DSyncInspector(){
+  scene3DSyncOutliner();
+  const p=scene3DActiveVariant()?.parts.find(x=>x.id===scene3DSelected),ids=['sceneObjName','sceneObjColor','scenePosX','scenePosY','scenePosZ','sceneRotX','sceneRotY','sceneRotZ'];ids.forEach(id=>{if($(id))$(id).disabled=!p});if(!p){$('scene3DSelectionLabel').textContent='Nothing selected';$('scene3DDimensions').textContent='—';return}
+  $('scene3DSelectionLabel').textContent=p.label||p.kind;$('sceneObjName').value=p.label||p.kind;$('sceneObjColor').value=p.color||'#9aa6b2';$('scenePosX').value=(p.x||0).toFixed(2);$('scenePosY').value=(p.y||0).toFixed(2);$('scenePosZ').value=(p.z||0).toFixed(2);$('sceneRotX').value=((p.rx||0)*180/Math.PI).toFixed(1);$('sceneRotY').value=((p.ry||0)*180/Math.PI).toFixed(1);$('sceneRotZ').value=((p.rz||0)*180/Math.PI).toFixed(1);$('scene3DDimensions').innerHTML=`<b>${(p.sx||1).toFixed(2)}</b> X × <b>${(p.sy||1).toFixed(2)}</b> Y × <b>${(p.sz||1).toFixed(2)}</b> Z`;
+  for(const axis of ['x','y','z']){const s=$('sceneAlign'+axis.toUpperCase());if(s){s.innerHTML=scene3DAlignOptions(axis);s.value=''}}
+  scene3DSyncTextureStatus()
+}
+function scene3DSyncVariantUI(){
+  const sel=$('sceneVariantSelect');if(!sel||!scene3DModel)return;sel.innerHTML=scene3DModel.variants.map(v=>`<option value="${v.id}" ${v.id===scene3DModel.activeVariantId?'selected':''}>${E.esc(v.name)}</option>`).join('');
+  const mergeSel=$('sceneVariantMergeSelect');if(mergeSel){const others=scene3DModel.variants.filter(v=>v.id!==scene3DModel.activeVariantId),current=mergeSel.value;mergeSel.innerHTML=others.map(v=>`<option value="${v.id}">${E.esc(v.name)} · ${v.parts?.length||0} objects</option>`).join('');if(others.some(v=>v.id===current))mergeSel.value=current;if($('sceneVariantMerge'))$('sceneVariantMerge').disabled=!others.length;if(!others.length)$('sceneVariantMergeBox')?.classList.add('hidden')}
+  const R=scene3DModel.repetition;$('sceneRepeatEnabled').checked=!!R.enabled;$('sceneRepeatMode').value=R.mode;$('sceneRepeatCountX').value=R.countX;$('sceneRepeatCountZ').value=R.countZ;$('sceneRepeatCount').value=R.count;$('sceneRepeatSpacingX').value=R.spacingX;$('sceneRepeatSpacingZ').value=R.spacingZ;$('sceneRepeatRadius').value=R.radius;if($('sceneRepeatAreaWidth'))$('sceneRepeatAreaWidth').value=R.areaWidth;if($('sceneRepeatAreaDepth'))$('sceneRepeatAreaDepth').value=R.areaDepth;if($('sceneRepeatScaleVariation'))$('sceneRepeatScaleVariation').value=R.scaleVariation;if($('sceneRepeatScaleVariationOut'))$('sceneRepeatScaleVariationOut').textContent=`${Math.round(R.scaleVariation||0)}%`;$('sceneRepeatVariantMode').value=R.variantMode;scene3DRefreshRepeatVisibility()
+}
+function scene3DRefreshRepeatVisibility(){
+  const R=scene3DModel?.repetition;if(!R)return;const host=$('sceneRepeatControls');host?.classList.toggle('repeat-off',!R.enabled);host?.querySelectorAll('input,select').forEach(el=>el.disabled=!R.enabled);
+  if($('sceneRepeatBake'))$('sceneRepeatBake').disabled=!R.enabled;if($('sceneRepeatAgain'))$('sceneRepeatAgain').disabled=!!R.enabled;
+  document.querySelectorAll('[data-repeat-mode]').forEach(el=>el.classList.toggle('hidden',!String(el.dataset.repeatMode).split(',').includes(R.mode)))
+}
+
+function scene3DSelectedPart(){return scene3DActiveVariant()?.parts.find(x=>x.id===scene3DSelected)||null}
+function scene3DSyncTextureStatus(){
+  const p=scene3DSelectedPart(),face=$('sceneTextureFace')?.value||'front',st=$('sceneTextureStatus'),
+        t=p?.faceTextures?.[face],mode=t?.mode==='tile'?'tile':'stretch';
+  if(st)st.textContent=t
+    ?`${face}: ${t.name||'texture'} · ${mode==='tile'?`Tiled · ${Number(t.tileSize)||2.5} unit tiles`:'Stretched'} · ${Math.round((t.data?.length||0)/1024)} KB embedded`
+    :`No texture on ${face}.`;
+  if($('sceneTextureMode'))$('sceneTextureMode').value=mode;
+  if($('sceneTextureTileSize'))$('sceneTextureTileSize').value=String(Number(t?.tileSize)||2.5);
+  if($('sceneTextureTileControls'))$('sceneTextureTileControls').classList.toggle('hidden',mode!=='tile'||!t)
+}
+function scene3DSetTextureMode(){
+  const p=scene3DSelectedPart(),face=$('sceneTextureFace')?.value||'front',t=p?.faceTextures?.[face];if(!t)return;
+  t.mode=$('sceneTextureMode')?.value==='tile'?'tile':'stretch';
+  t.tileSize=Math.max(.25,Math.min(100,+$('sceneTextureTileSize')?.value||2.5));
+  scene3DSyncTextureStatus();scene3DRenderViewport()
+}
+function scene3DApplyTextureFile(file){
+  const p=scene3DSelectedPart(),face=$('sceneTextureFace')?.value||'front';if(!p||!file||!file.type.startsWith('image/'))return;
+  const reader=new FileReader();reader.onload=()=>{p.faceTextures=p.faceTextures||{};p.faceTextures[face]={name:file.name,type:file.type,data:String(reader.result),mode:'stretch',tileSize:2.5};scene3DSyncTextureStatus();scene3DRenderViewport()};reader.readAsDataURL(file)
+}
+function scene3DTextureAverage(data,cb){
+  const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d');x.drawImage(img,0,0,16,16);const d=x.getImageData(0,0,16,16).data;let r=0,g=0,b=0;for(let i=0;i<d.length;i+=4){r+=d[i];g+=d[i+1];b+=d[i+2]}const n=d.length/4;cb(`#${[r/n,g/n,b/n].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('')}`)};img.src=data
+}
+function scene3DAddPart(){const kind=$('scenePrimitiveKind').value,p=scene3DPartDefaults(kind),v=scene3DActiveVariant();v.parts.push(p);scene3DSelected=p.id;scene3DSyncInspector();scene3DRenderViewport()}
+function scene3DDeleteSelected(){const v=scene3DActiveVariant();if(!v||!scene3DSelected)return;v.parts=v.parts.filter(p=>p.id!==scene3DSelected);scene3DSelected=null;scene3DSyncInspector();scene3DRenderViewport()}
+function scene3DDuplicateSelected(){const v=scene3DActiveVariant(),p=v?.parts.find(p=>p.id===scene3DSelected);if(!p)return;const q={...deepCloneState(p),id:'mesh-'+uid(),label:(p.label||p.kind)+' Copy',x:(p.x||0)+1,z:(p.z||0)+1};v.parts.push(q);scene3DSelected=q.id;scene3DSyncInspector();scene3DRenderViewport()}
+function scene3DFocusSelected(){const p=scene3DActiveVariant()?.parts.find(p=>p.id===scene3DSelected);if(!p)return;scene3DCamera.target=[p.x||0,p.y||0,p.z||0];scene3DCamera.distance=Math.max(7,Math.max(p.sx||1,p.sy||1,p.sz||1)*4);scene3DRenderViewport()}
+function scene3DHitTest(canvas,e){
+  const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*canvas.width,y=(e.clientY-r.top)/r.height*canvas.height,overlay=$('scene3DGizmo');
+  const handle=[...(overlay?._handles||[])].find(h=>Math.hypot(x-h.x,y-h.y)<14);if(handle)return{kind:'handle',handle,x,y};
+  const ring=overlay?._rotationRing;if(ring&&Math.abs(Math.hypot(x-ring.x,y-ring.y)-ring.r)<8)return{kind:'rotate',x,y};
+  const obj=[...(canvas._scenePick||[])].sort((A,B)=>A.r-B.r).find(H=>Math.hypot(x-H.x,y-H.y)<H.r);return obj?{kind:'object',part:obj.part,x,y}:{kind:'empty',x,y}
+}
+
+function scene3DVisibleTextureFace(p){
+  if(['Cylinder','Tower','Cone'].includes(p?.kind))return'wrap';const c=scene3DCamera,cp=Math.cos(c.pitch),eye=[c.target[0]+Math.sin(c.yaw)*cp*c.distance,c.target[1]+Math.sin(c.pitch)*c.distance,c.target[2]+Math.cos(c.yaw)*cp*c.distance];let d=[eye[0]-(p.x||0),eye[1]-(p.y||0),eye[2]-(p.z||0)];
+  // Convert camera direction into object-local coordinates so a rotated cube still receives the visible face.
+  const rz=-(p.rz||0),rx=-(p.rx||0),ry=-(p.ry||0),rotZ=v=>[v[0]*Math.cos(rz)-v[1]*Math.sin(rz),v[0]*Math.sin(rz)+v[1]*Math.cos(rz),v[2]],rotX=v=>[v[0],v[1]*Math.cos(rx)-v[2]*Math.sin(rx),v[1]*Math.sin(rx)+v[2]*Math.cos(rx)],rotY=v=>[v[0]*Math.cos(ry)+v[2]*Math.sin(ry),v[1],-v[0]*Math.sin(ry)+v[2]*Math.cos(ry)];d=rotY(rotX(rotZ(d)));const ax=Math.abs(d[0]),ay=Math.abs(d[1]),az=Math.abs(d[2]);if(ay>ax&&ay>az)return d[1]>=0?'top':'bottom';if(ax>az)return d[0]>=0?'right':'left';return d[2]>=0?'front':'back'
+}
+function scene3DApplyTextureFileToPart(file,p,face){
+  if(!p||!file||!file.type.startsWith('image/'))return;const reader=new FileReader();reader.onload=()=>{p.faceTextures=p.faceTextures||{};p.faceTextures[face]={name:file.name,type:file.type,data:String(reader.result),mode:'stretch',tileSize:2.5};scene3DSelected=p.id;if($('sceneTextureFace'))$('sceneTextureFace').value=face;scene3DSyncInspector();scene3DRenderViewport()};reader.readAsDataURL(file)
+}
+function v285SolveScreenBasis(dx,dy,ax,ay,bx,by){const det=ax*by-ay*bx;if(Math.abs(det)<1e-5)return null;return{x:(dx*by-dy*bx)/det,z:(ax*dy-ay*dx)/det}}
+function scene3DGroundScreenBasis(canvas,p){const vp=scene3DLastViewProj||scene3DCameraMatrices(canvas).vp,c=scene3DProject([p.x||0,p.y||0,p.z||0],canvas,vp),x=scene3DProject([(p.x||0)+1,p.y||0,p.z||0],canvas,vp),z=scene3DProject([p.x||0,p.y||0,(p.z||0)+1],canvas,vp);if(!c||!x||!z)return null;const r=canvas.getBoundingClientRect(),sx=r.width/canvas.width,sy=r.height/canvas.height;return{ax:(x.x-c.x)*sx,ay:(x.y-c.y)*sy,bx:(z.x-c.x)*sx,by:(z.y-c.y)*sy}}
+function surface3DGroundScreenBasis(canvas,world){const glc=$('surfaceWebGLCanvas'),target=glc&&!glc.classList.contains('hidden')?glc:canvas,{vp}=surface3DCameraMatrices(target),c=surface3DProject([world.x,0,world.z],target,vp),x=surface3DProject([world.x+1,0,world.z],target,vp),z=surface3DProject([world.x,0,world.z+1],target,vp);if(!c||!x||!z)return null;const r=target.getBoundingClientRect(),sx=r.width/target.width,sy=r.height/target.height;return{ax:(x.x-c.x)*sx,ay:(x.y-c.y)*sy,bx:(z.x-c.x)*sx,by:(z.y-c.y)*sy}}
+function scene3DBindCanvas(){
+  const canvas=$('scene3DCanvas');if(!canvas||canvas.dataset.v28Bound)return;canvas.dataset.v28Bound='1';canvas.addEventListener('contextmenu',e=>e.preventDefault());
+  canvas.addEventListener('dragover',e=>{if(e.dataTransfer?.types?.includes('Files')){e.preventDefault();canvas.classList.add('texture-dragover')}});
+  canvas.addEventListener('dragleave',()=>canvas.classList.remove('texture-dragover'));
+  canvas.addEventListener('drop',e=>{const file=e.dataTransfer?.files?.[0];if(!file?.type?.startsWith('image/'))return;e.preventDefault();canvas.classList.remove('texture-dragover');const hit=scene3DHitTest(canvas,e),p=hit.kind==='object'?hit.part:scene3DSelectedPart();if(p)scene3DApplyTextureFileToPart(file,p,scene3DVisibleTextureFace(p))});
+  canvas.addEventListener('pointerdown',e=>{
+    const hit=scene3DHitTest(canvas,e),p=scene3DActiveVariant()?.parts.find(x=>x.id===scene3DSelected);
+    scene3DDrag={pointerId:e.pointerId,lastX:e.clientX,lastY:e.clientY,startX:e.clientX,startY:e.clientY,kind:'orbit',part:p,axis:null,snapshot:p?deepCloneState(p):null,startGround:p?scene3DRayPlaneY(canvas,e.clientX,e.clientY,p.y||0):null};
+    if(e.button===1)scene3DDrag.kind=e.shiftKey?'pan':'orbit';
+    else if(e.button===2)scene3DDrag.kind='pan';
+    else if(hit.kind==='handle'){
+      scene3DDrag.kind=hit.handle.kind;scene3DDrag.axis=hit.handle.axis;scene3DDrag.handle=hit.handle;
+      scene3DDrag.startScale=p?{x:p.sx||1,y:p.sy||1,z:p.sz||1}:null;
+      const q=scene3DClientToCanvas(canvas,e.clientX,e.clientY);
+      scene3DDrag.startAlong=(q.x-hit.handle.cx)*hit.handle.ux+(q.y-hit.handle.cy)*hit.handle.uy;
+      // The center white handle is itself the Move handle. Previously it intercepted
+      // the object click but never initialized a movement basis/plane, so dragging a
+      // selected part did nothing. Give it the exact same drag state as object-drag.
+      if(hit.handle.kind==='move'&&p){
+        scene3DDrag.part=p;
+        scene3DDrag.snapshot=deepCloneState(p);
+        scene3DDrag.startGround=scene3DRayPlaneY(canvas,e.clientX,e.clientY,p.y||0);
+        scene3DDrag.groundBasis=scene3DGroundScreenBasis(canvas,p)
+      }
+    }
+    else if(hit.kind==='rotate'){scene3DDrag.kind='rotate';const q=scene3DClientToCanvas(canvas,e.clientX,e.clientY),ring=$('scene3DGizmo')?._rotationRing;scene3DDrag.startAngle=ring?Math.atan2(q.y-ring.y,q.x-ring.x):0;scene3DDrag.startRY=p?.ry||0}
+    else if(hit.kind==='object'){
+      scene3DSelected=hit.part.id;scene3DDrag.part=hit.part;scene3DDrag.snapshot=deepCloneState(hit.part);
+      scene3DDrag.kind=scene3DKeyMode||'move';
+      scene3DDrag.startGround=scene3DRayPlaneY(canvas,e.clientX,e.clientY,hit.part.y||0);
+      scene3DDrag.groundBasis=scene3DGroundScreenBasis(canvas,hit.part);scene3DSyncInspector()
+    }
+    else scene3DDrag.kind=e.shiftKey?'pan':'orbit';
+    canvas.setPointerCapture?.(e.pointerId);scene3DRenderViewport();e.preventDefault()
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(!scene3DDrag)return;const dx=e.clientX-scene3DDrag.lastX,dy=e.clientY-scene3DDrag.lastY;scene3DDrag.lastX=e.clientX;scene3DDrag.lastY=e.clientY;const p=scene3DActiveVariant()?.parts.find(x=>x.id===scene3DSelected),k=scene3DCamera.distance/28;
+    if(scene3DDrag.kind==='orbit'){scene3DCamera.yaw+=dx*.008;scene3DCamera.pitch=Math.max(-1.48,Math.min(1.48,scene3DCamera.pitch+dy*.007))}
+    else if(scene3DDrag.kind==='pan'){const right=[Math.cos(scene3DCamera.yaw),0,-Math.sin(scene3DCamera.yaw)],f=.022*k;scene3DCamera.target[0]-=right[0]*dx*f;scene3DCamera.target[2]-=right[2]*dx*f;scene3DCamera.target[1]+=dy*f}
+    else if(p&&(scene3DDrag.kind==='move'||scene3DDrag.kind==='grab')){
+      const snap=scene3DDrag.snapshot,start=scene3DDrag.startGround;
+      const now=scene3DRayPlaneY(canvas,e.clientX,e.clientY,snap?.y||p.y||0);
+      if(snap&&start&&now){
+        p.x=(snap.x||0)+(now[0]-start[0]);
+        p.z=(snap.z||0)+(now[2]-start[2])
+      }else{
+        // Near-horizontal camera angles can make the ray nearly parallel to the
+        // movement plane, so retain the screen-basis solver as a robust fallback.
+        const B=scene3DDrag.groundBasis,D=B?v285SolveScreenBasis(e.clientX-scene3DDrag.startX,e.clientY-scene3DDrag.startY,B.ax,B.ay,B.bx,B.by):null;
+        if(D&&snap){p.x=(snap.x||0)+D.x;p.z=(snap.z||0)+D.z}
+      }
+    }
+    else if(p&&scene3DDrag.kind==='scale'){const H=scene3DDrag.handle||{},q=scene3DClientToCanvas(canvas,e.clientX,e.clientY),along=(q.x-H.cx)*(H.ux||1)+(q.y-H.cy)*(H.uy||0),delta=(along-(scene3DDrag.startAlong||0))*(scene3DCamera.distance/28)*.024,S=scene3DDrag.startScale||{x:p.sx||1,y:p.sy||1,z:p.sz||1};if(scene3DDrag.axis==='x')p.sx=Math.max(.1,S.x+delta);if(scene3DDrag.axis==='y')p.sy=Math.max(.1,S.y+delta);if(scene3DDrag.axis==='z')p.sz=Math.max(.1,S.z+delta)}
+    else if(p&&scene3DDrag.kind==='lift'){const H=scene3DDrag.handle||{},q=scene3DClientToCanvas(canvas,e.clientX,e.clientY),along=(q.x-H.cx)*(H.ux||0)+(q.y-H.cy)*(H.uy||-1),delta=(along-(scene3DDrag.startAlong||0))*(scene3DCamera.distance/28)*.03;p.y=Math.max(-40,Math.min(80,(scene3DDrag.snapshot?.y||0)+delta))}
+    else if(p&&scene3DDrag.kind==='uniformScale'){const s=Math.max(.1,1+(e.clientX-scene3DDrag.startX-(e.clientY-scene3DDrag.startY))*.012);const S=scene3DDrag.snapshot||p;p.sx=Math.max(.1,(S.sx||1)*s);p.sy=Math.max(.1,(S.sy||1)*s);p.sz=Math.max(.1,(S.sz||1)*s)}
+    else if(p&&scene3DDrag.kind==='rotate'){const q=scene3DClientToCanvas(canvas,e.clientX,e.clientY),ring=$('scene3DGizmo')?._rotationRing;if(ring){const ang=Math.atan2(q.y-ring.y,q.x-ring.x);p.ry=(scene3DDrag.startRY||0)+(ang-(scene3DDrag.startAngle||0))}}
+    else if(p&&scene3DDrag.kind==='rotateKey')p.ry=(scene3DDrag.snapshot?.ry||0)+(e.clientX-scene3DDrag.startX)*.012;
+    scene3DSyncInspector();scene3DRenderViewport()
+  });
+  canvas.addEventListener('pointerup',e=>{scene3DDrag=null;scene3DKeyMode='';$('scene3DMode')&&( $('scene3DMode').textContent='Select' );canvas.releasePointerCapture?.(e.pointerId)});
+  canvas.addEventListener('pointercancel',()=>{scene3DDrag=null;scene3DKeyMode=''});
+  canvas.addEventListener('wheel',e=>{e.preventDefault();const maxD=scene3DTargetType==='landscape'?460:180;scene3DCamera.distance=Math.max(2,Math.min(maxD,scene3DCamera.distance*Math.exp(e.deltaY*.001)));scene3DRenderViewport()},{passive:false});
+  canvas.tabIndex=0;
+  canvas.addEventListener('keydown',e=>{
+    if(e.target!==canvas)return;
+    if(e.key==='Delete'||e.key==='Backspace'){scene3DDeleteSelected();e.preventDefault();return}
+    if(e.shiftKey&&e.key.toLowerCase()==='d'){scene3DDuplicateSelected();e.preventDefault();return}
+    if(e.key.toLowerCase()==='f'){scene3DFocusSelected();e.preventDefault();return}
+    if(e.key.toLowerCase()==='g'){scene3DKeyMode='grab';$('scene3DMode').textContent='Grab (click object and drag)';e.preventDefault();return}
+    if(e.key.toLowerCase()==='s'){scene3DKeyMode='uniformScale';$('scene3DMode').textContent='Scale (click object and drag)';e.preventDefault();return}
+    if(e.key.toLowerCase()==='r'){scene3DKeyMode='rotateKey';$('scene3DMode').textContent='Rotate (click object and drag)';e.preventDefault();return}
+    if(e.key==='1'){scene3DCamera.yaw=0;scene3DCamera.pitch=0;scene3DRenderViewport();return}
+    if(e.key==='3'){scene3DCamera.yaw=Math.PI/2;scene3DCamera.pitch=0;scene3DRenderViewport();return}
+    if(e.key==='7'){scene3DCamera.pitch=Math.PI/2-0.01;scene3DRenderViewport();return}
+  })
+}
+function scene3DInspectorInput(){
+  const p=scene3DActiveVariant()?.parts.find(x=>x.id===scene3DSelected);if(!p)return;
+  p.label=$('sceneObjName').value;p.color=$('sceneObjColor').value;p.x=+$('scenePosX').value||0;p.y=+$('scenePosY').value||0;p.z=+$('scenePosZ').value||0;p.rx=(+$('sceneRotX').value||0)*Math.PI/180;p.ry=(+$('sceneRotY').value||0)*Math.PI/180;p.rz=(+$('sceneRotZ').value||0)*Math.PI/180;scene3DRenderViewport()
+}
+function ensureScene3DPanel(){
+  let panel=$('scene3DPanel');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='scene3DPanel';panel.className='scene3d-panel detached-editor-panel hidden';panel.innerHTML=`
+    <div class="scene3d-head"><div><div class="eyebrow" id="scene3DEyebrow">3D Model</div><h3 id="scene3DTitle">Scene Modeller</h3></div><div class="scene3d-head-actions special-editor-window-actions"><span id="scene3DMode">Select</span><button type="button" id="scene3DMinimize" class="icon-btn">—</button><button type="button" id="scene3DClose" class="icon-btn">×</button></div></div>
+    <div class="scene3d-toolbar">
+      <select id="scenePrimitiveKind"><option>Cube</option><option>Wedge</option><option>Building</option><option>Tower</option><option>Cylinder</option><option>Sphere</option><option>Dome</option><option>Cone</option><option>Pyramid</option><option>Tree</option><option>Rock</option><option>Monument</option></select><button id="sceneAddPrimitive" class="primary">+ Add</button>
+      <button id="sceneDuplicate" class="ghost">Duplicate</button><button id="sceneDelete" class="danger ghost">Delete</button>
+      <span class="scene3d-sep scene-environment-only"></span><label id="sceneEnvironmentWrap">Environment<select id="sceneEnvironment"><option value="grass">Grass landscape</option><option value="desert">Desert</option><option value="gas">Gas giant atmosphere</option></select></label>
+      <button id="sceneFocus" class="ghost">Focus Selected</button>
+    </div>
+    <div class="scene3d-main">
+      <div class="scene3d-viewport"><canvas id="scene3DCanvas"></canvas><canvas id="scene3DGizmo"></canvas><div class="scene3d-corner-help"><b>Blender-style controls</b><span>MMB drag Orbit</span><span>Shift+MMB / RMB Pan</span><span>Wheel Zoom</span><span>LMB drag Move · G Move · S Scale · R Rotate</span><span>1 Front · 3 Side · 7 Top · F Focus</span><span>Shift+D Duplicate · Del Delete</span><span id="sceneLandscapeFootprintHint" class="hidden">Loader footprint: 360 × 360 world units · cyan edge = exact Surface boundary</span></div></div>
+      <aside class="scene3d-inspector">
+        <section><div class="scene3d-section-title">Outliner <span id="scene3DOutlinerCount">0</span></div><div id="scene3DOutliner" class="scene3d-outliner"></div></section>
+        <section><div class="scene3d-section-title">Object <span id="scene3DSelectionLabel">Nothing selected</span></div><label>Name<input id="sceneObjName"></label><label>Color<input id="sceneObjColor" type="color"></label><div class="scene3d-texture-box"><div><b>Face Texture</b><small>Choose a face, then drop an image here or browse your PC.</small></div><select id="sceneTextureFace"><option value="front">Front</option><option value="back">Back</option><option value="left">Left</option><option value="right">Right</option><option value="top">Top</option><option value="bottom">Bottom</option><option value="wrap">Wrap / curved side</option></select><label>Texture layout<select id="sceneTextureMode"><option value="stretch">Stretch</option><option value="tile">Tile / Repeat</option></select></label><label id="sceneTextureTileControls" class="hidden">Tile size <input id="sceneTextureTileSize" type="number" min=".25" max="100" step=".25" value="2.5"><small>World units per repeated image. Smaller = more copies.</small></label><div id="sceneTextureDrop" class="scene-texture-drop" tabindex="0">Drop texture image here<br><button type="button" id="sceneTextureBrowse" class="ghost">Browse PC…</button><input id="sceneTextureFile" type="file" accept="image/*" hidden></div><div id="sceneTextureStatus" class="scene-texture-status">No texture on this face.</div><button type="button" id="sceneTextureClear" class="danger ghost">Clear Face Texture</button></div></section>
+        <section><div class="scene3d-section-title">Transform</div><div class="scene3d-xyz"><label>X<input id="scenePosX" type="number" step=".1"></label><label>Y<input id="scenePosY" type="number" step=".1"></label><label>Z<input id="scenePosZ" type="number" step=".1"></label></div><small>Position</small><div class="scene3d-align-grid"><select id="sceneAlignX"></select><select id="sceneAlignY"></select><select id="sceneAlignZ"></select></div><small>Comfort align — set this object's X, Y, or Z exactly to another object's position.</small><div class="scene3d-xyz"><label>X<input id="sceneRotX" type="number" step="1"></label><label>Y<input id="sceneRotY" type="number" step="1"></label><label>Z<input id="sceneRotZ" type="number" step="1"></label></div><small>Rotation °</small><div id="scene3DDimensions" class="scene3d-dimensions">—</div><small>Drag X / Y / Z to scale. Drag the cyan ↑ handle to move the object vertically without typing Y.</small></section>
+        <section><div class="scene3d-section-title">Variants</div><select id="sceneVariantSelect"></select><div class="scene3d-button-grid"><button id="sceneVariantDuplicate" class="ghost">Duplicate Variant</button><button id="sceneVariantRename" class="ghost">Rename</button><button id="sceneVariantDelete" class="danger ghost">Delete</button><button id="sceneVariantMerge" class="ghost">Merge Variants</button></div><div id="sceneVariantMergeBox" class="scene-variant-merge-box hidden"><small>Combine the current variant with another one into a brand-new variant. Both source variants stay unchanged.</small><label>Merge current with<select id="sceneVariantMergeSelect"></select></label><label>New variant name<input id="sceneVariantMergeName" placeholder="Merged Variant"></label><div class="scene-repeat-actions"><button id="sceneVariantMergeConfirm" type="button" class="primary">Create Merged Variant</button><button id="sceneVariantMergeCancel" type="button" class="ghost">Cancel</button></div></div></section>
+        <section><div class="scene3d-section-title">Repetition <label class="inline-check"><input id="sceneRepeatEnabled" type="checkbox"> Enabled</label></div><div id="sceneRepeatControls"><label>Layout<select id="sceneRepeatMode"><option value="grid">Grid</option><option value="line">Line</option><option value="radial">Radial</option><option value="area">Area scatter</option></select></label><label>Variants<select id="sceneRepeatVariantMode"><option value="active">Current variant</option><option value="cycle">Cycle variants</option><option value="random">Random variants</option></select></label><div data-repeat-mode="grid" class="scene3d-xyz"><label>X count<input id="sceneRepeatCountX" type="number" min="1" max="20"></label><label>Z count<input id="sceneRepeatCountZ" type="number" min="1" max="20"></label></div><label data-repeat-mode="line,radial,area">Count<input id="sceneRepeatCount" type="number" min="1" max="400"></label><div data-repeat-mode="grid,line" class="scene3d-xyz"><label>X spacing<input id="sceneRepeatSpacingX" type="number" min=".5" max="50" step=".5"></label><label data-repeat-mode="grid">Z spacing<input id="sceneRepeatSpacingZ" type="number" min=".5" max="50" step=".5"></label></div><label data-repeat-mode="radial">Radius<input id="sceneRepeatRadius" type="number" min="1" max="400" step=".5"></label><div data-repeat-mode="area" class="scene3d-xyz"><label>Area width<input id="sceneRepeatAreaWidth" type="number" min="1" max="300" step="1"></label><label>Area depth<input id="sceneRepeatAreaDepth" type="number" min="1" max="300" step="1"></label></div><label>Size variation <input id="sceneRepeatScaleVariation" type="range" min="0" max="80" step="1" value="0"><small id="sceneRepeatScaleVariationOut">0%</small></label><div class="scene-repeat-actions"><button id="sceneRepeatBake" type="button" class="primary">Save Repetition</button><button id="sceneRepeatAgain" type="button" class="ghost">Repetition Again</button></div><small>Save Repetition converts every repeated instance into real editable objects in the current variant, then turns repetition off.</small></div></section>
+      </aside>
+    </div>
+    <div class="special-editor-savebar"><span id="scene3DStatus">Ready</span><button id="scene3DSaveReturn" class="primary">Save & Return</button></div>`;
+  document.body.appendChild(panel);prepareDetachedEditorPanel(panel,panel.querySelector('.scene3d-head'));
+  $('scene3DClose').onclick=()=>{panel.classList.add('hidden');$('sceneLandscapeWeatherPanel')?.classList.add('hidden')};$('scene3DMinimize').onclick=()=>minimizeSpecialEditor(panel,'3D Model');
+  $('sceneAddPrimitive').onclick=scene3DAddPart;$('sceneDelete').onclick=scene3DDeleteSelected;$('sceneDuplicate').onclick=scene3DDuplicateSelected;$('sceneFocus').onclick=scene3DFocusSelected;
+  $('sceneEnvironment').onchange=e=>{scene3DModel.environment=e.target.value;scene3DModel.groundColor=scene3DEnvironmentPreset(e.target.value).ground;scene3DRenderViewport()};
+  for(const id of ['sceneObjName','sceneObjColor','scenePosX','scenePosY','scenePosZ','sceneRotX','sceneRotY','sceneRotZ'])$(id).addEventListener('input',scene3DInspectorInput);
+  for(const axis of ['x','y','z'])$('sceneAlign'+axis.toUpperCase()).onchange=e=>{if(e.target.value)scene3DAlignAxis(axis,e.target.value)};
+  $('sceneTextureFace').onchange=scene3DSyncTextureStatus;$('sceneTextureMode').onchange=scene3DSetTextureMode;$('sceneTextureTileSize').oninput=scene3DSetTextureMode;$('sceneTextureBrowse').onclick=()=>$('sceneTextureFile').click();$('sceneTextureFile').onchange=e=>scene3DApplyTextureFile(e.target.files?.[0]);
+  const textureDrop=$('sceneTextureDrop');textureDrop.ondragover=e=>{e.preventDefault();textureDrop.classList.add('dragover')};textureDrop.ondragleave=()=>textureDrop.classList.remove('dragover');textureDrop.ondrop=e=>{e.preventDefault();textureDrop.classList.remove('dragover');scene3DApplyTextureFile(e.dataTransfer.files?.[0])};
+  $('sceneTextureClear').onclick=()=>{const p=scene3DSelectedPart(),face=$('sceneTextureFace').value;if(p?.faceTextures){delete p.faceTextures[face];scene3DSyncTextureStatus();scene3DRenderViewport()}};
+  $('sceneVariantSelect').onchange=e=>{scene3DModel.activeVariantId=e.target.value;scene3DSelected=scene3DActiveVariant()?.parts[0]?.id||null;syncScene3DLegacyParts();scene3DSyncInspector();scene3DRenderViewport()};
+  $('sceneVariantDuplicate').onclick=()=>{const v=scene3DActiveVariant();if(!v)return;const nv={id:'variant-'+uid(),name:v.name+' Variant',parts:deepCloneState(v.parts).map(p=>({...p,id:'mesh-'+uid()}))};scene3DModel.variants.push(nv);scene3DModel.activeVariantId=nv.id;scene3DSelected=nv.parts[0]?.id||null;scene3DSyncVariantUI();scene3DSyncInspector();scene3DRenderViewport()};
+  $('sceneVariantRename').onclick=()=>{const v=scene3DActiveVariant();if(!v)return;const name=prompt('Variant name',v.name);if(name?.trim()){v.name=name.trim();scene3DSyncVariantUI()}};
+  $('sceneVariantDelete').onclick=()=>{if(scene3DModel.variants.length<=1)return;const i=scene3DModel.variants.findIndex(v=>v.id===scene3DModel.activeVariantId);scene3DModel.variants.splice(Math.max(0,i),1);scene3DModel.activeVariantId=scene3DModel.variants[0].id;scene3DSelected=scene3DActiveVariant()?.parts[0]?.id||null;scene3DSyncVariantUI();scene3DSyncInspector();scene3DRenderViewport()};
+  const refreshVariantMerge=()=>{const active=scene3DActiveVariant(),sel=$('sceneVariantMergeSelect'),box=$('sceneVariantMergeBox');if(!sel||!box)return;const others=(scene3DModel?.variants||[]).filter(v=>v.id!==active?.id);sel.innerHTML=others.map(v=>`<option value="${v.id}">${E.esc(v.name)} · ${v.parts?.length||0} objects</option>`).join('');$('sceneVariantMerge').disabled=!others.length;if(!others.length)box.classList.add('hidden');if($('sceneVariantMergeName')&&!$('sceneVariantMergeName').value&&active&&others[0])$('sceneVariantMergeName').placeholder=`${active.name} + ${others[0].name}`};
+  $('sceneVariantMerge').onclick=()=>{refreshVariantMerge();const box=$('sceneVariantMergeBox');if($('sceneVariantMerge').disabled)return;box.classList.toggle('hidden');if(!box.classList.contains('hidden')){$('sceneVariantMergeName').value='';$('sceneVariantMergeSelect').focus()}};
+  $('sceneVariantMergeCancel').onclick=()=>$('sceneVariantMergeBox').classList.add('hidden');
+  $('sceneVariantMergeSelect').onchange=()=>{const active=scene3DActiveVariant(),other=scene3DModel?.variants?.find(v=>v.id===$('sceneVariantMergeSelect').value);if(active&&other)$('sceneVariantMergeName').placeholder=`${active.name} + ${other.name}`};
+  $('sceneVariantMergeConfirm').onclick=()=>{const a=scene3DActiveVariant(),b=scene3DModel?.variants?.find(v=>v.id===$('sceneVariantMergeSelect').value);if(!a||!b||a.id===b.id)return;const cloneParts=(parts,sourceName)=>(parts||[]).map(p=>({...deepCloneState(p),id:'mesh-'+uid(),mergedFromVariant:sourceName}));const requested=$('sceneVariantMergeName').value.trim(),name=requested||`${a.name} + ${b.name}`,nv={id:'variant-'+uid(),name,parts:[...cloneParts(a.parts,a.name),...cloneParts(b.parts,b.name)]};scene3DModel.variants.push(nv);scene3DModel.activeVariantId=nv.id;scene3DSelected=nv.parts[0]?.id||null;syncScene3DLegacyParts();scene3DSyncVariantUI();scene3DSyncInspector();scene3DRenderViewport();$('sceneVariantMergeBox').classList.add('hidden');refreshVariantMerge()};
+  const repeatInput=()=>{const R=scene3DModel.repetition;R.enabled=$('sceneRepeatEnabled').checked;R.mode=$('sceneRepeatMode').value;R.variantMode=$('sceneRepeatVariantMode').value;R.countX=Math.max(1,+$('sceneRepeatCountX').value||1);R.countZ=Math.max(1,+$('sceneRepeatCountZ').value||1);R.count=Math.max(1,+$('sceneRepeatCount').value||1);R.spacingX=Math.max(.5,+$('sceneRepeatSpacingX').value||8);R.spacingZ=Math.max(.5,+$('sceneRepeatSpacingZ').value||8);R.radius=Math.max(1,+$('sceneRepeatRadius').value||14);R.areaWidth=Math.max(1,+$('sceneRepeatAreaWidth')?.value||70);R.areaDepth=Math.max(1,+$('sceneRepeatAreaDepth')?.value||70);R.scaleVariation=Math.max(0,Math.min(80,+$('sceneRepeatScaleVariation')?.value||0));if($('sceneRepeatScaleVariationOut'))$('sceneRepeatScaleVariationOut').textContent=`${Math.round(R.scaleVariation)}%`;scene3DRefreshRepeatVisibility();scene3DRenderViewport()};
+  for(const id of ['sceneRepeatEnabled','sceneRepeatMode','sceneRepeatVariantMode','sceneRepeatCountX','sceneRepeatCountZ','sceneRepeatCount','sceneRepeatSpacingX','sceneRepeatSpacingZ','sceneRepeatRadius','sceneRepeatAreaWidth','sceneRepeatAreaDepth','sceneRepeatScaleVariation'])$(id).addEventListener('input',repeatInput);
+  $('sceneRepeatBake').onclick=scene3DBakeRepetition;$('sceneRepeatAgain').onclick=scene3DRepetitionAgain;
+  $('scene3DSaveReturn').onclick=()=>{
+    syncScene3DLegacyParts();
+    structureModelDraft=scene3DModelForSave(scene3DModel);
+    if(scene3DTargetType==='structure'&&scene3DTargetNode?.type==='structure'&&!scene3DTargetNode.isMegastructure){
+      scene3DTargetNode.structureModel=deepCloneState(structureModelDraft);
+      save()
+    }
+    const s=$('structureModelSummary');
+    if(s)s.textContent=`${scene3DModel.variants.length} variant${scene3DModel.variants.length===1?'':'s'} · ${scene3DRepeatInstances(scene3DModel).length} instance${scene3DRepeatInstances(scene3DModel).length===1?'':'s'}`;
+    panel.classList.add('hidden')
+  };
+  scene3DBindCanvas();return panel
+}
+function openShared3DModelEditor(node,targetType='structure'){
+  if(targetType!=='structure'||(node&&node.type!=='structure'))return;
+  const panel=ensureScene3DPanel();scene3DTargetNode=node||null;scene3DTargetType='structure';
+  const src=structureModelDraft||node?.structureModel;
+  scene3DModel=normalizeScene3DModel(src);structureModelDraft=scene3DModel;
+  scene3DSelected=scene3DActiveVariant()?.parts[0]?.id||null;scene3DCamera={yaw:.72,pitch:.42,distance:28,target:[0,2,0]};scene3DKeyMode='';
+  $('scene3DEyebrow').textContent=targetType==='place'?'Place':'Structure';$('scene3DTitle').textContent=(node?.name||$('eName')?.value||'Untitled')+' · 3D Model';$('sceneEnvironment').value=scene3DModel.environment;scene3DSyncVariantUI();scene3DSyncInspector();panel.classList.remove('hidden');requestAnimationFrame(()=>{keepDetachedPanelOnscreen(panel);scene3DRenderViewport();$('scene3DCanvas')?.focus()})
+}
+
+function v28SuggestedSceneEnvironment(node,targetType){
+  if(targetType==='place'){
+    const planet=node?.surfacePlanetId?byId(node.surfacePlanetId):null;
+    if(planet?.gasGiant)return'gas';
+    if(/desert|dune|arid|sand/i.test([node?.placeType,node?.name,node?.description].join(' ')))return'desert';
+    return'grass'
+  }
+  if(targetType==='structure'){
+    const linked=ofType('place').find(p=>node&&graphNodesLinked(node.id,p.id));
+    const planet=linked?.surfacePlanetId?byId(linked.surfacePlanetId):null;if(planet?.gasGiant)return'gas';
+    if(/desert|dune|arid|sand/i.test([linked?.placeType,linked?.name,linked?.description].join(' ')))return'desert'
+  }
+  return'grass'
+}
+function bindPlaceModelEditor(node){
+  const btn=$('openPlaceModelEditor'),launcher=btn?.closest('.place-model-launcher'),empty=$('.country-plus-model-empty');if(!btn)return;
+  const scaleSelect=$('ePlaceScale'),syncAllowed=()=>{const draft={...node,placeScale:scaleSelect?.value||node?.placeScale},allowed=placeAllows3DModel(draft);launcher?.classList.toggle('hidden',!allowed);empty?.classList.toggle('hidden',allowed);btn.disabled=!allowed};
+  scaleSelect?.addEventListener('change',syncAllowed);syncAllowed();
+  const own=normalizeScene3DModel(node?.placeModel),base=node?.variantOfPlaceId?byId(node.variantOfPlaceId):null;
+  placeModelDraft=own.variants.some(v=>v.parts.length)?own:normalizeScene3DModel(base?.placeModel);
+  if(!node?.placeModel?.environment&&!base?.placeModel?.environment){placeModelDraft.environment=v28SuggestedSceneEnvironment(node,'place');placeModelDraft.groundColor=scene3DEnvironmentPreset(placeModelDraft.environment).ground}
+  btn.onclick=()=>{const draft={...node,placeScale:$('ePlaceScale')?.value||node?.placeScale};if(placeAllows3DModel(draft))openShared3DModelEditor(node,'place')}
+}
+function bindStructureModelEditor(node){
+  const btn=$('openStructureModelEditor');if(!btn)return;
+  const own=normalizeScene3DModel(node?.structureModel),base=node?.variantOfStructureId?byId(node.variantOfStructureId):null;
+  structureModelDraft=own.variants.some(v=>v.parts.length)?own:normalizeScene3DModel(base?.structureModel);
+  if(!node?.structureModel?.environment&&!base?.structureModel?.environment){structureModelDraft.environment=v28SuggestedSceneEnvironment(node,'structure');structureModelDraft.groundColor=scene3DEnvironmentPreset(structureModelDraft.environment).ground}
+  const sync=()=>{const mega=!!$('eIsMegastructure')?.checked;$('structureModelLauncher')?.classList.toggle('hidden',mega);btn.disabled=mega};
+  $('eIsMegastructure')?.addEventListener('change',sync);sync();btn.onclick=()=>openShared3DModelEditor(node,'structure')
+}
+
+
+/* ============================ V28 UNIVERSAL CATEGORY SIDEBAR ============================ */
+let universalCategoryDraft={category:'',parent:''};
+function v28TypeLabel(type){
+  const custom=creatorSettings?.nodeTypes?.find(t=>t.id===type)?.label;if(custom)return custom;
+  return({mana:'Mana',spell:'Spell',rule:'Rule',material:'Material',magicalObject:'Magical Object',technique:'Technique',principle:'Principle',structure:'Structure',life:'Life',place:'Place',organization:'Organization',civilizationUtil:'Civilization Utility'})[type]||String(type||'Category')
+}
+function v28NodeGraphCategory(n){return String(n?.graphCategory||n?.category||'').trim()}
+function v28NodeGraphParent(n){return String(n?.graphParentCategory||n?.parentCategory||'').trim()}
+function v28KnownCategories(extra=''){
+  const out=new Map(),add=(name,parent='')=>{name=String(name||'').trim();if(!name)return;if(!out.has(name.toLowerCase()))out.set(name.toLowerCase(),{name,parent:String(parent||'').trim()});else if(parent&&!out.get(name.toLowerCase()).parent)out.get(name.toLowerCase()).parent=String(parent).trim()};
+  for(const n of nodes)if(!n.virtual){add(v28NodeGraphCategory(n),v28NodeGraphParent(n))}
+  for(const cat of creatorSettings?.categories||[]){const parent=(creatorSettings.categories||[]).find(p=>p.id===cat.parentId);add(cat.label||cat.id,parent?.label||parent?.id||'')}
+  add(extra);return[...out.values()].sort((a,b)=>a.name.localeCompare(b.name))
+}
+function v28CategoryParent(category){
+  const q=String(category||'').trim().toLowerCase();if(!q)return'';
+  const authored=nodes.find(n=>!n.virtual&&v28NodeGraphCategory(n).toLowerCase()===q&&v28NodeGraphParent(n));if(authored)return v28NodeGraphParent(authored);
+  const c=(creatorSettings?.categories||[]).find(c=>String(c.label||c.id).trim().toLowerCase()===q||String(c.id).toLowerCase()===q);if(c?.parentId){const p=creatorSettings.categories.find(x=>x.id===c.parentId);return p?.label||p?.id||''}return''
+}
+function v28CategoryPath(category,parent=universalCategoryDraft.parent){
+  const path=[],seen=new Set();let cur=String(category||'').trim(),par=String(parent||'').trim();if(cur)path.unshift(cur);
+  while(par&&path.length<12){const k=par.toLowerCase();if(seen.has(k))break;seen.add(k);path.unshift(par);par=v28CategoryParent(par)}
+  return path.join(' › ')||'Uncategorized'
+}
+function ensureUniversalCategoryPanel(){
+  let panel=$('universalCategoryPanel');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='universalCategoryPanel';panel.className='universal-category-panel detached-editor-panel hidden';panel.innerHTML=`
+    <div class="universal-category-head"><div><div class="eyebrow">Always available</div><b>Category</b></div><span id="universalCategoryType">Node</span></div>
+    <div class="universal-category-body">
+      <label>Category<input id="universalCategoryName" list="universalCategoryList" placeholder="Type or choose any category"><datalist id="universalCategoryList"></datalist></label>
+      <label>Subcategory of<select id="universalCategoryParent"><option value="">Nothing — top level</option></select></label>
+      <div id="universalCategoryPath" class="universal-category-path">Uncategorized</div>
+      <small>This menu appears for every node type. Setting a parent applies to the category itself, so every node in that category shares the same hierarchy.</small>
+      <div class="universal-category-all"><div><b>All categories</b><span id="universalCategoryCount">0</span></div><div id="universalCategoryAllRows"></div></div>
+    </div>`;
+  document.body.appendChild(panel);makePanelDraggable(panel,panel.querySelector('.universal-category-head'));
+  $('universalCategoryName').addEventListener('input',()=>{universalCategoryDraft.category=$('universalCategoryName').value.trim();v28RefreshUniversalCategoryPanel()});
+  $('universalCategoryParent').addEventListener('change',()=>{const parent=$('universalCategoryParent').value;if(parent&&parent.toLowerCase()===universalCategoryDraft.category.toLowerCase()){$('universalCategoryParent').value='';universalCategoryDraft.parent=''}else universalCategoryDraft.parent=parent;v28RefreshUniversalCategoryPanel(false)});
+  return panel
+}
+
+function v28CategoryWouldCycle(category,parent){
+  category=String(category||'').trim();parent=String(parent||'').trim();if(!category||!parent)return false;if(category.toLowerCase()===parent.toLowerCase())return true;
+  const map=new Map(v28KnownCategories(category).map(c=>[c.name.toLowerCase(),String(c.parent||'').toLowerCase()]));map.set(category.toLowerCase(),parent.toLowerCase());
+  let cur=parent.toLowerCase(),seen=new Set([category.toLowerCase()]);while(cur){if(seen.has(cur))return true;seen.add(cur);cur=map.get(cur)||''}return false
+}
+function v28SetGlobalCategoryParent(category,parent){
+  category=String(category||'').trim();parent=String(parent||'').trim();if(!category||v28CategoryWouldCycle(category,parent))return false;
+  for(const n of nodes)if(!n.virtual&&v28NodeGraphCategory(n).toLowerCase()===category.toLowerCase())n.graphParentCategory=parent;
+  const def=(creatorSettings?.categories||[]).find(c=>String(c.label||c.id).trim().toLowerCase()===category.toLowerCase()||String(c.id).toLowerCase()===category.toLowerCase());
+  if(def){const p=(creatorSettings.categories||[]).find(c=>String(c.label||c.id).trim().toLowerCase()===parent.toLowerCase()||String(c.id).toLowerCase()===parent.toLowerCase());def.parentId=p?.id||''}
+  if(universalCategoryDraft.category.toLowerCase()===category.toLowerCase())universalCategoryDraft.parent=parent;
+  rebuildEdges();save();return true
+}
+function v28RefreshUniversalCategoryPanel(rebuildParent=true){
+  const cat=universalCategoryDraft.category,known=v28KnownCategories(cat),list=$('universalCategoryList'),parent=$('universalCategoryParent');if(!list||!parent)return;
+  list.innerHTML=known.map(c=>`<option value="${E.esc(c.name)}"></option>`).join('');
+  if(rebuildParent){const keep=universalCategoryDraft.parent||v28CategoryParent(cat);parent.innerHTML='<option value="">Nothing — top level</option>'+known.filter(c=>c.name.toLowerCase()!==cat.toLowerCase()).map(c=>`<option value="${E.esc(c.name)}">${E.esc(c.name)}</option>`).join('');parent.value=keep;universalCategoryDraft.parent=parent.value||keep||''}
+  $('universalCategoryPath').textContent=v28CategoryPath(cat,universalCategoryDraft.parent);
+  $('universalCategoryCount').textContent=String(known.length);
+  const allHost=$('universalCategoryAllRows');
+  allHost.innerHTML=known.map(c=>`<div class="universal-category-row" data-universal-category="${E.esc(c.name)}"><b>${E.esc(c.name)}</b><select title="Parent category"><option value="">Top level</option>${known.filter(p=>p.name.toLowerCase()!==c.name.toLowerCase()).map(p=>`<option value="${E.esc(p.name)}" ${String(c.parent).toLowerCase()===p.name.toLowerCase()?'selected':''}>↳ ${E.esc(p.name)}</option>`).join('')}</select></div>`).join('');
+  allHost.querySelectorAll('[data-universal-category] select').forEach(sel=>sel.onchange=()=>{const row=sel.closest('[data-universal-category]'),catName=row.dataset.universalCategory,previous=v28CategoryParent(catName);if(!v28SetGlobalCategoryParent(catName,sel.value)){sel.value=previous;sel.classList.add('requirement-missing');setTimeout(()=>sel.classList.remove('requirement-missing'),800)}v28RefreshUniversalCategoryPanel()})
+}
+function showUniversalCategoryPanel(node,type){
+  const panel=ensureUniversalCategoryPanel();
+  let category=node?.graphCategory||node?.category||'';
+  if(!category&&type==='civilizationUtil')category=utilitySubtypeLabel(node?.utilityType||window.__pendingCivilizationUtilType||'language');
+  if(!category)category=v28TypeLabel(type);
+  universalCategoryDraft={category:String(category||'').trim(),parent:String(node?.graphParentCategory||node?.parentCategory||v28CategoryParent(category)||'').trim()};
+  $('universalCategoryName').value=universalCategoryDraft.category;$('universalCategoryType').textContent=v28TypeLabel(type);panel.classList.remove('hidden');v28RefreshUniversalCategoryPanel();requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel))
+}
+function hideUniversalCategoryPanel(){$('universalCategoryPanel')?.classList.add('hidden')}
+function applyUniversalCategoryToNode(n){
+  if(!n)return;
+  const cat=String(universalCategoryDraft.category||'').trim(),parent=String(universalCategoryDraft.parent||'').trim();
+  n.graphCategory=cat;n.graphParentCategory=(parent&&parent.toLowerCase()!==cat.toLowerCase())?parent:'';
+  if(cat){
+    for(const other of nodes){
+      if(other===n||other.virtual)continue;
+      if(v28NodeGraphCategory(other).toLowerCase()===cat.toLowerCase())other.graphParentCategory=n.graphParentCategory
+    }
+  }
+}
+
 function makePanelDraggable(panel,handle){
   if(!panel||!handle||draggablePanelState.has(panel))return;
 
@@ -2029,6 +3027,7 @@ function makePanelDraggable(panel,handle){
     startOffsetY:0
   };
   draggablePanelState.set(panel,state);
+  panel.classList.add('draggable-ui-panel');
 
   handle.classList.add('drag-handle');
 
@@ -2082,13 +3081,11 @@ function bindDraggableEditorPanels(){
   const modal=$('editorModal');
   if(!modal)return;
 
-  // MAIN EDITOR:
-  // drag the whole shell using the editor card header, not the card itself.
-  // This avoids fixed-position children fighting the centered shell transform.
-  const shell=modal.querySelector('.editor-shell');
+  // MAIN EDITOR is its own drag entity.
+  // Side panels are siblings and do not move when the main card is dragged.
   const main=modal.querySelector('.editor-main-card');
   const mainHandle=main?.querySelector('.modal-head');
-  if(shell&&mainHandle)makePanelDraggable(shell,mainHandle);
+  if(main&&mainHandle)makePanelDraggable(main,mainHandle);
 
   // Side panels stay in normal layout and move via transform offsets too.
   const sidePanels=[
@@ -2111,12 +3108,36 @@ function bindDraggableEditorPanels(){
   })
 }
 
+function keepDetachedPanelOnscreen(panel){
+  if(!panel||panel.classList.contains('hidden'))return;
+  const off=panelDragOffset(panel),next=clampPanelDrag(panel,off.x,off.y);
+  panel.dataset.dragX=String(next.x);panel.dataset.dragY=String(next.y);applyPanelDragTransform(panel)
+}
+
+function bindGlobalDraggableMenus(){
+  // Every conventional modal card gets a draggable title bar.
+  document.querySelectorAll('.modal:not(.hidden) .modal-card').forEach(card=>{
+    const head=card.querySelector(':scope > .modal-head');
+    if(head)makePanelDraggable(card,head)
+  });
+  // Detached editor panels are true viewport siblings, not layout children.
+  [['materialTexturePanel','.material-texture-panel-head'],['craftingGraphPanel','.crafting-graph-head']].forEach(([id,sel])=>{
+    const panel=$(id),head=panel?.querySelector(sel);if(panel&&head)makePanelDraggable(panel,head)
+  });
+  const mega=document.querySelector('body > .mega-painter.expanded');
+  const megaHead=mega?.querySelector(':scope > .section-title-row');
+  if(mega&&megaHead)makePanelDraggable(mega,megaHead);
+  const create=$('createMenu');
+  const createHead=create?.querySelector(':scope > .eyebrow');
+  if(create&&!create.classList.contains('hidden')&&createHead)makePanelDraggable(create,createHead)
+}
+
 function resetDraggableEditorPanels(){
   const modal=$('editorModal');
   if(!modal)return;
 
   modal.querySelectorAll(
-    '.editor-shell,.auto-connections-drawer,.planet-palette-panel,.solar-system-editor-panel,.star-editor-panel,.megastructure-editor-panel'
+    '.editor-main-card,.auto-connections-drawer,.planet-palette-panel,.solar-system-editor-panel,.star-editor-panel,.megastructure-editor-panel,#materialTexturePanel,#craftingGraphPanel'
   ).forEach(panel=>{
     panel.dataset.dragX='0';
     panel.dataset.dragY='0';
@@ -2129,7 +3150,7 @@ function resetDraggableEditorPanels(){
 // Resizing keeps moved panels visible without changing positioning mode.
 window.addEventListener('resize',()=>{
   document.querySelectorAll(
-    '#editorModal .editor-shell,#editorModal .auto-connections-drawer,#editorModal .planet-palette-panel,#editorModal .solar-system-editor-panel,#editorModal .star-editor-panel,#editorModal .megastructure-editor-panel'
+    '#editorModal .editor-main-card,#editorModal .auto-connections-drawer,#editorModal .planet-palette-panel,#editorModal .solar-system-editor-panel,#editorModal .star-editor-panel,#editorModal .megastructure-editor-panel,body>#materialTexturePanel,body>#craftingGraphPanel,body>.mega-painter.expanded'
   ).forEach(panel=>{
     const off=panelDragOffset(panel);
     const next=clampPanelDrag(panel,off.x,off.y);
@@ -2139,11 +3160,1353 @@ window.addEventListener('resize',()=>{
   })
 });
 
+function sanitizePathogenGenome(raw){
+  // Fictional worldbuilding genome. "-" is a persistent missing-gene/base slot; U is deliberately corrupted/flawed.
+  return String(raw||'').toUpperCase().replace(/[^ACGTU-]/g,'').slice(0,72)
+}
+function normalizePathogenGenome(raw){
+  const s=sanitizePathogenGenome(raw);return (s+'-'.repeat(72)).slice(0,72)
+}
+function generatePathogenGenome(length=72){
+  const chars='ACGT';let out='';for(let i=0;i<Math.min(72,Math.max(0,length));i++)out+=chars[Math.floor(Math.random()*chars.length)];return (out+'-'.repeat(72)).slice(0,72)
+}
+function pathogenComplement(seq){const c={A:'T',T:'A',C:'G',G:'C',U:'U','-':'-'};return [...normalizePathogenGenome(seq)].map(x=>c[x]||'-').join('')}
+function pathogenGenomeStats(seq){
+  const s=normalizePathogenGenome(seq),present=[...s].filter(x=>x!=='-'),gc=present.filter(x=>x==='G'||x==='C').length,corrupt=[...s].filter(x=>x==='U').length,missing=[...s].filter(x=>x==='-').length;
+  // Missing genetic material is treated as a stronger flaw than a corrupted base in this fictional model.
+  const flaws=corrupt+(missing*2);
+  return {length:present.length,totalSlots:72,gc:present.length?Math.round(gc/present.length*100):0,segments:6,corrupt,missing,flaws}
+}
+function selectedPathogenGene(){const sel=$('eDiseaseGeneSelect');return Math.max(0,Math.min(5,+sel?.value||0))}
+function setSelectedPathogenGene(i){const sel=$('eDiseaseGeneSelect');if(sel)sel.value=String(Math.max(0,Math.min(5,i|0)))}
+function pathogenGeneChunks(seq){return normalizePathogenGenome((seq ?? $('eDiseaseGenome')?.value) || '').match(/.{12}/g)||Array(6).fill('------------')}
+function pathogenHelixMarkup(seq,compSeq,{large=false,geneIndex=0,viewer=false}={}){
+  const letters=[...String(seq||'').padEnd(12,'-').slice(0,12)],comps=[...String(compSeq||'').padEnd(12,'-').slice(0,12)],n=12;
+  const color={A:'#8f6cff',T:'#4eb6ff',C:'#ffc94f',G:'#5fe0a0',U:'#ff5e68','-':'#7890a8'};
+  if(!large){
+    const left=[],right=[],rungs=[];
+    for(let i=0;i<n;i++){
+      const t=i/(n-1),phase=t*Math.PI*4-Math.PI/2,w=Math.sin(phase)*25;
+      const x1=27+w,x2=73-w,y=7+t*86,b=letters[i],cb=comps[i]||'-',missing=b==='-';
+      left.push(`${x1.toFixed(2)},${y.toFixed(2)}`);right.push(`${x2.toFixed(2)},${y.toFixed(2)}`);
+      rungs.push(`<line class="dna-svg-rung ${missing?'missing':''} ${b==='U'?'corrupt':''}" x1="${x1.toFixed(2)}" y1="${y.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y.toFixed(2)}" stroke="${color[b]||color['-']}"${missing?' stroke-dasharray="3 3"':''}><title>${missing?'Missing gene/base':`Base ${b} paired with ${cb}`}</title></line>`);
+    }
+    return `<span class="dna-helix-stage mini"><svg class="dna-editor-svg mini" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-label="DNA strand"><polyline class="dna-svg-backbone left" points="${left.join(' ')}"></polyline><polyline class="dna-svg-backbone right" points="${right.join(' ')}"></polyline>${rungs.join('')}</svg></span>`;
+  }
+
+  // v25.3k: the CLICKED / ENLARGED gene block is intentionally canvas-backed.
+  // Previous builds proved the interaction coordinates were correct while SVG paint
+  // could be hidden by inherited/legacy CSS. Canvas is isolated from that CSS stack.
+  const W=960,H=300,x0=54,x1=906,cy=150,amp=88,cycles=2.35;
+  const hits=[];
+  for(let i=0;i<n;i++){
+    const t=(i+.5)/n,x=x0+t*(x1-x0),phase=t*Math.PI*2*cycles-Math.PI/2,w=Math.sin(phase)*amp;
+    const yA=cy+w,yB=cy-w,b=letters[i],missing=b==='-';
+    const top=Math.min(yA,yB),bottom=Math.max(yA,yB);
+    const leftPct=(x/W*100).toFixed(3),topPct=(top/H*100).toFixed(3),heightPct=Math.max(8,(bottom-top)/H*100).toFixed(3);
+    if(!missing){
+      hits.push(`<span draggable="true" data-gene-base="${i}" data-gene-index="${geneIndex}" class="dna-enlarged-hit ${b==='U'?'corrupt':''}" style="--dna-x:${leftPct}%;--dna-y:${topPct}%;--dna-h:${heightPct}%" title="Drag base ${b}"><i>${b}</i></span>`);
+    }else{
+      hits.push(`<span class="dna-enlarged-missing" style="--dna-x:${leftPct}%;--dna-y:50%" title="Missing gene/base">∅</span>`);
+    }
+  }
+  const safeSeq=letters.join('');
+  const safeComp=comps.join('');
+  return `<span class="dna-enlarged-stage dna-canvas-stage" data-dna-large-seq="${safeSeq}" data-dna-large-comp="${safeComp}" style="position:relative;display:block;width:100%;max-width:${W}px;aspect-ratio:${W}/${H};height:auto;margin:auto;overflow:hidden;isolation:isolate;">
+    <canvas class="dna-enlarged-canvas" width="${W}" height="${H}" aria-label="Editable enlarged DNA strand" style="position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;z-index:2;"></canvas>${hits.join('')}
+  </span>`;
+}
+
+function paintPathogenEnlargedCanvases(root=document){
+  const color={A:'#8f6cff',T:'#4eb6ff',C:'#ffc94f',G:'#5fe0a0',U:'#ff5e68','-':'#7890a8'};
+  root.querySelectorAll('.dna-canvas-stage').forEach(stage=>{
+    const canvas=stage.querySelector('.dna-enlarged-canvas');
+    if(!canvas)return;
+    const ctx=canvas.getContext('2d');
+    if(!ctx)return;
+
+    // v25.3k stability: paint at the stage's ACTUAL laid-out size.
+    // CSS owns the panel height; JS never changes it. This prevents the renderer
+    // from squashing the editor when its width changes.
+    const rect=stage.getBoundingClientRect();
+    const cssW=Math.max(180,Math.floor(rect.width||stage.clientWidth||720));
+    const cssH=Math.max(180,Math.floor(rect.height||stage.clientHeight||270));
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const pxW=Math.max(1,Math.round(cssW*dpr)),pxH=Math.max(1,Math.round(cssH*dpr));
+    if(canvas.width!==pxW)canvas.width=pxW;
+    if(canvas.height!==pxH)canvas.height=pxH;
+    canvas.style.width='100%';
+    canvas.style.height='100%';
+
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,cssW,cssH);
+
+    const n=12;
+    const padX=Math.max(18,cssW*.055);
+    const x0=padX,x1=cssW-padX;
+    const cy=cssH/2;
+    const amp=Math.min(cssH*.29,Math.max(26,cssH/2-20));
+    const cycles=2.35;
+    const seq=String(stage.dataset.dnaLargeSeq||'').padEnd(n,'-').slice(0,n);
+    const comp=String(stage.dataset.dnaLargeComp||'').padEnd(n,'-').slice(0,n);
+
+    const traceBackbone=(flip,stroke,alpha)=>{
+      ctx.save();
+      ctx.beginPath();
+      for(let j=0;j<=240;j++){
+        const t=j/240,x=x0+t*(x1-x0),phase=t*Math.PI*2*cycles-Math.PI/2,w=Math.sin(phase)*amp*flip,y=cy+w;
+        if(j===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      }
+      ctx.strokeStyle=stroke;ctx.globalAlpha=alpha;
+      ctx.lineWidth=Math.max(4,Math.min(10,cssH*.033));
+      ctx.lineCap='round';ctx.lineJoin='round';
+      ctx.shadowColor='rgba(91,174,236,.28)';ctx.shadowBlur=Math.max(3,cssH*.02);
+      ctx.stroke();ctx.restore();
+    };
+    traceBackbone(1,'#8fbfe7',.92);
+    traceBackbone(-1,'#d1e9ff',.78);
+
+    for(let i=0;i<n;i++){
+      const t=(i+.5)/n,x=x0+t*(x1-x0),phase=t*Math.PI*2*cycles-Math.PI/2,w=Math.sin(phase)*amp;
+      const yA=cy+w,yB=cy-w,b=seq[i]||'-',cb=comp[i]||'-',missing=b==='-';
+      ctx.save();
+      ctx.beginPath();ctx.moveTo(x,yA);ctx.lineTo(x,yB);
+      ctx.strokeStyle=color[b]||color['-'];ctx.lineCap='round';
+      ctx.lineWidth=missing?Math.max(2,cssH*.014):Math.max(6,Math.min(12,cssH*.04));
+      ctx.globalAlpha=missing?.62:1;
+      if(missing)ctx.setLineDash([Math.max(5,cssH*.034),Math.max(4,cssH*.027)]);
+      ctx.shadowColor=b==='U'?'rgba(255,94,104,.7)':'rgba(120,190,255,.22)';
+      ctx.shadowBlur=b==='U'?Math.max(5,cssH*.03):Math.max(2,cssH*.013);
+      ctx.stroke();ctx.restore();
+
+      if(!missing && cssH>=125){
+        const mid=(yA+yB)/2;
+        ctx.save();
+        const fontSize=Math.max(8,Math.min(12,cssH*.04));
+        ctx.font=`700 ${fontSize}px ui-monospace, monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
+        const label=b+(cb&&cb!=='-'?'/'+cb:'');
+        const tw=Math.max(20,ctx.measureText(label).width+8),th=fontSize+7;
+        ctx.fillStyle='rgba(7,17,27,.94)';ctx.fillRect(x-tw/2,mid-th/2,tw,th);
+        ctx.fillStyle='#e7f5ff';ctx.fillText(label,x,mid);ctx.restore();
+      }
+    }
+
+    // Repaint this exact block if its editor column changes size.
+    if(!stage.__dnaResizeObserver && typeof ResizeObserver!=='undefined'){
+      stage.__dnaResizeObserver=new ResizeObserver(()=>{
+        if(stage.__dnaResizeFrame)cancelAnimationFrame(stage.__dnaResizeFrame);
+        stage.__dnaResizeFrame=requestAnimationFrame(()=>paintPathogenEnlargedCanvases(stage.parentElement||document));
+      });
+      stage.__dnaResizeObserver.observe(stage);
+    }
+  });
+}
+function pathogenViewerHelixMarkup(seq,compSeq){
+  // Compact node-info renderer: one SVG owns both backbones and rungs so tiny viewer scaling cannot de-sync them.
+  const letters=[...String(seq||'').padEnd(12,'-').slice(0,12)],comps=[...String(compSeq||'').padEnd(12,'-').slice(0,12)];
+  const ptsL=[],ptsR=[],rungs=[],n=12;
+  const color={A:'#71df9d',T:'#66bfff',C:'#ffd36a',G:'#b995ff',U:'#ff74bc','-':'#9b5f75'};
+  letters.forEach((b,i)=>{
+    const t=i/(n-1),phase=t*Math.PI*4-Math.PI/2,wave=Math.sin(phase)*21;
+    const xL=27+wave,xR=73-wave,y=4+t*92,cb=comps[i]||'-';
+    ptsL.push(`${xL.toFixed(2)},${y.toFixed(2)}`);ptsR.push(`${xR.toFixed(2)},${y.toFixed(2)}`);
+    const missing=b==='-',stroke=color[b]||'#91a4b8',dash=missing?' stroke-dasharray="3 2"':'';
+    rungs.push(`<line x1="${xL.toFixed(2)}" y1="${y.toFixed(2)}" x2="${xR.toFixed(2)}" y2="${y.toFixed(2)}" stroke="${stroke}" stroke-width="3.2" stroke-linecap="round"${dash}><title>${missing?'Missing gene/base':`Base ${b} paired with ${cb}`}</title></line>`);
+  });
+  return `<svg class="dna-viewer-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-label="DNA strand"><polyline class="dna-viewer-backbone left" points="${ptsL.join(' ')}"></polyline><polyline class="dna-viewer-backbone right" points="${ptsR.join(' ')}"></polyline>${rungs.join('')}</svg>`;
+}
+
+function ensureDiseaseStrandSidePanel(){let panel=$('diseaseStrandSidePanel');if(panel)return panel;panel=document.createElement('aside');panel.id='diseaseStrandSidePanel';panel.className='disease-strand-side-panel detached-editor-panel hidden';panel.innerHTML=`<div class="disease-strand-side-head"><div><div class="eyebrow">Disease</div><b>Selected DNA Strand</b></div><button id="closeDiseaseStrandSide" class="icon-btn">×</button></div><div id="diseaseStrandSideBody"></div>`;document.body.appendChild(panel);makePanelDraggable(panel,panel.querySelector('.disease-strand-side-head'));$('closeDiseaseStrandSide').onclick=()=>panel.classList.add('hidden');return panel}
+function renderDiseaseStrandSidePanel(detail,palette){const panel=ensureDiseaseStrandSidePanel(),body=$('diseaseStrandSideBody');panel.classList.remove('hidden');body.innerHTML=`${detail}<aside class="dna-palette-panel"><div class="dna-palette-title">BASE PALETTE</div>${palette}<div class="dna-palette-help">Selecting another strand updates this side menu.</div></aside>`;paintPathogenEnlargedCanvases(body)}
+function renderPathogenGenome(){
+  const input=$('eDiseaseGenome'),view=$('pathogenGenomeView'),stats=$('pathogenGenomeStats');if(!input||!view||!stats)return;
+  const clean=normalizePathogenGenome(input.value);if(input.value!==clean)input.value=clean;
+  const chunks=pathogenGeneChunks(clean),comp=pathogenGeneChunks(pathogenComplement(clean));
+  let selected=selectedPathogenGene();setSelectedPathogenGene(selected);
+  const palette=`<div class="dna-base-palette"><span>DRAG BASES ONTO A STRAND</span>${['A','C','G','T','U'].map(b=>`<b draggable="true" class="dna-palette-base ${b==='U'?'corrupt':''}" data-palette-base="${b}" title="${b==='U'?'Corrupted / flawed fictional base':'Base '+b}">${b}</b>`).join('')}</div>`;
+  const field=chunks.map((x,i)=>{const y=comp[i]||'';const miss=[...x].filter(b=>b==='-').length,cor=[...x].filter(b=>b==='U').length,flaws=cor+miss*2;return `<button type="button" class="dna-strand-card ${i===selected?'selected':''} ${(cor||miss)?'has-corruption':''}" data-dna-gene="${i}">
+    <span class="dna-strand-index">Gene block ${i+1}</span>
+    ${pathogenHelixMarkup(x,y)}
+    <span class="dna-strand-count">${12-miss} / 12</span>
+    <span class="dna-strand-flaws ${flaws?'bad':'good'}">Flaws: ${flaws}</span>
+  </button>`}).join('');
+  const active=chunks[selected]||'------------',activeComp=comp[selected]||'------------';
+  const activeMiss=[...active].filter(b=>b==='-').length,activeCor=[...active].filter(b=>b==='U').length,activeFlaws=activeCor+activeMiss*2;
+  const detail=`<div class="dna-selected-detail"><div class="dna-selected-head"><div><small>SELECTED DNA STRAND</small><b>Gene block ${selected+1}</b></div><code>${E.esc(active)}</code></div><div class="dna-large-helix" data-gene-drop="${selected}">${pathogenHelixMarkup(active,activeComp,{large:true,geneIndex:selected})}</div><div class="dna-strand-information"><div><small>Genes present</small><b>${12-activeMiss} / 12</b></div><div><small>Missing genes</small><b class="${activeMiss?'warn':''}">${activeMiss}</b></div><div><small>Corrupted U</small><b class="${activeCor?'warn':''}">${activeCor}</b></div><div><small>Strand flaws</small><b class="${activeFlaws?'warn':''}">${activeFlaws}</b></div></div><div class="dna-detail-note">Colored rungs are genes/bases; dashed ∅ rungs are missing genetic slots and count as stronger flaws.</div></div>`;
+  view.innerHTML=`<div class="dna-workbench"><div class="dna-overview-title">GENOME OVERVIEW (6 STRANDS)</div><div class="dna-strand-field" data-dna-field>${field}</div><div class="dna-base-palette-inline">${palette}</div></div>`;renderDiseaseStrandSidePanel(detail,palette);
+  const st=pathogenGenomeStats(clean);stats.innerHTML=`<b>${st.length}/${st.totalSlots}</b> genes present · <b>${st.gc}%</b> GC-style ratio · <b>6</b> strands · <b class="${st.corrupt?'dna-stat-warn':''}">${st.corrupt}</b> corrupted U · <b class="${st.missing?'dna-stat-warn':''}">${st.missing}</b> missing · <b class="${st.flaws?'dna-stat-warn':''}">${st.flaws}</b> total flaws`;
+  paintPathogenEnlargedCanvases(view);
+  const sel=$('eDiseaseGeneSelect');if(sel)sel.innerHTML=chunks.map((_,i)=>`<option value="${i}" ${i===selected?'selected':''}>Strand ${i+1}</option>`).join('');
+  document.querySelectorAll('[data-dna-gene]').forEach(el=>el.addEventListener('click',()=>{setSelectedPathogenGene(+el.dataset.dnaGene);renderPathogenGenome()}));
+  document.querySelectorAll('[data-palette-base]').forEach(el=>el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/x-dna-new',el.dataset.paletteBase);e.dataTransfer.effectAllowed='copy'}));
+  document.querySelectorAll('[data-gene-base]').forEach(el=>{
+    el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/x-dna-existing',JSON.stringify({gene:+el.dataset.geneIndex,base:+el.dataset.geneBase}));e.dataTransfer.effectAllowed='move';window.__dnaDropAccepted=false});
+    el.addEventListener('dragend',e=>{if(window.__dnaDropAccepted)return;const hit=document.elementFromPoint(e.clientX,e.clientY);if(hit?.closest?.('.dna-workbench'))return;removePathogenBase(+el.dataset.geneIndex,+el.dataset.geneBase)})
+  });
+  document.querySelectorAll('[data-gene-drop],[data-dna-gene],[data-dna-field]').forEach(zone=>{
+    zone.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect=e.dataTransfer.types.includes('text/x-dna-existing')?'move':'copy';zone.classList.add('dna-drop-ready')});
+    zone.addEventListener('dragleave',()=>zone.classList.remove('dna-drop-ready'));
+    zone.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();zone.classList.remove('dna-drop-ready');window.__dnaDropAccepted=true;const targetGene=Number.isFinite(+zone.dataset.geneDrop)?+zone.dataset.geneDrop:Number.isFinite(+zone.dataset.dnaGene)?+zone.dataset.dnaGene:selectedPathogenGene();const fresh=e.dataTransfer.getData('text/x-dna-new');const moving=e.dataTransfer.getData('text/x-dna-existing');if(fresh)insertPathogenBase(targetGene,fresh);else if(moving){try{const m=JSON.parse(moving);movePathogenBase(m.gene,m.base,targetGene)}catch{}}})
+  })
+}
+function mutateAbstractGene(seq,geneIndex,count=2){
+  const arr=[...normalizePathogenGenome(seq)],chars='ACGT',start=Math.max(0,Math.min(5,geneIndex))*12,end=start+12;
+  const candidates=[];for(let i=start;i<end;i++)if(arr[i]!=='-')candidates.push(i);if(!candidates.length)return arr.join('');
+  for(let k=0;k<count;k++){const i=candidates[Math.floor(Math.random()*candidates.length)],old=arr[i];arr[i]=old==='U'?chars[Math.floor(Math.random()*4)]:chars.replace(old,'')[Math.floor(Math.random()*3)]}
+  return arr.join('')
+}
+function insertPathogenBase(geneIndex,base){
+  const input=$('eDiseaseGenome');if(!input)return;const arr=[...normalizePathogenGenome(input.value)],b=sanitizePathogenGenome(base).replace(/-/g,'').slice(0,1);if(!b)return;const start=Math.max(0,Math.min(5,geneIndex))*12,end=start+12;let i=arr.findIndex((v,idx)=>idx>=start&&idx<end&&v==='-');if(i<0)i=end-1;arr[i]=b;input.value=arr.join('');setSelectedPathogenGene(geneIndex);renderPathogenGenome()
+}
+function removePathogenBase(geneIndex,baseIndex){
+  const input=$('eDiseaseGenome');if(!input)return;const arr=[...normalizePathogenGenome(input.value)],i=Math.max(0,Math.min(5,geneIndex))*12+Math.max(0,Math.min(11,baseIndex));if(arr[i]==='-')return;arr[i]='-';input.value=arr.join('');setSelectedPathogenGene(geneIndex);renderPathogenGenome()
+}
+function movePathogenBase(fromGene,baseIndex,toGene){
+  const input=$('eDiseaseGenome');if(!input)return;const arr=[...normalizePathogenGenome(input.value)],i=Math.max(0,Math.min(5,fromGene))*12+Math.max(0,Math.min(11,baseIndex));const b=arr[i];if(!b||b==='-')return;arr[i]='-';const start=Math.max(0,Math.min(5,toGene))*12,end=start+12;let target=arr.findIndex((v,idx)=>idx>=start&&idx<end&&v==='-');if(target<0)target=end-1;arr[target]=b;input.value=arr.join('');setSelectedPathogenGene(toGene);renderPathogenGenome()
+}
+function bindPathogenGenomeEditor(){
+  const input=$('eDiseaseGenome');if(!input)return;
+  input.value=normalizePathogenGenome(input.value);
+  input.addEventListener('input',()=>{input.value=normalizePathogenGenome(input.value);renderPathogenGenome()});
+  $('eDiseaseGeneSelect')?.addEventListener('change',renderPathogenGenome);
+  $('regeneratePathogenGenome')?.addEventListener('click',()=>{input.value=generatePathogenGenome(72);renderPathogenGenome()});
+  $('shortenPathogenGenome')?.addEventListener('click',()=>{const arr=[...normalizePathogenGenome(input.value)],present=arr.map((v,i)=>v!=='-'?i:-1).filter(i=>i>=0);for(let k=0;k<Math.min(6,present.length);k++){const at=present[present.length-1-k];arr[at]='-'}input.value=arr.join('');renderPathogenGenome()});
+  $('extendPathogenGenome')?.addEventListener('click',()=>{const arr=[...normalizePathogenGenome(input.value)],chars='ACGT';let filled=0;for(let i=0;i<arr.length&&filled<6;i++)if(arr[i]==='-'){arr[i]=chars[Math.floor(Math.random()*4)];filled++}input.value=arr.join('');renderPathogenGenome()});
+  $('mutatePathogenGene')?.addEventListener('click',()=>{input.value=mutateAbstractGene(input.value,selectedPathogenGene(),1+Math.floor(Math.random()*3));renderPathogenGenome()});
+  $('removePathogenGene')?.addEventListener('click',()=>{const arr=[...normalizePathogenGenome(input.value)],i=selectedPathogenGene()*12;for(let j=i;j<i+12;j++)arr[j]='-';input.value=arr.join('');renderPathogenGenome()});
+  $('addPathogenGene')?.addEventListener('click',()=>{const arr=[...normalizePathogenGenome(input.value)],i=selectedPathogenGene()*12,g=generatePathogenGenome(12).slice(0,12);for(let j=0;j<12;j++)arr[i+j]=g[j];input.value=arr.join('');renderPathogenGenome()});
+  $('radiatePathogenGenome')?.addEventListener('click',()=>{let arr=[...normalizePathogenGenome(input.value)];const present=arr.map((v,i)=>v!=='-'?i:-1).filter(i=>i>=0),hits=Math.max(2,Math.min(12,Math.round(present.length/12)));for(let i=0;i<hits&&present.length;i++){const at=present[Math.floor(Math.random()*present.length)];if(Math.random()<.27)arr[at]='U';else{const chars='ACGT',old=arr[at];arr[at]=old==='U'?chars[Math.floor(Math.random()*4)]:chars.replace(old,'')[Math.floor(Math.random()*3)]}}input.value=arr.join('');renderPathogenGenome()});
+  renderPathogenGenome()
+}
+
+function materialRarityInfo(value,name='This material'){
+  const v=Math.max(0,Math.min(100,+value||0)),n=String(name||'This material').trim()||'This material';
+  let uniquePlace='';
+  try{
+    const mat=nodes.find(x=>x.type==='material'&&String(x.name||'').trim().toLowerCase()===n.toLowerCase());
+    if(mat&&typeof graphNodesLinked==='function'){
+      const linked=nodes.filter(x=>x.type==='place'&&graphNodesLinked(mat.id,x.id));
+      const system=linked.find(x=>/system/i.test(String(x.placeType||x.category||x.name||'')))||linked[0];
+      if(system)uniquePlace=system.name||''
+    }
+  }catch{}
+  if(v<=2)return{tier:'Divine',comparison:'Practically none exists in the whole setting.'};
+  if(v<=10)return{tier:'Mythic',comparison:uniquePlace?`Only ${uniquePlace} is known to contain ${n}.`:`Only a tiny number of known systems contain ${n}.`};
+  if(v<=22)return{tier:'Legendary',comparison:`Fewer than 1 in 100,000 planets are known to contain ${n}.`};
+  if(v<=38)return{tier:'Epic',comparison:`Roughly 1 in ${Math.round(1200-(v-22)*55).toLocaleString()} planets contains usable deposits.`};
+  if(v<=58)return{tier:'Rare',comparison:`Around ${Math.max(2,Math.round((v-38)*.55+2))}% of planets contain detectable amounts.`};
+  if(v<=82)return{tier:'Uncommon',comparison:`About ${Math.round(32+(v-58)*2.25)}% of planets have this material.`};
+  return{tier:'Common',comparison:`About ${Math.min(99,Math.round(86+(v-82)*.72))}% of planets have this material.`}
+}
+function bindMaterialRarityEditor(){
+  const slider=$('eMaterialRarity'),tier=$('materialRarityTier'),text=$('materialRarityComparison'),name=$('eName');if(!slider)return;
+  const update=()=>{const info=materialRarityInfo(slider.value,name?.value||'This material');if(tier){tier.textContent=info.tier;tier.dataset.tier=info.tier.toLowerCase()}if(text)text.textContent=info.comparison;slider.style.setProperty('--rarity-pos',`${slider.value}%`)};
+  slider.addEventListener('input',update);name?.addEventListener('input',update);update()
+}
+
+let materialTextureDraft=null,materialTextureTool='brush',materialTextureUndoStack=[],materialTextureRedoStack=[],materialTextureSelection=new Set(),materialTextureSelectionMode='rect',materialTextureSelectStart=null,materialTextureLasso=[],materialTextureHover=null,texturePainterKind='material';
+function materialTextureSize(){return Math.max(8,Math.min(256,+materialTextureDraft?.size||32))}
+function blankMaterialTexture(size=32){size=[8,16,32,64,128,256].includes(+size)?+size:32;return {size,pixels:Array(size*size).fill('#00000000')}}
+function resampleMaterialTexture(t,newSize){
+  const old=t&&Array.isArray(t.pixels)?t:blankMaterialTexture(32),oldSize=Math.max(1,+old.size||Math.round(Math.sqrt(old.pixels.length))||32),out=blankMaterialTexture(newSize);
+  for(let y=0;y<newSize;y++)for(let x=0;x<newSize;x++){const sx=Math.min(oldSize-1,Math.floor(x/newSize*oldSize)),sy=Math.min(oldSize-1,Math.floor(y/newSize*oldSize));out.pixels[y*newSize+x]=String(old.pixels[sy*oldSize+sx]||'#00000000')}
+  return out
+}
+function normalizeMaterialTexture(t){
+  if(!t||!Array.isArray(t.pixels))return blankMaterialTexture(32);
+  let size=Math.max(1,+t.size||Math.round(Math.sqrt(t.pixels.length))||32);
+  if(![8,16,32,64,128,256].includes(size)){size=[8,16,32,64,128,256].reduce((best,n)=>Math.abs(n-size)<Math.abs(best-size)?n:best,32)}
+  const out=blankMaterialTexture(size),limit=Math.min(out.pixels.length,t.pixels.length);for(let i=0;i<limit;i++)out.pixels[i]=String(t.pixels[i]||'#00000000');return out
+}
+function cloneMaterialTexture(t){const n=normalizeMaterialTexture(t);return {size:n.size,pixels:[...n.pixels]}}
+function pushMaterialTextureHistory(){if(!materialTextureDraft)return;materialTextureUndoStack.push(cloneMaterialTexture(materialTextureDraft));if(materialTextureUndoStack.length>40)materialTextureUndoStack.shift();materialTextureRedoStack=[]}
+function materialTexturePreviewPixels(t,max=32){
+  const n=normalizeMaterialTexture(t),size=n.size,target=Math.min(max,size),out=[];
+  for(let y=0;y<target;y++)for(let x=0;x<target;x++){const sx=Math.min(size-1,Math.floor(x/target*size)),sy=Math.min(size-1,Math.floor(y/target*size));out.push(n.pixels[sy*size+sx]||'#00000000')}
+  return {size:target,pixels:out}
+}
+function renderMaterialTextureEditor(preview=null){
+  refreshMaterialTextureInlinePreview();const canvas=$('materialTextureCanvas');if(!canvas||!materialTextureDraft)return;const ctx=canvas.getContext('2d'),size=materialTextureSize(),cell=canvas.width/size;ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let i=0;i<size*size;i++){const col=materialTextureDraft.pixels[i];if(col&&col!=='#00000000'){ctx.fillStyle=col;ctx.fillRect((i%size)*cell,Math.floor(i/size)*cell,Math.ceil(cell+.01),Math.ceil(cell+.01))}}
+  if(size<=64){ctx.save();ctx.strokeStyle='rgba(150,180,220,.13)';ctx.lineWidth=1;for(let k=0;k<=size;k++){const p=Math.round(k*cell)+.5;ctx.beginPath();ctx.moveTo(p,0);ctx.lineTo(p,canvas.height);ctx.stroke();ctx.beginPath();ctx.moveTo(0,p);ctx.lineTo(canvas.width,p);ctx.stroke()}ctx.restore()}
+  if(materialTextureSelection.size){ctx.save();ctx.fillStyle='rgba(93,201,255,.24)';ctx.strokeStyle='rgba(130,225,255,.8)';for(const i of materialTextureSelection){const xx=i%size,yy=(i/size)|0;ctx.fillRect(xx*cell,yy*cell,cell,cell);if(cell>=3)ctx.strokeRect(xx*cell+.5,yy*cell+.5,cell-1,cell-1)}ctx.restore()}
+  const ghost=preview||(materialTextureHover&&['brush','eraser'].includes(materialTextureTool)?{type:'brush',at:materialTextureHover}:null);if(ghost){ctx.save();ctx.globalAlpha=.38;ctx.fillStyle=ghost.erase?'#ff8f8f':materialTextureColor();ctx.strokeStyle=ctx.fillStyle;const draw=(xx,yy)=>{if(xx>=0&&yy>=0&&xx<size&&yy<size)ctx.fillRect(xx*cell,yy*cell,Math.max(1,cell),Math.max(1,cell))};if(ghost.type==='brush'){for(const q of materialTextureFootprint(ghost.at.x,ghost.at.y))draw(q[0],q[1])}else{const pts=[];if(ghost.type==='line'){let x0=ghost.a.x,y0=ghost.a.y,x1=ghost.b.x,y1=ghost.b.y,dx=Math.abs(x1-x0),sx=x0<x1?1:-1,dy=-Math.abs(y1-y0),sy=y0<y1?1:-1,err=dx+dy;for(;;){pts.push([x0,y0]);if(x0===x1&&y0===y1)break;const e2=2*err;if(e2>=dy){err+=dy;x0+=sx}if(e2<=dx){err+=dx;y0+=sy}}}else if(ghost.type==='rect'){const xa=Math.min(ghost.a.x,ghost.b.x),xb=Math.max(ghost.a.x,ghost.b.x),ya=Math.min(ghost.a.y,ghost.b.y),yb=Math.max(ghost.a.y,ghost.b.y);for(let xx=xa;xx<=xb;xx++)pts.push([xx,ya],[xx,yb]);for(let yy=ya;yy<=yb;yy++)pts.push([xa,yy],[xb,yy])}else if(ghost.type==='circle'){const centered=!!$('materialTextureCircleCenter')?.checked;let cx,cy,rx,ry;if(centered){cx=ghost.a.x;cy=ghost.a.y;rx=Math.abs(ghost.b.x-ghost.a.x);ry=Math.abs(ghost.b.y-ghost.a.y)}else{cx=(ghost.a.x+ghost.b.x)/2;cy=(ghost.a.y+ghost.b.y)/2;rx=Math.abs(ghost.b.x-ghost.a.x)/2;ry=Math.abs(ghost.b.y-ghost.a.y)/2}const steps=Math.max(20,Math.ceil(Math.PI*2*Math.max(rx,ry)*2));for(let i=0;i<steps;i++){const t=i/steps*Math.PI*2;pts.push([Math.round(cx+Math.cos(t)*Math.max(.5,rx)),Math.round(cy+Math.sin(t)*Math.max(.5,ry))])}}for(const [xx,yy] of pts)for(const q of materialTextureFootprint(xx,yy))draw(q[0],q[1])}ctx.restore()}
+}
+function materialTextureCellFromEvent(e){const canvas=$('materialTextureCanvas'),r=canvas.getBoundingClientRect(),size=materialTextureSize();return{x:Math.max(0,Math.min(size-1,Math.floor((e.clientX-r.left)/r.width*size))),y:Math.max(0,Math.min(size-1,Math.floor((e.clientY-r.top)/r.height*size)))}}
+function materialTextureFootprint(x,y){const size=materialTextureSize(),th=Math.max(1,Math.min(32,+$('materialTextureThickness')?.value||1)),shape=Math.max(0,Math.min(100,+$('materialBrushShape')?.value||50)),r=Math.max(.5,th/2),pow=2+(shape/100)*18,out=[];for(let yy=Math.floor(y-r);yy<=Math.ceil(y+r);yy++)for(let xx=Math.floor(x-r);xx<=Math.ceil(x+r);xx++){if(xx<0||yy<0||xx>=size||yy>=size)continue;const dx=Math.abs((xx+.5)-(x+.5))/r,dy=Math.abs((yy+.5)-(y+.5))/r;if(Math.pow(dx,pow)+Math.pow(dy,pow)<=1.05)out.push([xx,yy])}if(!out.length&&x>=0&&y>=0&&x<size&&y<size)out.push([x,y]);return out}
+function setMaterialTexturePixel(x,y,col){const size=materialTextureSize();for(const [xx,yy] of materialTextureFootprint(x,y))materialTextureDraft.pixels[yy*size+xx]=col}
+function materialTextureColor(){return $('materialTextureColor')?.value||'#8aa4ff'}
+function materialTextureLine(a,b,col){let x0=a.x,y0=a.y,x1=b.x,y1=b.y,dx=Math.abs(x1-x0),sx=x0<x1?1:-1,dy=-Math.abs(y1-y0),sy=y0<y1?1:-1,err=dx+dy;for(;;){setMaterialTexturePixel(x0,y0,col);if(x0===x1&&y0===y1)break;const e2=2*err;if(e2>=dy){err+=dy;x0+=sx}if(e2<=dx){err+=dx;y0+=sy}}}
+function materialTextureRect(a,b,col){const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y);for(let x=x0;x<=x1;x++){setMaterialTexturePixel(x,y0,col);setMaterialTexturePixel(x,y1,col)}for(let y=y0;y<=y1;y++){setMaterialTexturePixel(x0,y,col);setMaterialTexturePixel(x1,y,col)}}
+function materialTextureCircle(a,b,col){const centered=!!$('materialTextureCircleCenter')?.checked;let cx,cy,rx,ry;if(centered){cx=a.x;cy=a.y;rx=Math.abs(b.x-a.x);ry=Math.abs(b.y-a.y)}else{cx=(a.x+b.x)/2;cy=(a.y+b.y)/2;rx=Math.abs(b.x-a.x)/2;ry=Math.abs(b.y-a.y)/2}rx=Math.max(.5,rx);ry=Math.max(.5,ry);const steps=Math.max(20,Math.ceil(Math.PI*2*Math.max(rx,ry)*2));for(let i=0;i<steps;i++){const t=i/steps*Math.PI*2;setMaterialTexturePixel(Math.round(cx+Math.cos(t)*rx),Math.round(cy+Math.sin(t)*ry),col)}}
+function materialTextureFill(x,y,col){const size=materialTextureSize(),target=materialTextureDraft.pixels[y*size+x];if(target===col)return;const q=[[x,y]],seen=new Set();while(q.length){const [cx,cy]=q.pop();if(cx<0||cy<0||cx>=size||cy>=size)continue;const k=cy*size+cx;if(seen.has(k)||materialTextureDraft.pixels[k]!==target)continue;seen.add(k);materialTextureDraft.pixels[k]=col;q.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1])}}
+function ensureMaterialTexturePanel(){
+  let panel=$('materialTexturePanel');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='materialTexturePanel';panel.className='material-texture-panel hidden';panel.dataset.activeTool='brush';panel.innerHTML=`
+    <div class="material-texture-panel-head"><div><div class="eyebrow" id="texturePainterEyebrow">Material</div><h3><span id="texturePainterTitle">Texture Painter</span> · <span id="materialTextureResolutionTitle">32×32</span></h3></div><button type="button" id="closeMaterialTexturePanel" class="icon-btn">×</button></div>
+    <p class="material-texture-panel-help">Resolution can range from 8×8 to 256×256. Existing art is resampled when you change it.</p>
+    <div class="painter-three-column material-painter-layout">
+      <nav class="painter-tool-rail material-texture-toolbar" aria-label="Material painter tools">
+        <button type="button" class="material-texture-tool active" data-material-texture-tool="brush" title="Brush">✎<span>Brush</span></button>
+        <button type="button" class="material-texture-tool" data-material-texture-tool="line" title="Line">╱<span>Line</span></button>
+        <button type="button" class="material-texture-tool" data-material-texture-tool="rect" title="Rectangle">□<span>Rect</span></button>
+        <button type="button" class="material-texture-tool" data-material-texture-tool="circle" title="Circle">○<span>Circle</span></button>
+        <button type="button" class="material-texture-tool" data-material-texture-tool="fill" title="Fill">▣<span>Fill</span></button>
+        <button type="button" class="material-texture-tool" data-material-texture-tool="eraser" title="Eraser">⌫<span>Erase</span></button>
+        <button type="button" class="material-texture-tool" data-material-texture-tool="select" title="Select">⌖<span>Select</span></button>
+        <i class="painter-rail-divider"></i>
+        <button type="button" id="materialTextureUndo" title="Undo">↶<span>Undo</span></button>
+        <button type="button" id="materialTextureRedo" title="Redo">↷<span>Redo</span></button>
+        <button type="button" id="clearMaterialTexture" title="Clear">×<span>Clear</span></button>
+      </nav>
+      <div class="painter-canvas-column material-texture-canvas-wrap"><canvas id="materialTextureCanvas" width="640" height="640"></canvas></div>
+      <aside class="painter-options-rail material-texture-controls">
+        <div class="painter-options-title"><span>TOOL OPTIONS</span><b id="materialTextureToolName">Brush</b></div>
+        <label data-material-tools="brush,line,rect,circle,fill,eraser,select">Pixel quality<select id="materialTextureResolution"><option>8</option><option>16</option><option selected>32</option><option>64</option><option>128</option><option>256</option></select><small>8×8 → 256×256</small></label>
+        <label data-material-tools="brush,line,rect,circle,fill">Paint color<input id="materialTextureColor" type="color" value="#8aa4ff"></label>
+        <label data-material-tools="brush,line,rect,circle,eraser">Thickness <output id="materialTextureThicknessOut">1 px</output><input id="materialTextureThickness" type="range" min="1" max="32" step="1" value="1"></label>
+        <label class="life-check compact" data-material-tools="circle"><input id="materialTextureCircleCenter" type="checkbox"><span><b>Circle from center</b><small>Drag outward from the starting point.</small></span></label>
+        <label data-material-tools="brush,eraser">Brush shape <output id="materialBrushShapeOut">50%</output><input id="materialBrushShape" type="range" min="0" max="100" value="50"><small>Circle ← → Square</small></label>
+        <label data-material-tools="select">Selection mode<select id="materialSelectMode"><option value="rect">Rectangle</option><option value="lasso">Lasso</option></select></label>
+        <button type="button" id="materialDeleteSelection" data-material-tools="select" class="danger ghost">Delete selection</button>
+        <div class="painter-option-note" data-material-tools="brush,line,rect,circle,eraser"><b>Pixel locked</b><small>Every mark snaps exactly to the selected material grid.</small></div>
+        <div class="painter-option-note" data-material-tools="fill"><b>Flood Fill</b><small>Fills one contiguous region of identical pixels.</small></div>
+      </aside>
+    </div>`;
+  document.body.appendChild(panel);
+  panel.classList.add('detached-editor-panel');
+  const head=panel.querySelector('.material-texture-panel-head');
+  if(head)prepareDetachedEditorPanel(panel,head);
+  $('closeMaterialTexturePanel').onclick=()=>panel.classList.add('hidden');
+  const savebar=document.createElement('div');savebar.className='special-editor-savebar';savebar.innerHTML='<span>Pixel-art changes are synchronized to the current editor preview.</span><button type="button" class="primary">Save & Return</button>';savebar.querySelector('button').onclick=()=>{refreshMaterialTextureInlinePreview();panel.classList.add('hidden')};panel.appendChild(savebar);
+  return panel
+}
+function updateMaterialPainterToolUI(){
+  const panel=$('materialTexturePanel');if(!panel)return;panel.dataset.activeTool=materialTextureTool;
+  const nice={brush:'Brush',line:'Line',rect:'Rectangle',circle:'Circle',fill:'Fill',eraser:'Eraser',select:'Select'}[materialTextureTool]||materialTextureTool;
+  if($('materialTextureToolName'))$('materialTextureToolName').textContent=nice;
+  panel.querySelectorAll('[data-material-tools]').forEach(el=>{const tools=el.dataset.materialTools.split(',');el.classList.toggle('tool-option-hidden',!tools.includes(materialTextureTool))});
+  if($('materialTextureThicknessOut'))$('materialTextureThicknessOut').textContent=`${+$('materialTextureThickness')?.value||1} px`;if($('materialBrushShapeOut'))$('materialBrushShapeOut').textContent=`${+$('materialBrushShape')?.value||50}%`
+}
+function refreshMaterialTextureInlinePreview(){
+  const host=$('materialTextureInlinePreview');if(!host||!materialTextureDraft)return;const p=materialTexturePreviewPixels(materialTextureDraft,32);host.style.setProperty('--material-preview-size',String(p.size));host.innerHTML=p.pixels.map(c=>`<i style="background:${/^#[0-9a-f]{6}$/i.test(c)?c:'transparent'}"></i>`).join('')
+}
+function materialSelectionRect(a,b){const size=materialTextureSize(),out=new Set(),x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y);for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++)out.add(y*size+x);return out}
+function pointInPoly(x,y,poly){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y,hit=((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi||1e-9)+xi);if(hit)inside=!inside}return inside}
+function materialSelectionLasso(poly){const size=materialTextureSize(),out=new Set();if(poly.length<3)return out;for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(pointInPoly(x+.5,y+.5,poly))out.add(y*size+x);return out}
+function bindMaterialTextureCanvas(){
+  const c=$('materialTextureCanvas');if(!c||c.dataset.bound==='1')return;c.dataset.bound='1';let down=false,start=null,last=null;
+  const col=()=>materialTextureTool==='eraser'?'#00000000':materialTextureColor();
+  document.querySelectorAll('.material-texture-tool').forEach(btn=>btn.addEventListener('click',()=>{materialTextureTool=btn.dataset.materialTextureTool;document.querySelectorAll('.material-texture-tool').forEach(x=>x.classList.toggle('active',x===btn));materialTextureHover=null;updateMaterialPainterToolUI();renderMaterialTextureEditor()}));
+  $('materialTextureThickness')?.addEventListener('input',()=>{updateMaterialPainterToolUI();renderMaterialTextureEditor()});$('materialBrushShape')?.addEventListener('input',()=>{updateMaterialPainterToolUI();renderMaterialTextureEditor()});
+  $('materialTextureResolution')?.addEventListener('change',e=>{const size=+e.target.value||32;if(size===materialTextureSize())return;pushMaterialTextureHistory();materialTextureDraft=resampleMaterialTexture(materialTextureDraft,size);materialTextureSelection.clear();if($('materialTextureResolutionTitle'))$('materialTextureResolutionTitle').textContent=`${size}×${size}`;renderMaterialTextureEditor()});
+  $('materialSelectMode')?.addEventListener('change',e=>materialTextureSelectionMode=e.target.value);
+  $('materialDeleteSelection')?.addEventListener('click',()=>{if(!materialTextureSelection.size)return;pushMaterialTextureHistory();for(const i of materialTextureSelection)materialTextureDraft.pixels[i]='#00000000';materialTextureSelection.clear();renderMaterialTextureEditor()});updateMaterialPainterToolUI();
+  c.addEventListener('pointerdown',e=>{e.preventDefault();start=materialTextureCellFromEvent(e);last=start;c.setPointerCapture?.(e.pointerId);if(materialTextureTool==='select'){down=true;materialTextureSelectStart=start;materialTextureLasso=[start];materialTextureSelection=materialTextureSelectionMode==='rect'?new Set([start.y*materialTextureSize()+start.x]):new Set();renderMaterialTextureEditor();return}pushMaterialTextureHistory();down=true;if(materialTextureTool==='fill'){materialTextureFill(start.x,start.y,col());down=false;renderMaterialTextureEditor()}else if(materialTextureTool==='brush'||materialTextureTool==='eraser'){setMaterialTexturePixel(start.x,start.y,col());renderMaterialTextureEditor()}});
+  c.addEventListener('pointermove',e=>{const p0=materialTextureCellFromEvent(e);materialTextureHover=p0;if(!down){renderMaterialTextureEditor();return}let p=p0;if(e.shiftKey&&start&&materialTextureTool!=='select'){const dx=p.x-start.x,dy=p.y-start.y;p=Math.abs(dx)>=Math.abs(dy)?{x:p.x,y:start.y}:{x:start.x,y:p.y}}if(materialTextureTool==='select'){if(materialTextureSelectionMode==='lasso'){if(!materialTextureLasso.length||materialTextureLasso.at(-1).x!==p.x||materialTextureLasso.at(-1).y!==p.y)materialTextureLasso.push(p);materialTextureSelection=materialSelectionLasso(materialTextureLasso)}else materialTextureSelection=materialSelectionRect(materialTextureSelectStart,p);renderMaterialTextureEditor();return}if(materialTextureTool==='brush'||materialTextureTool==='eraser'){materialTextureLine(last,p,col());last=p;renderMaterialTextureEditor()}else if(['line','rect','circle'].includes(materialTextureTool))renderMaterialTextureEditor({type:materialTextureTool,a:start,b:p})});
+  c.addEventListener('pointerup',e=>{if(!down)return;let p=materialTextureCellFromEvent(e);if(materialTextureTool==='select'){down=false;renderMaterialTextureEditor();return}if(e.shiftKey&&start){const dx=p.x-start.x,dy=p.y-start.y;p=Math.abs(dx)>=Math.abs(dy)?{x:p.x,y:start.y}:{x:start.x,y:p.y}}if(materialTextureTool==='line')materialTextureLine(start,p,col());else if(materialTextureTool==='rect')materialTextureRect(start,p,col());else if(materialTextureTool==='circle')materialTextureCircle(start,p,col());down=false;start=null;last=null;renderMaterialTextureEditor()});
+  c.addEventListener('pointerleave',()=>{if(!down){materialTextureHover=null;renderMaterialTextureEditor()}});
+  $('materialTextureUndo')?.addEventListener('click',()=>{if(!materialTextureUndoStack.length)return;materialTextureRedoStack.push(cloneMaterialTexture(materialTextureDraft));materialTextureDraft=materialTextureUndoStack.pop();renderMaterialTextureEditor()});
+  $('materialTextureRedo')?.addEventListener('click',()=>{if(!materialTextureRedoStack.length)return;materialTextureUndoStack.push(cloneMaterialTexture(materialTextureDraft));materialTextureDraft=materialTextureRedoStack.pop();renderMaterialTextureEditor()});
+  $('clearMaterialTexture')?.addEventListener('click',()=>{pushMaterialTextureHistory();materialTextureDraft=blankMaterialTexture(materialTextureSize());materialTextureSelection.clear();renderMaterialTextureEditor()})
+}
+function bindMaterialTextureEditor(node,kind='material'){
+  texturePainterKind=kind==='object'?'object':'material';
+  materialTextureDraft=normalizeMaterialTexture(texturePainterKind==='object'?node?.objectTexture:node?.materialTexture);materialTextureTool='brush';materialTextureUndoStack=[];materialTextureRedoStack=[];materialTextureSelection=new Set();materialTextureHover=null;refreshMaterialTextureInlinePreview();
+  $('openMaterialTexturePanel')?.addEventListener('click',()=>{const panel=ensureMaterialTexturePanel();panel.classList.remove('hidden');panel.dataset.dragX='0';panel.dataset.dragY='0';applyPanelDragTransform(panel);bindMaterialTextureCanvas();if($('texturePainterEyebrow'))$('texturePainterEyebrow').textContent=texturePainterKind==='object'?'Magical Object':'Material';if($('texturePainterTitle'))$('texturePainterTitle').textContent=texturePainterKind==='object'?'2D Object Drawer':'Texture Painter';if($('materialTextureResolution'))$('materialTextureResolution').value=String(materialTextureSize());if($('materialTextureResolutionTitle'))$('materialTextureResolutionTitle').textContent=`${materialTextureSize()}×${materialTextureSize()}`;renderMaterialTextureEditor();requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel))})
+}
+function materialTextureEditorData(){return materialTextureDraft?normalizeMaterialTexture(materialTextureDraft):blankMaterialTexture()}
+
+function ensureMaterialUpgradeTreePanel(){
+  let panel=$('materialUpgradeTreePanel');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='materialUpgradeTreePanel';panel.className='material-upgrade-tree-panel detached-editor-panel hidden';panel.innerHTML=`<div class="material-upgrade-tree-head"><div><div class="eyebrow">Materials</div><h3>Upgrade Tree</h3></div><button type="button" id="closeMaterialUpgradeTree" class="icon-btn">×</button></div><p>Links are generated from each Material's <b>Made from</b> recipe. Hover quantities to see the exact amount.</p><div id="materialUpgradeTreeCanvas" class="material-upgrade-tree-canvas"></div>`;document.body.appendChild(panel);prepareDetachedEditorPanel(panel,panel.querySelector('.material-upgrade-tree-head'));$('closeMaterialUpgradeTree').onclick=()=>panel.classList.add('hidden');return panel
+}
+function materialUpgradeTreeLevels(materials){
+  const map=new Map(materials.map(m=>[m.id,m])),memo=new Map();
+  const depth=(m,seen=new Set())=>{if(memo.has(m.id))return memo.get(m.id);if(!m.materialUpgradeFromId||!map.has(m.materialUpgradeFromId)||seen.has(m.id)){memo.set(m.id,0);return 0}const ns=new Set(seen);ns.add(m.id);const d=1+depth(map.get(m.materialUpgradeFromId),ns);memo.set(m.id,d);return d};
+  const groups=[];for(const m of materials){const d=Math.min(12,depth(m));(groups[d]||(groups[d]=[])).push(m)}return groups
+}
+function renderMaterialUpgradeTree(){
+  const host=$('materialUpgradeTreeCanvas');if(!host)return;const mats=nodes.filter(n=>n.type==='material'&&!n.isHub);if(!mats.length){host.innerHTML='<div class="auto-empty">Create Materials to build an upgrade chain.</div>';return}
+  const groups=materialUpgradeTreeLevels(mats),cols=Math.max(1,groups.length),cw=230,rowH=112,pad=36,H=Math.max(300,...groups.map(g=>(g?.length||0)*rowH+pad*2)),W=Math.max(620,cols*cw+pad*2),pos=new Map();
+  groups.forEach((g,level)=>(g||[]).forEach((m,i)=>pos.set(m.id,{x:pad+level*cw,y:pad+i*rowH,w:174,h:68})));
+  const paths=[];for(const m of mats){const a=pos.get(m.materialUpgradeFromId),b=pos.get(m.id);if(!a||!b)continue;const x1=a.x+a.w,y1=a.y+a.h/2,x2=b.x,y2=b.y+b.h/2,mx=(x1+x2)/2,q=Math.max(1,+m.materialUpgradeQty||1);paths.push(`<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}"/><text x="${mx}" y="${(y1+y2)/2-7}" text-anchor="middle"><title>Exact: ${E.esc(String(q))}</title>${E.esc(compactMaterialQuantity(q))}×</text>`)}
+  host.style.width=W+'px';host.style.height=H+'px';host.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${paths.join('')}</svg>`+mats.map(m=>{const p=pos.get(m.id),ac=materialShortName(m);return `<div class="material-upgrade-node" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px"><b>${E.esc(m.name||'Unnamed')}</b><span>${E.esc(ac)}</span></div>`}).join('')
+}
+function bindMaterialUpgradeTreeEditor(){
+  $('openMaterialUpgradeTree')?.addEventListener('click',()=>{const p=ensureMaterialUpgradeTreePanel();p.classList.remove('hidden');p.dataset.dragX='0';p.dataset.dragY='0';applyPanelDragTransform(p);renderMaterialUpgradeTree();requestAnimationFrame(()=>keepDetachedPanelOnscreen(p))})
+}
+
+function compactMaterialQuantity(value){
+  const n=Number(value);if(!Number.isFinite(n))return String(value??'');const a=Math.abs(n);if(a<1000)return Number.isInteger(n)?String(n):String(+n.toFixed(2));
+  const units=['K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc'];let u=-1,v=a;while(v>=1000&&u<units.length-1){v/=1000;u++}const sign=n<0?'-':'';return sign+(v>=100?Math.round(v):v>=10?v.toFixed(1):v.toFixed(2)).replace(/\.0+$|(?<=\.[0-9])0$/,'')+units[u]
+}
+function materialShortName(n){return String(n?.acronym||n?.materialAcronym||n?.name||'?').trim()||'?'}
+
+let craftingGraphDraft=null,craftingGraphNode=null,craftingTool='move';
+let craftingSelectedIds=new Set(),craftingLinkMode='process',craftingInsertRefId='';
+function craftingCandidateNodes(editingNode){return nodes.filter(n=>!n.isHub&&n.id!==editingNode?.id&&(n.type==='material'||n.type==='magicalObject'||n.type==='tool'))}
+function normalizeCraftingGraph(node){
+  const recipe=node?.craftingRecipe||{},g=recipe.graph;
+  if(g&&Array.isArray(g.nodes)&&Array.isArray(g.links))return {nodes:g.nodes.map(n=>({...n})),links:g.links.map(l=>({...l})),failOutput:String(recipe.failOutput||g.failOutput||'')};
+  const product={id:'product',kind:'product',refId:node?.id||'',label:node?.name||'Product',x:50,y:50};
+  const out={nodes:[product],links:[],failOutput:String(recipe.failOutput||'')};
+  (recipe.ingredients||[]).forEach((it,i)=>{const ref=byId(it.nodeId),id='ingredient-'+uid();out.nodes.push({id,kind:'ingredient',refId:it.nodeId,label:ref?.name||'Ingredient',qty:Number(it.qty)||1,x:12+(i%2)*20,y:18+Math.floor(i/2)*19});out.links.push({id:uid(),a:id,b:'product',label:'',direct:true})});
+  if(recipe.process){const id='process-'+uid();out.nodes.push({id,kind:'process',label:String(recipe.process).split('\n')[0].slice(0,48)||'Process',x:50,y:72})}
+  return out
+}
+function ensureCraftingPanel(){
+  let panel=$('craftingGraphPanel');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='craftingGraphPanel';panel.className='crafting-graph-panel crafting-v287at hidden detached-editor-panel';panel.innerHTML=`
+    <div class="crafting-graph-head"><div><div class="eyebrow">Magical Object</div><h3>Crafting Editor</h3></div><button type="button" id="closeCraftingGraph" class="icon-btn">×</button></div>
+    <div class="crafting-workspace">
+      <nav class="crafting-side-tools" aria-label="Crafting tools">
+        <button type="button" id="craftingMoveTool" class="active" data-tip="Move">↔<span>Move</span></button>
+        <button type="button" id="craftingLinkTool" data-tip="Link">⌁<span>Link</span></button>
+        <button type="button" id="craftingInsertTool" data-tip="Insert">＋<span>Insert</span></button>
+        <button type="button" id="craftingCreateProcessTool" data-tip="Create Process">◆<span>Process</span></button>
+        <button type="button" id="craftingEditTool" data-tip="Edit">✎<span>Edit</span></button>
+      </nav>
+      <section class="crafting-main-area">
+        <div id="craftingToolOptions" class="crafting-tool-options">
+          <div class="crafting-tool-pane" data-craft-pane="move"><b>Move</b><span>Drag ingredients, helpers and processes anywhere on the graph.</span></div>
+          <div class="crafting-tool-pane hidden" data-craft-pane="link"><div class="crafting-link-mode"><button type="button" id="craftingDirectMode">Direct</button><button type="button" id="craftingProcessMode" class="active">Process</button></div><input id="craftingProcessName" placeholder="Process name"><button type="button" id="craftingConfirmLink" class="primary" disabled>Confirm</button><button type="button" id="craftingCancelLink" class="ghost">Clear</button></div>
+          <div class="crafting-tool-pane hidden" data-craft-pane="insert"><select id="craftingInsertKind"><option value="permanent">Permanent material / component / object</option><option value="temporary">Temporary material / helper / other</option></select><div id="craftingPermanentInsert"><select id="craftingAddSelect"><option value="">Choose an existing object…</option></select><label class="crafting-qty">× <input id="craftingAddQty" type="text" inputmode="numeric" autocomplete="off" value="1" placeholder="e.g. 450 000"></label><button type="button" id="craftingAddNode" class="primary">Insert</button></div><div id="craftingTemporaryInsert" class="hidden"><input id="craftingTemporaryInput" placeholder="Temporary material / helper / other"><select id="craftingTemporaryType"><option value="material">Temporary material</option><option value="component">Temporary component</option><option value="tool">Temporary tool</option><option value="other">Temporary other</option></select><button type="button" id="craftingAddTemporary" class="primary">Insert temporary</button></div></div>
+          <div class="crafting-tool-pane hidden" data-craft-pane="process"><b>Create Process</b><input id="craftingNewProcessName" placeholder="Process name — e.g. Weld"><span>Click anywhere on the graph to place the process.</span></div>
+          <div class="crafting-tool-pane hidden" data-craft-pane="edit"><b>Edit</b><span>Click a process to rename it. Double-click a temporary node to convert it into a real Material, Component, Tool or Magical Object.</span></div>
+        </div>
+        <div id="craftingLinkHint" class="crafting-link-hint">Move · drag nodes around the recipe.</div>
+        <div id="craftingGraphCanvas" class="crafting-graph-canvas"><svg id="craftingGraphSvg" aria-hidden="true"></svg><div id="craftingGraphNodes"></div></div>
+      </section>
+    </div>
+    <div class="crafting-fail-control"><button type="button" id="craftingFailToggle" class="fail-output-plus"><span>＋</span>Fail output</button><div id="craftingFailBody" class="fail-output-body hidden"><textarea id="craftingFailOutput" rows="3" placeholder="What happens when crafting fails?"></textarea></div></div>
+    <div class="crafting-graph-foot"><div><button type="button" id="craftingDeleteSelected" class="danger ghost">Delete selected</button><button type="button" id="craftingSaveReturn" class="primary">Save & Return</button></div><span>Double-click TEMP nodes to promote them into real authored ingredients.</span></div>`;
+  document.body.appendChild(panel);const head=panel.querySelector('.crafting-graph-head');if(head)prepareDetachedEditorPanel(panel,head);
+  $('closeCraftingGraph').onclick=()=>panel.classList.add('hidden');
+  $('craftingMoveTool').onclick=()=>setCraftingTool('move');$('craftingLinkTool').onclick=()=>setCraftingTool('link');$('craftingInsertTool').onclick=()=>setCraftingTool('insert');$('craftingCreateProcessTool').onclick=()=>setCraftingTool('process');$('craftingEditTool').onclick=()=>setCraftingTool('edit');
+  $('craftingProcessMode').onclick=()=>setCraftingLinkMode('process');$('craftingDirectMode').onclick=()=>setCraftingLinkMode('direct');
+  $('craftingAddNode').onclick=e=>{e.preventDefault();e.stopPropagation();addCraftingGraphNode()};$('craftingAddTemporary').onclick=e=>{e.preventDefault();e.stopPropagation();addTemporaryCraftingNode()};$('craftingConfirmLink').onclick=confirmCraftingLink;$('craftingCancelLink').onclick=clearCraftingLinkSelection;$('craftingDeleteSelected').onclick=deleteCraftingSelected;$('craftingSaveReturn').onclick=()=>{const status=$('craftingOpenStatus');if(status)status.textContent=`Crafting synced · ${craftingGraphDraft.nodes.filter(n=>n.kind==='ingredient').length} ingredients`;panel.classList.add('hidden')};
+  $('craftingInsertKind').onchange=()=>{const temp=$('craftingInsertKind').value==='temporary';$('craftingPermanentInsert').classList.toggle('hidden',temp);$('craftingTemporaryInsert').classList.toggle('hidden',!temp)};$('craftingAddSelect').onchange=e=>{craftingInsertRefId=e.target.value||''};
+  $('craftingTemporaryInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addTemporaryCraftingNode()}});
+  $('craftingFailToggle').onclick=()=>{const body=$('craftingFailBody'),open=body.classList.toggle('hidden')===false;$('craftingFailToggle').classList.toggle('open',open);if(open)$('craftingFailOutput').focus()};$('craftingFailOutput').oninput=e=>{if(craftingGraphDraft)craftingGraphDraft.failOutput=e.target.value};
+  $('craftingGraphCanvas').addEventListener('click',e=>{if(e.target.closest('[data-craft-id]'))return;if(craftingTool==='process')placeCraftingProcessAt(e)});
+  return panel
+}
+function setCraftingLinkMode(mode){craftingLinkMode=mode==='direct'?'direct':'process';$('craftingProcessMode')?.classList.toggle('active',craftingLinkMode==='process');$('craftingDirectMode')?.classList.toggle('active',craftingLinkMode==='direct');const input=$('craftingProcessName');if(input)input.placeholder=craftingLinkMode==='process'?'Process name — e.g. Weld, Enchant, Assemble':'Message beside direct line';updateCraftingLinkControls()}
+function setCraftingTool(tool){craftingTool=tool;craftingSelectedIds.clear();window.__craftingSelected=null;const ids={move:'craftingMoveTool',link:'craftingLinkTool',insert:'craftingInsertTool',process:'craftingCreateProcessTool',edit:'craftingEditTool'};Object.entries(ids).forEach(([k,id])=>$(id)?.classList.toggle('active',tool===k));document.querySelectorAll('#craftingGraphPanel [data-craft-pane]').forEach(p=>p.classList.toggle('hidden',p.dataset.craftPane!==tool));if(tool==='insert'){populateCraftingCandidates();const sel=$('craftingAddSelect');if(sel)sel.disabled=false;const add=$('craftingAddNode');if(add)add.disabled=false;const temp=$('craftingAddTemporary');if(temp)temp.disabled=false}const h=$('craftingLinkHint');if(h)h.textContent=tool==='link'?'Link · select 2+ nodes, choose Direct or Process, then Confirm.':tool==='insert'?'Insert · add a permanent ingredient or a temporary helper.':tool==='process'?'Create Process · name it, then click the graph.':tool==='edit'?'Edit · click a process; double-click TEMP to convert it.':'Move · drag nodes around the recipe.';updateCraftingLinkControls();renderCraftingGraph()}
+function clearCraftingLinkSelection(){craftingSelectedIds.clear();updateCraftingLinkControls();renderCraftingGraph()}
+function updateCraftingLinkControls(){const n=craftingSelectedIds.size,b=$('craftingConfirmLink'),h=$('craftingLinkHint');if(b)b.disabled=craftingTool!=='link'||n<2;if(h&&craftingTool==='link')h.textContent=`${n} node${n===1?'':'s'} selected · keep selecting, then press Confirm.`}
+function craftingNodeRefLabel(n){if(n.kind==='product')return $('eName')?.value.trim()||n.label||'Product';if(n.kind==='process'||n.kind==='temporary')return n.label||'Process';const ref=byId(n.refId);return ref?.name||n.label||'Missing node'}
+function populateCraftingCandidates(preserve=true){const sel=$('craftingAddSelect');if(!sel)return;const wanted=preserve?(sel.value||craftingInsertRefId):'';const candidates=craftingCandidateNodes(craftingGraphNode);sel.innerHTML='<option value="">Insert material / component / object…</option>'+candidates.map(n=>`<option value="${n.id}">${E.esc(n.name)} · ${n.type==='material'?'Material':n.isComponent?'Component':n.type==='tool'?'Tool':'Magical Object'}</option>`).join('');if(wanted&&candidates.some(n=>n.id===wanted)){sel.value=wanted;craftingInsertRefId=wanted}else if(!sel.value&&craftingInsertRefId&&!candidates.some(n=>n.id===craftingInsertRefId))craftingInsertRefId=''}
+function craftingOpenInsertPosition(){
+  // Inserted nodes must always land somewhere visibly free. The old random
+  // placement could put a later ingredient directly under an existing node,
+  // making a successful insert look like it did nothing.
+  const occupied=(craftingGraphDraft?.nodes||[]).map(n=>({x:Number(n.x)||50,y:Number(n.y)||50}));
+  const xs=[14,28,42,72,86,58],ys=[14,29,44,59,74,89];
+  let best={x:14,y:14},bestScore=-1;
+  for(const x of xs)for(const y of ys){
+    const nearest=occupied.length?Math.min(...occupied.map(o=>Math.hypot((x-o.x)*1.15,y-o.y))):999;
+    if(nearest>=14)return{x,y};
+    if(nearest>bestScore){bestScore=nearest;best={x,y}}
+  }
+  // Even a very crowded recipe gets a deterministic stagger instead of an
+  // exact overlap.
+  const i=occupied.length;
+  return{x:10+(i*13)%80,y:10+(i*17)%80}
+}
+function craftingEnsureDraft(){
+  if(!craftingGraphDraft)craftingGraphDraft=normalizeCraftingGraph(craftingGraphNode);
+  if(!craftingGraphDraft||typeof craftingGraphDraft!=='object')craftingGraphDraft={nodes:[],links:[],failOutput:''};
+  if(!Array.isArray(craftingGraphDraft.nodes))craftingGraphDraft.nodes=[];
+  if(!Array.isArray(craftingGraphDraft.links))craftingGraphDraft.links=[];
+  if(!craftingGraphDraft.nodes.some(n=>n&&n.kind==='product'))craftingGraphDraft.nodes.unshift({id:'product',kind:'product',refId:craftingGraphNode?.id||'',label:craftingGraphNode?.name||$('eName')?.value.trim()||'Product',x:50,y:50});
+  return craftingGraphDraft
+}
+function parseCraftingQuantity(raw){
+  // Quantity fields are authored by humans and often include grouping separators
+  // such as 450 000, 450,000, NBSP, or thin spaces. A native type=number
+  // rejects those strings before our handler can read them, so normalize them
+  // explicitly and only then convert to a number.
+  const text=String(raw??'').trim().replace(/[\s\u00a0\u202f,_']/g,'');
+  if(!text)return 1;
+  const n=Number(text);
+  if(!Number.isFinite(n)||n<=0)return null;
+  return Math.max(1,Math.floor(n))
+}
+function formatCraftingQuantity(value,compact=false){
+  // Crafting quantities are display metadata only. Never expand a quantity into
+  // repeated nodes/elements, and never send it through material acronym logic.
+  const n=Number(value);
+  if(!Number.isFinite(n)||n<=0)return '1';
+  const whole=Math.floor(n);
+  if(compact){
+    const units=['K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc'];
+    if(whole<1000)return String(whole);
+    let v=whole,u=-1;
+    while(v>=1000&&u<units.length-1){v/=1000;u++}
+    let text=v>=100?String(Math.round(v)):v>=10?v.toFixed(1):v.toFixed(2);
+    text=text.replace(/\.0+$/,'').replace(/(\.\d*[1-9])0+$/,'$1');
+    return text+units[u]
+  }
+  // Group manually so this remains safe even if Intl/locale formatting behaves oddly.
+  return String(whole).replace(/\B(?=(\d{3})+(?!\d))/g,' ')
+}
+function commitCraftingWorkspaceInsert(ref,qty){
+  if(!ref)return null;
+  const graph=craftingEnsureDraft(),pos=craftingOpenInsertPosition(),inserted={id:'craft-'+uid(),kind:'ingredient',refId:String(ref.id||''),label:String(ref.name||'Ingredient'),qty:Math.max(1,Math.floor(Number(qty)||1)),x:pos.x,y:pos.y};
+  graph.nodes.push(inserted);craftingInsertRefId=ref.id;window.__craftingSelected=inserted.id;renderCraftingGraph();return inserted
+}
+function addCraftingGraphNode(){
+  const sel=$('craftingAddSelect'),status=$('craftingOpenStatus'),selectedId=sel?.value||craftingInsertRefId,ref=selectedId?byId(selectedId):null;
+  if(!ref){if(status)status.textContent='Choose a Material, Component, Magical Object, or Tool to insert.';sel?.focus();return}
+  const qtyInput=$('craftingAddQty'),qty=parseCraftingQuantity(qtyInput?.value);
+  if(qty===null){if(status)status.textContent='Quantity must be a positive number. Spaces and commas are allowed.';qtyInput?.focus();return}
+  const inserted=commitCraftingWorkspaceInsert(ref,qty);
+  if(!inserted){if(status)status.textContent='Insert failed — the item was not added to the crafting graph.';return}
+  if(sel)sel.value=ref.id;populateCraftingCandidates(true);if(status)status.textContent=`Inserted ${formatCraftingQuantity(qty,false)}× ${ref.name}.`
+}
+function addTemporaryCraftingNode(){
+  const input=$('craftingTemporaryInput'),label=String(input?.value||'').trim();if(!label){input?.focus();return}
+  const graph=craftingEnsureDraft(),pos=craftingOpenInsertPosition(),inserted={id:'temp-'+uid(),kind:'temporary',temporary:true,tempType:$('craftingTemporaryType')?.value||'material',label:label.slice(0,80),x:pos.x,y:pos.y};
+  graph.nodes.push(inserted);window.__craftingSelected=inserted.id;if(input)input.value='';renderCraftingGraph()
+}
+function placeCraftingProcessAt(ev){const graph=craftingEnsureDraft(),canvas=$('craftingGraphCanvas');if(!canvas)return;const r=canvas.getBoundingClientRect(),label=String($('craftingNewProcessName')?.value||'').trim()||'Process';graph.nodes.push({id:'process-'+uid(),kind:'process',label:label.slice(0,64),x:Math.max(4,Math.min(96,(ev.clientX-r.left)/Math.max(1,r.width)*100)),y:Math.max(5,Math.min(95,(ev.clientY-r.top)/Math.max(1,r.height)*100))});renderCraftingGraph()}
+function editCraftingProcess(n){const next=prompt('Process name',n.label||'Process');if(next!==null&&String(next).trim()){n.label=String(next).trim().slice(0,64);renderCraftingGraph()}}
+function convertTemporaryCraftingNode(n){const candidates=craftingCandidateNodes(craftingGraphNode);if(!candidates.length)return;let box=document.getElementById('craftingTempConvert');if(box)box.remove();box=document.createElement('div');box.id='craftingTempConvert';box.className='crafting-convert-popover';box.innerHTML=`<b>Convert “${E.esc(n.label||'Temporary')}”</b><span>Choose the authored object this temporary node becomes.</span><select id="craftingConvertSelect"><option value="">Choose Material / Component / Object / Tool…</option>${candidates.map(x=>`<option value="${x.id}">${E.esc(x.name)} · ${x.type==='material'?'Material':x.isComponent?'Component':x.type==='tool'?'Tool':'Magical Object'}</option>`).join('')}</select><div><button id="craftingConvertCancel" class="ghost">Cancel</button><button id="craftingConvertGo" class="primary">Convert</button></div>`;document.body.appendChild(box);$('craftingConvertCancel').onclick=()=>box.remove();$('craftingConvertGo').onclick=()=>{const ref=byId($('craftingConvertSelect').value);if(!ref)return;n.kind='ingredient';n.refId=ref.id;n.label=ref.name;n.qty=n.qty||1;delete n.temporary;delete n.tempType;box.remove();renderCraftingGraph()}}
+function craftingNodeClick(id){const n=craftingGraphDraft?.nodes?.find(x=>x.id===id);if(craftingTool==='edit'&&n?.kind==='process'){editCraftingProcess(n);return}if(craftingTool!=='link'){window.__craftingSelected=id;renderCraftingGraph();return}if(craftingSelectedIds.has(id))craftingSelectedIds.delete(id);else craftingSelectedIds.add(id);updateCraftingLinkControls();renderCraftingGraph()}
+function confirmCraftingLink(){
+  const graph=craftingEnsureDraft();if(craftingSelectedIds.size<2)return;const ids=[...craftingSelectedIds],map=new Map(graph.nodes.map(n=>[n.id,n])),label=String($('craftingProcessName')?.value||'').trim();
+  if(craftingLinkMode==='direct'){const anchor=ids[0];for(const id of ids.slice(1)){if(anchor===id)continue;if(!graph.links.some(l=>l.direct&&((l.a===anchor&&l.b===id)||(l.a===id&&l.b===anchor))))graph.links.push({id:uid(),a:anchor,b:id,label,direct:true})}}
+  else{const selected=ids.map(id=>map.get(id)).filter(Boolean),product=selected.find(n=>n.kind==='product'),sources=selected.filter(n=>n!==product),px=selected.reduce((s,n)=>s+(Number(n.x)||50),0)/Math.max(1,selected.length),py=selected.reduce((s,n)=>s+(Number(n.y)||50),0)/Math.max(1,selected.length),pid='process-'+uid();graph.nodes.push({id:pid,kind:'process',label:(label||'Process').slice(0,64),x:product?(px+(Number(product.x)||50))/2:px,y:product?(py+(Number(product.y)||50))/2:py});for(const n of sources)graph.links.push({id:uid(),a:n.id,b:pid,label:''});if(product)graph.links.push({id:uid(),a:pid,b:product.id,label:''})}
+  craftingSelectedIds.clear();if($('craftingProcessName'))$('craftingProcessName').value='';updateCraftingLinkControls();renderCraftingGraph()
+}
+function pointSegDistance(px,py,x1,y1,x2,y2){const dx=x2-x1,dy=y2-y1;if(!dx&&!dy)return Math.hypot(px-x1,py-y1);const t=Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/(dx*dx+dy*dy)));return Math.hypot(px-(x1+t*dx),py-(y1+t*dy))}
+function craftingProcessLabelSide(n,map,w,h,used){const text=craftingNodeRefLabel(n),tw=Math.min(150,Math.max(38,text.length*6.3)),th=18,cx=(Number(n.x)||50)/100*w,cy=(Number(n.y)||50)/100*h,candidates=[['top',cx-tw/2,cy-34],['right',cx+16,cy-th/2],['bottom',cx-tw/2,cy+16],['left',cx-tw-16,cy-th/2]],nodeBoxes=[...map.values()].filter(o=>o.id!==n.id&&o.kind!=='process').map(o=>{const x=(Number(o.x)||50)/100*w,y=(Number(o.y)||50)/100*h,ww=84,hh=84;return{x:x-ww/2,y:y-hh/2,w:ww,h:hh}}),lines=(craftingGraphDraft.links||[]).map(l=>[map.get(l.a),map.get(l.b)]).filter(x=>x[0]&&x[1]),overlap=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;let best=candidates[0],bestScore=1e9;for(const q of candidates){const box={x:q[1],y:q[2],w:tw,h:th};let score=0;if(box.x<4||box.y<4||box.x+box.w>w-4||box.y+box.h>h-4)score+=1000;for(const b of nodeBoxes)if(overlap(box,b))score+=350;for(const b of used)if(overlap(box,b))score+=260;const qx=box.x+box.w/2,qy=box.y+box.h/2;for(const [aa,bb] of lines){if(aa.id===n.id||bb.id===n.id)continue;const d=pointSegDistance(qx,qy,(Number(aa.x)||50)/100*w,(Number(aa.y)||50)/100*h,(Number(bb.x)||50)/100*w,(Number(bb.y)||50)/100*h);if(d<18)score+=(18-d)*12}if(score<bestScore){bestScore=score;best=q}}used.push({x:best[1],y:best[2],w:tw,h:th});return best[0]}
+function bindCraftingNodeElement(el,n,map){
+  el.addEventListener('click',ev=>{ev.stopPropagation();craftingNodeClick(n.id)});
+  if(n.kind==='temporary')el.addEventListener('dblclick',ev=>{ev.preventDefault();ev.stopPropagation();convertTemporaryCraftingNode(n)});
+  if(n.kind!=='product')el.addEventListener('pointerdown',ev=>{if(craftingTool!=='move')return;ev.preventDefault();el.setPointerCapture?.(ev.pointerId);const canvas=$('craftingGraphCanvas');if(!canvas)return;const move=mv=>{const rr=canvas.getBoundingClientRect();n.x=Math.max(4,Math.min(96,(mv.clientX-rr.left)/Math.max(1,rr.width)*100));n.y=Math.max(5,Math.min(95,(mv.clientY-rr.top)/Math.max(1,rr.height)*100));el.style.left=n.x+'%';el.style.top=n.y+'%';renderCraftingGraphLinks(map)},up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};window.addEventListener('pointermove',move);window.addEventListener('pointerup',up)})
+}
+function renderCraftingGraphLinks(mapArg){
+  const svg=$('craftingGraphSvg'),graph=craftingGraphDraft;if(!svg||!graph)return;const map=mapArg||new Map((graph.nodes||[]).map(n=>[n.id,n]));svg.replaceChildren();const ns='http://www.w3.org/2000/svg';
+  for(const l of graph.links||[]){const aa=map.get(l.a),bb=map.get(l.b);if(!aa||!bb)continue;const x1=Number(aa.x)||50,y1=Number(aa.y)||50,x2=Number(bb.x)||50,y2=Number(bb.y)||50,line=document.createElementNS(ns,'line');line.setAttribute('x1',x1+'%');line.setAttribute('y1',y1+'%');line.setAttribute('x2',x2+'%');line.setAttribute('y2',y2+'%');svg.appendChild(line);if(l.direct&&l.label){const text=document.createElementNS(ns,'text');text.setAttribute('x',((x1+x2)/2)+'%');text.setAttribute('y',((y1+y2)/2)+'%');text.setAttribute('dy','-7');text.setAttribute('class','craft-link-label');text.textContent=String(l.label);svg.appendChild(text)}}
+}
+function renderCraftingGraph(){
+  const host=$('craftingGraphNodes'),svg=$('craftingGraphSvg');if(!host||!svg)return;const graph=craftingEnsureDraft(),product=graph.nodes.find(n=>n&&n.kind==='product');if(product){product.x=50;product.y=50;product.label=$('eName')?.value.trim()||product.label||'Product'}
+  const clean=graph.nodes.filter(n=>n&&typeof n==='object'&&n.id);graph.nodes=clean;const map=new Map(clean.map(n=>[n.id,n]));renderCraftingGraphLinks(map);
+  const canvas=$('craftingGraphCanvas'),r=canvas?.getBoundingClientRect()||{width:640,height:420},used=[],labelSides=new Map();for(const n of clean)if(n.kind==='process')labelSides.set(n.id,craftingProcessLabelSide(n,map,r.width||640,r.height||420,used));
+  const frag=document.createDocumentFragment();for(const n of clean){n.x=Number.isFinite(Number(n.x))?Math.max(4,Math.min(96,Number(n.x))):50;n.y=Number.isFinite(Number(n.y))?Math.max(5,Math.min(95,Number(n.y))):50;const el=document.createElement('div');el.dataset.craftId=n.id;el.style.left=n.x+'%';el.style.top=n.y+'%';const picked=craftingSelectedIds.has(n.id),selected=window.__craftingSelected===n.id;
+    if(n.kind==='process'){el.className='craft-node process'+(picked?' link-picked':'')+(selected?' selected':'');const dot=document.createElement('span');dot.className='craft-process-dot';const b=document.createElement('b');b.className='craft-process-label '+(labelSides.get(n.id)||'top');b.textContent=craftingNodeRefLabel(n);el.append(dot,b)}
+    else{el.className='craft-node graph-style '+String(n.kind||'ingredient')+(picked?' link-picked':'')+(selected?' selected':'');const ref=n.kind==='product'?craftingGraphNode:byId(n.refId),type=n.kind==='temporary'?'tool':(ref?.type||'magicalObject'),base=window.MAGIC_DATA?.COLORS?.[type]||'#aab4c7';el.style.setProperty('--craft-node-color',base);const b=document.createElement('b');b.textContent=craftingNodeRefLabel(n);el.appendChild(b);if(n.kind==='ingredient'){const em=document.createElement('em'),sp=document.createElement('span'),q=Math.max(1,Number(n.qty)||1);sp.title='Exact: '+formatCraftingQuantity(q,false);sp.textContent=formatCraftingQuantity(q,true)+'×';em.appendChild(sp);el.appendChild(em)}else if(n.kind==='temporary'){const em=document.createElement('em');em.textContent='TEMP · '+String(n.tempType||'other').toUpperCase();el.appendChild(em)}}
+    bindCraftingNodeElement(el,n,map);frag.appendChild(el)
+  }host.replaceChildren(frag);host.onclick=()=>{if(craftingTool==='move'){window.__craftingSelected=null;renderCraftingGraph()}}
+}
+function deleteCraftingSelected(){const id=window.__craftingSelected;if(!id||id==='product'||!craftingGraphDraft)return;craftingGraphDraft.nodes=craftingGraphDraft.nodes.filter(n=>n.id!==id);craftingGraphDraft.links=craftingGraphDraft.links.filter(l=>l.a!==id&&l.b!==id);craftingSelectedIds.delete(id);window.__craftingSelected=null;renderCraftingGraph()}
+function bindCraftingEditor(node){
+  craftingGraphNode=node||null;craftingGraphDraft=normalizeCraftingGraph(node);craftingInsertRefId='';const button=$('toggleCraftingPanel');if(!button)return;
+  const syncHubDisabled=()=>{const hub=value('eHubRole')==='hub';button.disabled=hub;button.title=hub?'Hubs do not have crafting recipes':'';button.closest('.crafting-editor-shell')?.toggleAttribute('data-hub-disabled',hub);if(hub)$('craftingGraphPanel')?.classList.add('hidden')};syncHubDisabled();
+  button.addEventListener('click',()=>{syncHubDisabled();if(button.disabled)return;const name=$('eName')?.value.trim(),status=$('craftingOpenStatus');if(!name){$('eName')?.classList.add('requirement-missing');if(status)status.textContent='Name this Magical Object before opening its Crafting Graph.';return}$('eName')?.classList.remove('requirement-missing');if(status)status.textContent='';const panel=ensureCraftingPanel();panel.classList.remove('hidden');panel.dataset.dragX='0';panel.dataset.dragY='0';applyPanelDragTransform(panel);populateCraftingCandidates();$('craftingFailOutput').value=craftingGraphDraft.failOutput||'';$('craftingFailBody').classList.toggle('hidden',!craftingGraphDraft.failOutput);setCraftingTool('move');renderCraftingGraph();requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel))});
+  $('eName')?.addEventListener('input',()=>{if(craftingGraphDraft?.nodes){const p=craftingGraphDraft.nodes.find(n=>n.kind==='product');if(p)p.label=$('eName').value.trim()||p.label;renderCraftingGraph()}});$('eHubRole')?.addEventListener('change',syncHubDisabled)
+}
+function collectCraftingRecipe(){const graph=craftingGraphDraft||{nodes:[],links:[],failOutput:''},ingredients=graph.nodes.filter(n=>n.kind==='ingredient'&&n.refId).map(n=>({nodeId:n.refId,qty:Number(n.qty)||1})),process=graph.nodes.filter(n=>n.kind==='process').map(n=>n.label).filter(Boolean).join(' → '),failOutput=String(graph.failOutput||$('craftingFailOutput')?.value||'');return {ingredients,process,failOutput,graph:{nodes:graph.nodes.map(n=>({...n})),links:graph.links.map(l=>({...l})),failOutput}}}
+
+
+/* ===== v28 detachable Language Graph Editor ===== */
+let languageGraphDraft=null,languageGraphNode=null,languageGraphTool='move',languageGraphSelected=new Set();
+function normalizeLanguageGraph(node){
+  const raw=node?.languageEditorGraph;
+  if(raw&&Array.isArray(raw.nodes)&&Array.isArray(raw.links))return {nodes:raw.nodes.map(n=>({...n})),links:raw.links.map(l=>({...l}))};
+  return {nodes:[{id:'language-main',kind:'main',label:node?.name||'Language',x:50,y:50}],links:[]}
+}
+function ensureLanguageGraphPanel(){
+  let panel=$('languageGraphPanel');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='languageGraphPanel';panel.className='language-graph-panel detached-editor-panel hidden';panel.innerHTML=`
+    <div class="language-graph-head"><div><div class="eyebrow">Civilization Utility</div><h3>Language Graph</h3></div><div class="special-editor-window-actions"><button type="button" id="minimizeLanguageGraph" class="icon-btn" title="Minimize">—</button><button type="button" id="closeLanguageGraph" class="icon-btn">×</button></div></div>
+    <p class="language-graph-help">The glowing center orb is the language itself. Add Sounds, Symbols, Words, Phrases, Grammar, or custom pieces and connect them.</p>
+    <div class="language-graph-toolbar">
+      <select id="languagePartType"><option>Sound</option><option>Symbol</option><option>Word</option><option>Phrase</option><option>Grammar</option><option>Meaning</option><option>Custom</option></select>
+      <input id="languagePartLabel" placeholder="e.g. /sh/, Hello, Formal greeting">
+      <button type="button" id="languageAddPart" class="ghost">+ Insert</button>
+      <button type="button" id="languageMoveTool" class="active">↔ Move</button><button type="button" id="languageLinkTool">⌁ Link</button>
+      <input id="languageLinkLabel" placeholder="Connection label">
+      <button type="button" id="languageConfirmLink" class="primary" disabled>Confirm</button>
+    </div>
+    <div id="languageGraphHint" class="crafting-link-hint">Move tool · drag language pieces around the orb.</div>
+    <div id="languageGraphCanvas" class="language-graph-canvas"><svg id="languageGraphSvg"></svg><div id="languageGraphNodes"></div></div>
+    <div class="language-graph-foot"><div><button type="button" id="languageDeletePart" class="danger ghost">Delete selected</button><button type="button" id="languageSaveReturn" class="primary">Save & Return</button></div><span id="languageSyncStatus">This graph is stored inside the Language node.</span></div>`;
+  document.body.appendChild(panel);prepareDetachedEditorPanel(panel,panel.querySelector('.language-graph-head'));
+  $('closeLanguageGraph').onclick=()=>panel.classList.add('hidden');
+  $('minimizeLanguageGraph').onclick=()=>minimizeSpecialEditor(panel,'Language Graph');
+  $('languageAddPart').onclick=addLanguageGraphPart;$('languageMoveTool').onclick=()=>setLanguageGraphTool('move');$('languageLinkTool').onclick=()=>setLanguageGraphTool('link');$('languageConfirmLink').onclick=confirmLanguageGraphLink;$('languageDeletePart').onclick=deleteLanguageGraphPart;
+  $('languageSaveReturn').onclick=()=>{const count=languageGraphDraft?.nodes?.filter(n=>n.kind!=='main').length||0;const launcher=$('openLanguageGraphEditor')?.closest('.special-editor-launcher');if(launcher?.querySelector('small'))launcher.querySelector('small').textContent=`${count} language pieces synced from the graph editor.`;panel.classList.add('hidden')};
+  return panel
+}
+function minimizeSpecialEditor(panel,label){
+  if(!panel)return;panel.classList.add('hidden');let tray=$('minimizedEditorsTray');if(!tray){tray=document.createElement('div');tray.id='minimizedEditorsTray';document.body.appendChild(tray)}
+  const old=[...tray.querySelectorAll('[data-special-editor]')].find(x=>x.dataset.specialEditor===panel.id);if(old)return;
+  const chip=document.createElement('button');chip.className='minimized-editor-chip';chip.dataset.specialEditor=panel.id;chip.textContent=label;chip.onclick=()=>{panel.classList.remove('hidden');chip.remove();requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel))};tray.appendChild(chip)
+}
+function setLanguageGraphTool(tool){languageGraphTool=tool;languageGraphSelected.clear();$('languageMoveTool')?.classList.toggle('active',tool==='move');$('languageLinkTool')?.classList.toggle('active',tool==='link');renderLanguageGraph()}
+function addLanguageGraphPart(){if(!languageGraphDraft)return;const label=String($('languagePartLabel')?.value||'').trim(),kind=$('languagePartType')?.value||'Custom';if(!label)return;languageGraphDraft.nodes.push({id:'lang-'+uid(),kind:kind.toLowerCase(),label:label.slice(0,80),x:18+Math.random()*64,y:16+Math.random()*68});$('languagePartLabel').value='';renderLanguageGraph()}
+function languageGraphNodeClick(id){if(languageGraphTool==='link'){languageGraphSelected.has(id)?languageGraphSelected.delete(id):languageGraphSelected.add(id);$('languageConfirmLink').disabled=languageGraphSelected.size<2}else window.__languageGraphSelected=id;renderLanguageGraph()}
+function confirmLanguageGraphLink(){if(!languageGraphDraft||languageGraphSelected.size<2)return;const ids=[...languageGraphSelected],label=String($('languageLinkLabel')?.value||'').trim();for(let i=1;i<ids.length;i++){if(!languageGraphDraft.links.some(l=>(l.a===ids[0]&&l.b===ids[i])||(l.a===ids[i]&&l.b===ids[0])))languageGraphDraft.links.push({id:uid(),a:ids[0],b:ids[i],label})}languageGraphSelected.clear();$('languageConfirmLink').disabled=true;$('languageLinkLabel').value='';renderLanguageGraph()}
+function deleteLanguageGraphPart(){const id=window.__languageGraphSelected;if(!id||id==='language-main'||!languageGraphDraft)return;languageGraphDraft.nodes=languageGraphDraft.nodes.filter(n=>n.id!==id);languageGraphDraft.links=languageGraphDraft.links.filter(l=>l.a!==id&&l.b!==id);window.__languageGraphSelected=null;renderLanguageGraph()}
+function renderLanguageGraph(){
+  const host=$('languageGraphNodes'),svg=$('languageGraphSvg');if(!host||!svg||!languageGraphDraft)return;const main=languageGraphDraft.nodes.find(n=>n.kind==='main');if(main){main.x=50;main.y=50;main.label=$('eName')?.value.trim()||main.label||'Language'}
+  const map=new Map(languageGraphDraft.nodes.map(n=>[n.id,n]));svg.innerHTML=languageGraphDraft.links.map(l=>{const aa=map.get(l.a),bb=map.get(l.b);if(!aa||!bb)return'';return`<line x1="${aa.x}%" y1="${aa.y}%" x2="${bb.x}%" y2="${bb.y}%"></line>${l.label?`<text x="${(aa.x+bb.x)/2}%" y="${(aa.y+bb.y)/2}%" dy="-6">${E.esc(l.label)}</text>`:''}`}).join('');
+  host.innerHTML=languageGraphDraft.nodes.map(n=>`<div class="language-graph-node ${n.kind==='main'?'main-orb':''} ${languageGraphSelected.has(n.id)?'link-picked':''} ${window.__languageGraphSelected===n.id?'selected':''}" data-language-part="${n.id}" style="left:${n.x}%;top:${n.y}%"><small>${n.kind==='main'?'LANGUAGE':E.esc(n.kind.toUpperCase())}</small><b>${E.esc(n.label)}</b></div>`).join('');
+  host.querySelectorAll('[data-language-part]').forEach(el=>{const id=el.dataset.languagePart,n=map.get(id);el.onclick=e=>{e.stopPropagation();languageGraphNodeClick(id)};if(n.kind!=='main')el.onpointerdown=e=>{if(languageGraphTool!=='move')return;e.preventDefault();const canvas=$('languageGraphCanvas'),move=mv=>{const r=canvas.getBoundingClientRect();n.x=Math.max(5,Math.min(95,(mv.clientX-r.left)/r.width*100));n.y=Math.max(7,Math.min(93,(mv.clientY-r.top)/r.height*100));renderLanguageGraph()},up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up)};window.addEventListener('pointermove',move);window.addEventListener('pointerup',up)}})
+}
+function bindLanguageGraphEditor(node){
+  const btn=$('openLanguageGraphEditor');if(!btn)return;languageGraphNode=node||null;languageGraphDraft=normalizeLanguageGraph(node);
+  btn.onclick=()=>{const panel=ensureLanguageGraphPanel();panel.classList.remove('hidden');panel.dataset.dragX='0';panel.dataset.dragY='0';applyPanelDragTransform(panel);setLanguageGraphTool('move');renderLanguageGraph();requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel))}
+}
+
+function updateDiseaseKindEditor(){
+  const kind=$('eDiseaseKind')?.value||'Disease';
+  const isSymptom=kind==='Symptom';
+
+  const diseaseOnlyIds=[
+    'eDiseaseSpread',
+    'eDiseaseMortality',
+    'eDiseaseCure',
+    'eDiseaseOrigin'
+  ];
+
+  diseaseOnlyIds.forEach(id=>{
+    const el=$(id);
+    if(el?.closest('label'))el.closest('label').classList.toggle('hidden',isSymptom)
+  });
+
+  document.querySelector('.disease-symptom-picker')?.classList.toggle('hidden',isSymptom);
+  document.querySelector('.pathogen-genome-editor')?.classList.toggle('hidden',isSymptom);
+
+  // Symptoms use Severity + Duration + Description.
+  // Diseases use the full epidemiology form plus selected Symptoms.
+  const hint=$('editorBody')?.querySelector('.editor-hint');
+  if(hint){
+    hint.innerHTML=isSymptom
+      ?'<b>Symptom.</b> Define a reusable manifestation such as fever, coughing, hallucinations, magical fatigue, or crystal growth. Symptoms can be attached to multiple Diseases.'
+      :'<b>Disease.</b> Define spread, mortality, treatment, origin, and at least one reusable Symptom.'
+  }
+}
+
+
+function normalizeCreatorSettings(raw){
+  const base=freshMagicCreator(),src=raw&&typeof raw==='object'?raw:{};
+  const out={...base,...src};
+  out.categories=Array.isArray(src.categories)?src.categories.map((c,i)=>({id:String(c.id||`category${i+1}`).replace(/[^a-zA-Z0-9_-]/g,''),label:String(c.label||c.id||`Category ${i+1}`),color:/^#[0-9a-f]{6}$/i.test(String(c.color||''))?String(c.color):'#8aa4ff',parentId:String(c.parentId||'')})):base.categories;
+  out.nodeTypes=Array.isArray(src.nodeTypes)&&src.nodeTypes.length?src.nodeTypes.map((t,i)=>({id:String(t.id||`custom${i+1}`).replace(/[^a-zA-Z0-9_-]/g,''),label:String(t.label||t.id||`Type ${i+1}`),icon:String(t.icon||'◆').slice(0,4),description:String(t.description||''),enabled:t.enabled!==false,builtin:!!t.builtin,useGeneratedEditor:!!t.useGeneratedEditor,category:String(t.category||''),fields:Array.isArray(t.fields)?t.fields.map((f,j)=>({key:String(f.key||`field${j+1}`).replace(/[^a-zA-Z0-9_-]/g,''),label:String(f.label||f.key||`Field ${j+1}`),kind:['input','textarea','number','select'].includes(f.kind)?f.kind:'input',placeholder:String(f.placeholder||''),options:Array.isArray(f.options)?f.options.map(String):String(f.options||'').split(',').map(x=>x.trim()).filter(Boolean)})):[]})):base.nodeTypes;
+  out.linkTypes=Array.isArray(src.linkTypes)?src.linkTypes.map((l,i)=>({id:String(l.id||`link${i+1}`).replace(/[^a-zA-Z0-9_-]/g,''),label:String(l.label||l.id||`Link ${i+1}`),enabled:l.enabled!==false,auto:!!l.auto,fromType:String(l.fromType||''),toType:String(l.toType||''),sourceField:String(l.sourceField||''),direction:['forward','backward','both','none'].includes(l.direction)?l.direction:'forward',category:String(l.category||''),style:['solid','dashed','dotted'].includes(l.style)?l.style:'solid',thickness:Math.max(.5,Math.min(6,Number(l.thickness)||1.6)),color:/^#[0-9a-f]{6}$/i.test(String(l.color||''))?String(l.color):'#cfd7ff',matchMode:['contains','exact','list'].includes(l.matchMode)?l.matchMode:'contains'})):base.linkTypes.map(l=>({...l,auto:false,fromType:'',toType:'',sourceField:'',direction:'forward'}));
+  out.timelineRules=Array.isArray(src.timelineRules)?src.timelineRules.map((r,i)=>({id:String(r.id||`timeline${i+1}`),name:String(r.name||`Event Rule ${i+1}`),enabled:r.enabled!==false,nodeType:String(r.nodeType||''),kind:String(r.kind||'Event'),title:String(r.title||'{node} changes history'),text:String(r.text||'{node} becomes important to {civilization}.'),cause:String(r.cause||'{node} exists in the creator graph'),tone:String(r.tone||'normal'),impact:{knowledge:Number(r.impact?.knowledge)||0,economy:Number(r.impact?.economy)||0,technology:Number(r.impact?.technology)||0,stability:Number(r.impact?.stability)||0,danger:Number(r.impact?.danger)||0}})):[];
+  return out
+}
+function creatorType(type){return creatorSettings.nodeTypes.find(t=>t.id===type)}
+function generatedCreatorType(type){if(type==='civilizationUtil')return null;const t=creatorType(type);return t&&(t.useGeneratedEditor||!t.builtin)?t:null}
+function creatorTemplate(str,node){return String(str||'').replace(/\{node\}/g,node?.name||'Unknown').replace(/\{year\}/g,String(simState?.year??0)).replace(/\{civilization\}/g,String(simState?.civ||'Civilization'))}
+function applyCreatorBranding(){
+  const title=$('creatorSystemTitle'),label=$('creatorVersionLabel');
+  if(title)title.textContent=creatorSettings.title||`${creatorSettings.name||'Custom'} Sandbox`;
+  if(label)label.textContent=`V28.7bl · ${creatorSettings.name||'Custom'} creator`;
+  document.title=`${creatorSettings.title||creatorSettings.name||'Creator Sandbox'} v28.7bl`;
+  const p=$('activeCreatorPresetName');if(p)p.textContent=creatorSettings.name||'Custom';
+  renderCreatorCreateMenu();refreshCreatorLinkTypes()
+}
+function renderCreatorCreateMenu(){
+  const grid=document.querySelector('#createMenu .create-grid');if(!grid)return;
+  const builtins=new Map(MAGIC_CREATOR_TYPES.map(x=>[x[0],x]));
+  for(const [id] of builtins){
+    const btn=id==='civilizationUtil'?$('createCivilizationUtil'):grid.querySelector(`[data-create="${id}"]`),def=creatorSettings.nodeTypes.find(t=>t.id===id);
+    if(!btn)continue;
+    btn.classList.toggle('hidden',def?.enabled===false||!def);
+    if(def){btn.querySelector('b').textContent=def.icon||'◆';btn.querySelector('span').textContent=def.label||id;btn.querySelector('small').textContent=def.description||''}
+  }
+  grid.querySelectorAll('.creator-custom-create').forEach(x=>x.remove());
+  creatorSettings.nodeTypes.filter(t=>!builtins.has(t.id)&&t.enabled!==false).forEach(def=>{
+    const b=document.createElement('button');b.className='creator-custom-create';b.dataset.create=def.id;b.title=def.label;
+    b.innerHTML=`<b>${E.esc(def.icon||'◆')}</b><span>${E.esc(def.label)}</span><small>${E.esc(def.description||'Custom creator node.')}</small>`;
+    b.onclick=()=>{creatingHub=!!$('createHubToggle')?.checked;openEditor(def.id)};grid.appendChild(b)
+  })
+}
+function creatorLinkDef(id){return creatorSettings.linkTypes.find(l=>l.id===id)}
+function refreshCreatorLinkTypes(){
+  const sel=$('linkType');if(!sel)return;
+  const current=sel.value;
+  sel.innerHTML=creatorSettings.linkTypes.filter(x=>x.enabled!==false).map(x=>`<option value="${E.esc(x.id)}">${E.esc(x.label)}</option>`).join('');
+  if([...sel.options].some(o=>o.value===current))sel.value=current;
+  else if(sel.options.length)sel.selectedIndex=0
+}
+function generatedEditorHtml(def,node){
+  const f=E.field.bind(E);let html=`<div class="editor-grid"><div class="editor-hint full"><b>${E.esc(def.label)} generated editor.</b> This form comes from the active V25 Creator Definition.</div>`;
+  html+=f(`${def.label} name`,'eName',node?.name||'',false,'input',`placeholder="e.g. ${E.esc(def.label)}"`);
+  for(const field of def.fields||[]){
+    const id='creatorField_'+field.key,val=node?.creatorFields?.[field.key]??node?.[field.key]??'';
+    if(field.kind==='textarea')html+=f(field.label,id,val,true,'textarea',`placeholder="${E.esc(field.placeholder||'')}"`);
+    else if(field.kind==='select')html+=f(field.label,id,(field.options||[]).map(o=>`<option ${String(val)===String(o)?'selected':''}>${E.esc(o)}</option>`).join(''),false,'select');
+    else if(field.kind==='number')html+=f(field.label,id,val,false,'input',`type="number" placeholder="${E.esc(field.placeholder||'')}"`);
+    else html+=f(field.label,id,val,false,'input',`placeholder="${E.esc(field.placeholder||'')}"`)
+  }
+  html+=f('Description','eDescription',node?.description||'',true,'textarea','placeholder="Describe this node."');
+  return html
+}
+function saveGeneratedCreatorNode(type){
+  const def=generatedCreatorType(type),name=value('eName');if(!def||!name)return false;
+  checkpointHistory();let n=editingId?byId(editingId):null;
+  if(!n){const a=Math.random()*Math.PI*2,d=220+Math.random()*180;n={id:uid(),type,name,x:Math.cos(a)*d,y:Math.sin(a)*d,vx:0,vy:0,r:16};nodes.push(n)}
+  n.type=type;n.name=name;n.description=value('eDescription');n.creatorFields={};
+  for(const field of def.fields||[]){const v=value('creatorField_'+field.key);n.creatorFields[field.key]=field.kind==='number'?(Number(v)||0):v;n[field.key]=n.creatorFields[field.key]}
+  if($('eHubRole'))setNodeHubRole(n,value('eHubRole'));
+  applyUniversalCategoryToNode(n);
+  closeEditor();rebuildEdges();ensureTechnologyConnections();renderLibraries();renderTechnologyTree();organize();selectNode(n);graph.fit();save();return true
+}
+function creatorNodeTypeOptions(selected=''){return creatorDraft.nodeTypes.filter(t=>t.enabled!==false).map(t=>`<option value="${E.esc(t.id)}" ${t.id===selected?'selected':''}>${E.esc(t.label)}</option>`).join('')}
+function creatorCategoryOptions(selected=''){return `<option value="">Uncategorized</option>`+(creatorDraft.categories||[]).map(c=>`<option value="${E.esc(c.id)}" ${c.id===selected?'selected':''}>${E.esc(c.label)}</option>`).join('')}
+function creatorFieldRow(field={}){return `<div class="creator-field-row"><input class="cf-key" value="${E.esc(field.key||'field')}" placeholder="key"><input class="cf-label" value="${E.esc(field.label||'Field')}" placeholder="Label"><select class="cf-kind">${['input','textarea','number','select'].map(k=>`<option ${field.kind===k?'selected':''}>${k}</option>`).join('')}</select><input class="cf-options" value="${E.esc((field.options||[]).join(', '))}" placeholder="Select options"><input class="cf-placeholder" value="${E.esc(field.placeholder||'')}" placeholder="Placeholder"><button type="button" class="creator-mini-danger">×</button></div>`}
+function renderCreatorEditor(){
+  creatorDraft=normalizeCreatorSettings(creatorDraft||creatorSettings);$('creatorName').value=creatorDraft.name||'';$('creatorTitle').value=creatorDraft.title||'';$('creatorPreset').value=creatorDraft.preset==='magic'?'magic':'custom';
+  const types=$('creatorTypesList');types.innerHTML=creatorDraft.nodeTypes.map((t,i)=>`<article class="creator-item" data-creator-type="${i}"><div class="creator-item-top"><input class="ct-icon" value="${E.esc(t.icon)}" maxlength="4"><input class="ct-label" value="${E.esc(t.label)}"><input class="ct-id" value="${E.esc(t.id)}" ${t.builtin?'readonly':''}><select class="ct-category" title="Category">${creatorCategoryOptions(t.category)}</select><label class="creator-check"><input class="ct-enabled" type="checkbox" ${t.enabled!==false?'checked':''}>Enabled</label><label class="creator-check"><input class="ct-generated" type="checkbox" ${t.useGeneratedEditor||!t.builtin?'checked':''} ${t.id==='civilizationUtil'?'disabled':''}>Generated Editor</label><button class="creator-danger ct-delete" ${t.builtin?'disabled title="Built-in type can be disabled instead"':''}>Delete</button></div><textarea class="ct-description" rows="2" placeholder="Description">${E.esc(t.description||'')}</textarea><div class="creator-fields"><div class="creator-fields-head"><b>Editor fields</b><button type="button" class="ghost ct-add-field">+ Field</button></div><div class="creator-field-list">${(t.fields||[]).map(creatorFieldRow).join('')}</div></div></article>`).join('');
+  const categories=$('creatorCategoriesList');
+  const categoryTools=categories?.parentElement?.querySelector('.creator-category-hierarchy-tools')||document.createElement('div');
+  if(categories&&!categoryTools.classList.contains('creator-category-hierarchy-tools')){categoryTools.className='creator-category-hierarchy-tools';categoryTools.innerHTML='<div><b>Category Hierarchy</b><small>Choose any category and nest it under any other category. Nodes inherit this hierarchy automatically.</small></div><button type="button" id="openCategoryHierarchy" class="primary">◎ Manage Hierarchy</button>';categories.before(categoryTools)}
+  categories.innerHTML=(creatorDraft.categories||[]).map((cat,i)=>`<article class="creator-item creator-category-item" data-creator-category="${i}"><input class="cc-label" value="${E.esc(cat.label)}" placeholder="Category name"><input class="cc-id" value="${E.esc(cat.id)}" placeholder="category-id"><select class="cc-parent" title="Branches from"><option value="">Top-level</option>${(creatorDraft.categories||[]).filter((_,j)=>j!==i).map(p=>`<option value="${E.esc(p.id)}" ${cat.parentId===p.id?'selected':''}>↳ ${E.esc(p.label)}</option>`).join('')}</select><input class="cc-color" type="color" value="${E.esc(cat.color||'#8aa4ff')}"><button class="creator-danger cc-delete">Delete</button></article>`).join('');
+  const links=$('creatorLinksList');links.innerHTML=creatorDraft.linkTypes.map((l,i)=>`<article class="creator-item creator-link-item" data-creator-link="${i}"><div class="creator-link-main"><input class="cl-label" value="${E.esc(l.label)}" placeholder="Label"><input class="cl-id" value="${E.esc(l.id)}" placeholder="id"><select class="cl-category" title="Connection category">${creatorCategoryOptions(l.category)}</select><label class="creator-check"><input class="cl-enabled" type="checkbox" ${l.enabled!==false?'checked':''}>Enabled</label><label class="creator-check"><input class="cl-auto" type="checkbox" ${l.auto?'checked':''}>Automatic</label><button class="creator-danger cl-delete">Delete</button></div><div class="creator-link-style"><label>Line style<select class="cl-style">${['solid','dashed','dotted'].map(v=>`<option ${l.style===v?'selected':''}>${v}</option>`).join('')}</select></label><label>Thickness<input class="cl-thickness" type="number" min="0.5" max="6" step="0.1" value="${l.thickness||1.6}"></label><label>Color<input class="cl-color" type="color" value="${E.esc(l.color||'#cfd7ff')}"></label><label>Auto match<select class="cl-match">${[['contains','Contains target name'],['exact','Exact target name'],['list','Comma/semicolon list']].map(([v,n])=>`<option value="${v}" ${l.matchMode===v?'selected':''}>${n}</option>`).join('')}</select></label></div><div class="creator-link-rule"><label>Source type<select class="cl-from"><option value="">Any</option>${creatorNodeTypeOptions(l.fromType)}</select></label><label>Target type<select class="cl-to"><option value="">Any</option>${creatorNodeTypeOptions(l.toType)}</select></label><label>Source field key<input class="cl-field" value="${E.esc(l.sourceField||'')}" placeholder="e.g. fuel"></label><label>Direction<select class="cl-direction">${['forward','backward','both','none'].map(d=>`<option ${l.direction===d?'selected':''}>${d}</option>`).join('')}</select></label><small>Automatic rules can match by contains, exact name, or a comma/semicolon-separated list. Style settings are used for auto-links and as defaults for new manual links.</small></div></article>`).join('');
+  const timeline=$('creatorTimelineList');timeline.innerHTML=creatorDraft.timelineRules.map((r,i)=>`<article class="creator-item creator-event-item" data-creator-event="${i}"><div class="creator-item-top"><input class="ce-name" value="${E.esc(r.name)}" placeholder="Rule name"><select class="ce-node-type"><option value="">Any node</option>${creatorNodeTypeOptions(r.nodeType)}</select><label class="creator-check"><input class="ce-enabled" type="checkbox" ${r.enabled!==false?'checked':''}>Enabled</label><button class="creator-danger ce-delete">Delete</button></div><div class="creator-event-grid"><label>Event kind<input class="ce-kind" value="${E.esc(r.kind)}"></label><label>Tone<select class="ce-tone">${['normal','major','breakthrough','crisis','pale-good','pale-bad'].map(t=>`<option ${r.tone===t?'selected':''}>${t}</option>`).join('')}</select></label><label class="full">Title template<input class="ce-title" value="${E.esc(r.title)}"></label><label class="full">Event text<textarea class="ce-text" rows="2">${E.esc(r.text)}</textarea></label><label class="full">Cause / reasoning<textarea class="ce-cause" rows="2">${E.esc(r.cause)}</textarea></label><label>Knowledge<input class="ce-impact" data-impact="knowledge" type="number" value="${r.impact?.knowledge||0}"></label><label>Economy<input class="ce-impact" data-impact="economy" type="number" value="${r.impact?.economy||0}"></label><label>Technology<input class="ce-impact" data-impact="technology" type="number" value="${r.impact?.technology||0}"></label><label>Stability<input class="ce-impact" data-impact="stability" type="number" value="${r.impact?.stability||0}"></label><label>Danger<input class="ce-impact" data-impact="danger" type="number" value="${r.impact?.danger||0}"></label></div></article>`).join('');
+  $('creatorDefinitionJson').value=JSON.stringify(creatorDraft,null,2);bindCreatorEditorRows();$('openCategoryHierarchy')?.addEventListener('click',openCategoryHierarchyPanel)
+}
+function harvestCreatorVisual(){
+  if(!creatorDraft)return;
+  creatorDraft.name=$('creatorName').value.trim()||'Custom Creator';creatorDraft.title=$('creatorTitle').value.trim()||`${creatorDraft.name} Sandbox`;creatorDraft.preset=$('creatorPreset').value;
+  document.querySelectorAll('[data-creator-type]').forEach(row=>{const t=creatorDraft.nodeTypes[+row.dataset.creatorType];if(!t)return;t.icon=row.querySelector('.ct-icon').value||'◆';t.label=row.querySelector('.ct-label').value||t.id;t.id=row.querySelector('.ct-id').value.replace(/[^a-zA-Z0-9_-]/g,'')||t.id;t.category=row.querySelector('.ct-category')?.value||'';t.enabled=row.querySelector('.ct-enabled').checked;t.useGeneratedEditor=row.querySelector('.ct-generated').checked;t.description=row.querySelector('.ct-description').value;t.fields=[...row.querySelectorAll('.creator-field-row')].map(fr=>({key:fr.querySelector('.cf-key').value.replace(/[^a-zA-Z0-9_-]/g,'')||'field',label:fr.querySelector('.cf-label').value||'Field',kind:fr.querySelector('.cf-kind').value,options:fr.querySelector('.cf-options').value.split(',').map(x=>x.trim()).filter(Boolean),placeholder:fr.querySelector('.cf-placeholder').value}))});
+  creatorDraft.categories=[...document.querySelectorAll('[data-creator-category]')].map((row,i)=>({id:row.querySelector('.cc-id').value.replace(/[^a-zA-Z0-9_-]/g,'')||`category${i+1}`,label:row.querySelector('.cc-label').value||`Category ${i+1}`,color:row.querySelector('.cc-color').value||'#8aa4ff',parentId:row.querySelector('.cc-parent')?.value||''}));
+  document.querySelectorAll('[data-creator-link]').forEach(row=>{const l=creatorDraft.linkTypes[+row.dataset.creatorLink];if(!l)return;l.label=row.querySelector('.cl-label').value||l.id;l.id=row.querySelector('.cl-id').value.replace(/[^a-zA-Z0-9_-]/g,'')||l.id;l.enabled=row.querySelector('.cl-enabled').checked;l.auto=!!row.querySelector('.cl-auto')?.checked;l.fromType=row.querySelector('.cl-from')?.value||'';l.toType=row.querySelector('.cl-to')?.value||'';l.sourceField=row.querySelector('.cl-field')?.value.trim()||'';l.direction=row.querySelector('.cl-direction')?.value||'forward';l.category=row.querySelector('.cl-category')?.value||'';l.style=row.querySelector('.cl-style')?.value||'solid';l.thickness=Math.max(.5,Math.min(6,+row.querySelector('.cl-thickness')?.value||1.6));l.color=row.querySelector('.cl-color')?.value||'#cfd7ff';l.matchMode=row.querySelector('.cl-match')?.value||'contains'});
+  document.querySelectorAll('[data-creator-event]').forEach(row=>{const r=creatorDraft.timelineRules[+row.dataset.creatorEvent];if(!r)return;r.name=row.querySelector('.ce-name').value||'Event Rule';r.nodeType=row.querySelector('.ce-node-type').value;r.enabled=row.querySelector('.ce-enabled').checked;r.kind=row.querySelector('.ce-kind').value||'Event';r.tone=row.querySelector('.ce-tone').value;r.title=row.querySelector('.ce-title').value;r.text=row.querySelector('.ce-text').value;r.cause=row.querySelector('.ce-cause').value;r.impact={};row.querySelectorAll('.ce-impact').forEach(el=>r.impact[el.dataset.impact]=Number(el.value)||0)});
+  $('creatorDefinitionJson').value=JSON.stringify(creatorDraft,null,2)
+}
+function bindCreatorEditorRows(){
+  document.querySelectorAll('.ct-add-field').forEach(btn=>btn.onclick=()=>{const row=btn.closest('[data-creator-type]'),list=row.querySelector('.creator-field-list');list.insertAdjacentHTML('beforeend',creatorFieldRow({key:'field',label:'Field',kind:'input'}));bindCreatorEditorRows()});
+  document.querySelectorAll('.creator-mini-danger').forEach(btn=>btn.onclick=()=>btn.closest('.creator-field-row')?.remove());
+  document.querySelectorAll('.ct-delete:not([disabled])').forEach(btn=>btn.onclick=()=>{harvestCreatorVisual();creatorDraft.nodeTypes.splice(+btn.closest('[data-creator-type]').dataset.creatorType,1);renderCreatorEditor()});
+  document.querySelectorAll('.cc-delete').forEach(btn=>btn.onclick=()=>{harvestCreatorVisual();const row=btn.closest('[data-creator-category]'),removed=creatorDraft.categories.splice(+row.dataset.creatorCategory,1)[0];if(removed){creatorDraft.nodeTypes.forEach(t=>{if(t.category===removed.id)t.category=''});creatorDraft.linkTypes.forEach(l=>{if(l.category===removed.id)l.category=''});creatorDraft.categories.forEach(c=>{if(c.parentId===removed.id)c.parentId=''})}renderCreatorEditor()});
+  document.querySelectorAll('.cl-delete').forEach(btn=>btn.onclick=()=>{harvestCreatorVisual();creatorDraft.linkTypes.splice(+btn.closest('[data-creator-link]').dataset.creatorLink,1);renderCreatorEditor()});
+  document.querySelectorAll('.ce-delete').forEach(btn=>btn.onclick=()=>{harvestCreatorVisual();creatorDraft.timelineRules.splice(+btn.closest('[data-creator-event]').dataset.creatorEvent,1);renderCreatorEditor()})
+}
+
+function ensureCategoryHierarchyPanel(){
+  let panel=$('categoryHierarchyPanel');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='categoryHierarchyPanel';panel.className='category-hierarchy-panel detached-editor-panel hidden';panel.innerHTML=`
+    <div class="category-hierarchy-head"><div><div class="eyebrow">Creator Editor</div><h3>Category Hierarchy</h3></div><button id="closeCategoryHierarchy" class="icon-btn">×</button></div>
+    <p>Every category can be top-level or a subcategory of any other category. Circular loops are prevented automatically.</p>
+    <div id="categoryHierarchyRows" class="category-hierarchy-rows"></div>
+    <div class="special-editor-savebar"><span>Subcategory circles will stay inside their parent category on the main graph.</span><button id="categoryHierarchyDone" class="primary">Apply & Return</button></div>`;
+  document.body.appendChild(panel);prepareDetachedEditorPanel(panel,panel.querySelector('.category-hierarchy-head'));$('closeCategoryHierarchy').onclick=()=>panel.classList.add('hidden');$('categoryHierarchyDone').onclick=()=>{harvestCategoryHierarchyPanel();panel.classList.add('hidden');renderCreatorEditor()};return panel
+}
+function categoryWouldCycle(catId,parentId){
+  if(!catId||!parentId)return false;if(catId===parentId)return true;const map=new Map((creatorDraft.categories||[]).map(c=>[c.id,c.parentId||'']));map.set(catId,parentId);let cur=parentId,seen=new Set([catId]);while(cur){if(seen.has(cur))return true;seen.add(cur);cur=map.get(cur)||''}return false
+}
+function renderCategoryHierarchyPanel(){
+  const host=$('categoryHierarchyRows');if(!host)return;const cats=creatorDraft.categories||[];
+  host.innerHTML=cats.map(cat=>`<div class="category-hierarchy-row" data-hierarchy-category="${E.esc(cat.id)}"><span class="category-hierarchy-swatch" style="background:${E.esc(cat.color||'#8aa4ff')}"></span><b>${E.esc(cat.label)}</b><span>is a subcategory of</span><select><option value="">Nothing — top level</option>${cats.filter(p=>p.id!==cat.id).map(p=>`<option value="${E.esc(p.id)}" ${cat.parentId===p.id?'selected':''}>${E.esc(p.label)}</option>`).join('')}</select></div>`).join('');
+  host.querySelectorAll('select').forEach(sel=>sel.onchange=()=>{const row=sel.closest('[data-hierarchy-category]'),id=row.dataset.hierarchyCategory;if(categoryWouldCycle(id,sel.value)){sel.value=(creatorDraft.categories.find(c=>c.id===id)?.parentId||'');sel.classList.add('requirement-missing');setTimeout(()=>sel.classList.remove('requirement-missing'),900)}})
+}
+function harvestCategoryHierarchyPanel(){
+  document.querySelectorAll('[data-hierarchy-category]').forEach(row=>{const cat=creatorDraft.categories.find(c=>c.id===row.dataset.hierarchyCategory),parent=row.querySelector('select')?.value||'';if(cat&&!categoryWouldCycle(cat.id,parent))cat.parentId=parent})
+}
+function openCategoryHierarchyPanel(){harvestCreatorVisual();const panel=ensureCategoryHierarchyPanel();renderCategoryHierarchyPanel();panel.classList.remove('hidden');requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel))}
+function creatorParentCategoryForNode(n){
+  if(!n?.category)return'';const q=String(n.category).trim().toLowerCase(),cat=(creatorSettings.categories||[]).find(c=>String(c.id).toLowerCase()===q||String(c.label).trim().toLowerCase()===q);if(!cat?.parentId)return'';const p=(creatorSettings.categories||[]).find(x=>x.id===cat.parentId);return p?.label||p?.id||''
+}
+function syncNodeCategoryHierarchy(){
+  for(const n of nodes){if(n.virtual||n.isHub)continue;const inherited=creatorParentCategoryForNode(n);if(inherited)n.parentCategory=inherited}
+}
+
+function openCreatorEditorModal(){creatorDraft=normalizeCreatorSettings(JSON.parse(JSON.stringify(creatorSettings)));renderCreatorEditor();$('addonsModal').classList.add('hidden');$('creatorEditorModal').classList.remove('hidden')}
+function applyCreatorAutomaticLinks(){
+  for(const rule of creatorSettings.linkTypes||[]){
+    if(rule.enabled===false||!rule.auto||!rule.sourceField)continue;
+    const sources=nodes.filter(n=>!n.virtual&&!n.isHub&&(!rule.fromType||n.type===rule.fromType));
+    const targets=nodes.filter(n=>!n.virtual&&!n.isHub&&(!rule.toType||n.type===rule.toType));
+    for(const a of sources){
+      const raw=a.creatorFields?.[rule.sourceField]??a[rule.sourceField]??'';
+      const hay=String(raw).trim().toLowerCase();if(!hay)continue;
+      const list=hay.split(/[;,|]/).map(x=>x.trim()).filter(Boolean);
+      for(const b of targets){if(a===b||!b.name)continue;const targetName=String(b.name).trim().toLowerCase();const matched=rule.matchMode==='exact'?hay===targetName:rule.matchMode==='list'?list.includes(targetName):hay.includes(targetName);if(!matched)continue;
+        const exists=edges.some(e=>!e.blocked&&((e.a===a.id&&e.b===b.id)||(e.a===b.id&&e.b===a.id))&&(e.creatorRuleId===rule.id||e.manual));
+        if(!exists&&!isBlockedAutomatic(a.id,b.id,rule.id))edges.push({id:uid(),a:a.id,b:b.id,type:rule.id,linkType:rule.id,label:rule.label||rule.id,direction:rule.direction||'forward',creatorAuto:true,creatorRuleId:rule.id,strength:rule.style||'solid',thickness:rule.thickness||1.6,color:rule.color||'#cfd7ff',creatorCategory:rule.category||''})
+      }
+    }
+  }
+}
+function addCreatorTimelineEvents(pool){
+  for(const rule of creatorSettings.timelineRules||[]){
+    if(rule.enabled===false)continue;const candidates=rule.nodeType?nodes.filter(n=>n.type===rule.nodeType&&!n.isHub&&!n.virtual):nodes.filter(n=>!n.isHub&&!n.virtual&&n.type!=='mana');if(!candidates.length)continue;
+    pool.push(()=>{const node=pick(candidates);return event(rule.kind||'Event',creatorTemplate(rule.title,node),creatorTemplate(rule.text,node),[node?.name||'Creator Event',rule.name||'Custom'],{...(rule.impact||{})},rule.tone||'normal',[creatorTemplate(rule.cause,node),`Creator rule: ${rule.name||'Custom event'}`].filter(Boolean))})
+  }
+  const failedSpells=nodes.filter(n=>n.type==='spell'&&!n.isHub&&String(n.failOutput||'').trim());
+  if(failedSpells.length)pool.push(()=>{const s=pick(failedSpells);return event('Spell Failure',`${s.name} fails during use`,s.failOutput,[s.name,'Failure'],{danger:Math.max(1,Math.round(Math.max(0,-(s.morality||0))/18)),knowledge:2},(s.morality||0)<-15?'crisis':'normal',[`${s.name} has a defined fail output`])});
+  const failedCraft=nodes.filter(n=>n.type==='magicalObject'&&!n.isHub&&String(n.craftingRecipe?.failOutput||'').trim());
+  if(failedCraft.length)pool.push(()=>{const o=pick(failedCraft);return event('Crafting Failure',`${o.name} production fails`,o.craftingRecipe.failOutput,[o.name,'Crafting','Failure'],{economy:-2,knowledge:2,danger:1},'normal',[`${o.name} has a crafting failure output`])});
+  const helperCraft=nodes.filter(n=>n.type==='magicalObject'&&!n.isHub&&n.craftingRecipe?.graph?.nodes?.some(x=>x.kind==='temporary'));
+  if(helperCraft.length)pool.push(()=>{const o=pick(helperCraft),helpers=o.craftingRecipe.graph.nodes.filter(x=>x.kind==='temporary').map(x=>x.label).slice(0,3);return event('Crafting Innovation',`${o.name} process is refined`,`Craftspeople improve production of ${o.name} by using temporary aids such as ${helpers.join(', ')} without consuming them as permanent ingredients.`,[o.name,'Crafting','Process'],{economy:3,technology:2,knowledge:2},'breakthrough',[`Recipe contains temporary crafting helpers`])});
+  const located=nodes.filter(n=>n.type==='material'&&n.materialPlaceId&&byId(n.materialPlaceId));
+  if(located.length)pool.push(()=>{const m=pick(located),p=byId(m.materialPlaceId),rel=m.materialPlaceMode==='only-found'?'only known source':m.materialPlaceMode==='mostly-found'?'main concentration':'common source';return event('Resource',`${m.name} reshapes the importance of ${p.name}`,`${p.name} becomes a ${rel} of ${m.name}, changing trade, research, settlement, and strategic planning.`,[m.name,p.name,'Resource'],{economy:3,stability:m.materialPlaceMode==='only-found'?-2:1,knowledge:1},'major',[`Material occurrence is explicitly assigned to ${p.name}`])});
+}
+
+
+function failOutputControlHtml(id,current='',title='Fail output'){
+  const has=!!String(current||'').trim();
+  return `<div class="full fail-output-control ${has?'open':''}" data-fail-control="${id}">
+    <button type="button" class="fail-output-plus" aria-expanded="${has?'true':'false'}"><span>＋</span>${E.esc(title)}</button>
+    <div class="fail-output-body ${has?'':'hidden'}"><textarea id="${id}" rows="3" placeholder="What happens when this fails?">${E.esc(current||'')}</textarea><small>This can generate failure events in the civilization timeline.</small></div>
+  </div>`
+}
+function bindFailOutputControls(root=document){
+  root.querySelectorAll?.('[data-fail-control]').forEach(box=>{
+    const btn=box.querySelector('.fail-output-plus'),body=box.querySelector('.fail-output-body');if(!btn||!body||btn.dataset.bound)return;btn.dataset.bound='1';
+    btn.onclick=()=>{const open=body.classList.toggle('hidden')===false;box.classList.toggle('open',open);btn.setAttribute('aria-expanded',String(open));if(open)body.querySelector('textarea,input')?.focus()}
+  })
+}
+
+
+let countryBorderDraft=[];
+const COUNTRY_BORDER_COLS=64,COUNTRY_BORDER_ROWS=32;
+function countryBorderKey(kind,x,y){return `${kind}:${x}:${y}`}
+function parseCountryBorderKey(key){const [kind,x,y]=String(key||'').split(':');return{kind,x:+x,y:+y}}
+function normalizeCountryBorderSegments(list){return [...new Set((Array.isArray(list)?list:[]).filter(k=>/^[vh]:\d+:\d+$/.test(String(k))))]}
+let countryBorderView={yaw:.45,pitch:-.12};
+function countryBorderPainterPlanet(){
+  if(countryUsesImplicitPlanet())return activeSurfacePlanetNode()||activePlanetPlace()||(simState.planet?{id:'__active_planet__',name:simState.planet.name||'Active Planet',gasGiant:!!simState.planet.gasGiant,__useActiveModel:true}:null);
+  return byId(value('eSurfacePlanet'))||null
+}
+function countryPainterProject(lat,lon,w,h){
+  const yaw=countryBorderView.yaw,pitch=countryBorderView.pitch,cl=Math.cos(lat);let x=cl*Math.cos(lon),y=Math.sin(lat),z=cl*Math.sin(lon);
+  const cy=Math.cos(yaw),sy=Math.sin(yaw);[x,z]=[x*cy-z*sy,x*sy+z*cy];const cp=Math.cos(pitch),sp=Math.sin(pitch);[x,y]=[x*cp-y*sp,x*sp+y*cp];const R=Math.min(w,h)*.43;return{x:w/2+z*R,y:h/2-y*R,front:x>0,depth:x,R}
+}
+function countryPainterInverse(canvas,clientX,clientY){
+  const r=canvas.getBoundingClientRect(),w=r.width,h=r.height,R=Math.min(w,h)*.43,z=(clientX-r.left-w/2)/R,y=-(clientY-r.top-h/2)/R;if(z*z+y*y>1)return null;let x=Math.sqrt(Math.max(0,1-z*z-y*y));const cp=Math.cos(countryBorderView.pitch),sp=Math.sin(countryBorderView.pitch);[x,y]=[x*cp+y*sp,-x*sp+y*cp];const cy=Math.cos(countryBorderView.yaw),sy=Math.sin(countryBorderView.yaw);[x,z]=[x*cy+z*sy,-x*sy+z*cy];return{lat:Math.asin(Math.max(-1,Math.min(1,y))),lon:Math.atan2(z,x)}
+}
+function countryPainterTerrainColor(planet,lat,lon){
+  const active=activeSurfacePlanetNode();if(active&&planet&&active.id===planet.id){const c=planetTerrainColorAt(lat,lon);if(c)return c}
+  if(planet?.gasGiant){const bands=[planet.planetGasColor||'#d6b783',planet.planetGasColor2||'#a87a58',planet.planetGasColor3||'#eee0b5'];return bands[Math.abs(Math.floor((lat+Math.PI/2)*10))%3]}
+  const seed=[...String(planet?.id||planet?.name||'planet')].reduce((a,c)=>a+c.charCodeAt(0),0),n=planetSmooth(lat*2.25,lon*2.25,seed+99),threshold=(.56-(+planet?.planetLandCoverage||45)/500),land=n>threshold;
+  if(!land&&planet?.planetOceanEnabled!==false){const deep=(threshold-n)>.10||planetSmooth(lat*4.2,lon*4.2,seed+733)>.72;return deep?(planet?.planetOceanColor2||'#102f58'):(planet?.planetOceanColor||'#315f9f')}
+  const p0=planet?.planetLandColor||'#5d8f5a',p1=planet?.planetLandColor2||'#78915b',p2=planet?.planetLandColor3||'#8d8655',moist=planetSmooth(lat*3.1,lon*3.1,seed+301);
+  // v28.7am: procedural terrestrial terrain NEVER invents hidden biome accents.
+  // The planet uses only the three visible land palette colors, even before an explicit Save Palette.
+  return n>.69?p2:moist>.56?p1:p0
+}
+function v287yCountryPlanetSnapshot(planet){
+  if(!planet)return null;
+  const sig=v287afSnapshotSignature(planet),cachedPreview=v287afPlanetSnapshotCache.get(planet.id);
+  if(cachedPreview?.sig===sig)return cachedPreview.snap;
+  const active=activeSurfacePlanetNode();
+  if((planet.__useActiveModel||active?.id===planet.id)&&simState.planet&&planetTerrainCache.length){const snap={planet:deepCloneState(simState.planet),cells:deepCloneState(planetTerrainCache)};v287afPlanetSnapshotCache.set(planet.id,{sig,snap});return snap}
+  const cached=Object.values(worldStateCache.planets||{}).find(v=>v?.planet?.name===planet.name);
+  const oldPlanet=simState.planet,oldOverride=simState.planetOverride,oldCells=planetTerrainCache;
+  try{
+    simState.planetOverride=v287yPlanetOverrideFromNode(planet);
+    if(cached?.planet)simState.planet={...deepCloneState(cached.planet),...simState.planetOverride};
+    else{
+      const seed=simState.planetOverride.seed,count=3+(Math.abs(Math.floor(seed))%4),shape=buildContinents(seed,count);
+      simState.planet={seed,name:planet.name,continents:count,continentData:shape.continents,islandData:shape.islands,...simState.planetOverride}
+    }
+    buildPlanetTerrainCache();
+    const snap={planet:deepCloneState(simState.planet),cells:deepCloneState(planetTerrainCache)};v287afPlanetSnapshotCache.set(planet.id,{sig,snap});return snap
+  }finally{simState.planet=oldPlanet;simState.planetOverride=oldOverride;planetTerrainCache=oldCells}
+}
+const v287afSphereVectorCache=new Map();
+function v287yPainterProject(lat,lon,w,h){
+  const key=lat+'|'+lon;let v=v287afSphereVectorCache.get(key);
+  if(!v){const cl=Math.cos(lat);v=[cl*Math.cos(lon),Math.sin(lat),cl*Math.sin(lon)];v287afSphereVectorCache.set(key,v)}
+  let x=v[0],y=v[1],z=v[2],yaw=countryBorderView.yaw,pitch=countryBorderView.pitch;
+  const cy=Math.cos(yaw),sy=Math.sin(yaw);[x,z]=[x*cy-z*sy,x*sy+z*cy];const cp=Math.cos(pitch),sp=Math.sin(pitch);[x,y]=[x*cp-y*sp,x*sp+y*cp];const R=Math.min(w,h)*.43;
+  return{x:w/2+z*R,y:h/2-y*R,front:x>0,depth:x,R}
+}
+function v287yLandscapeTileForPlanet(planet,lat,lon){const key=v287pSurfacePixelIndex(lat,lon);return planet?.planetLandscapeTiles?.[key]||null}
+function v287yRenderActualPlanetModel(ctx,w,h,planet){
+  const snap=v287yCountryPlanetSnapshot(planet);if(!snap)return;
+  const R=Math.min(w,h)*.43,cx=w/2,cy=h/2,p=snap.planet||{},gas=!!p.gasGiant;
+  const oceanBase=gas?(p.gasColor||'#d6b783'):(p.oceanEnabled===false?(p.landColor||'#8a7654'):(p.oceanColor||'#315f9f'));
+  const oceanDeep=gas?(p.gasColor2||'#a87a58'):(p.oceanEnabled===false?(p.landColor2||oceanBase):(p.oceanColor2||'#102f58'));
+  const grad=ctx.createRadialGradient(cx-R*.3,cy-R*.35,R*.1,cx,cy,R*1.1);grad.addColorStop(0,oceanBase);grad.addColorStop(.62,oceanBase);grad.addColorStop(1,oceanDeep);
+  ctx.fillStyle=grad;ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fill();ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
+  for(const cell of snap.cells||[]){const mid=v287yPainterProject(cell.midLat,cell.midLon,w,h);if(!mid.front)continue;const ps=[v287yPainterProject(cell.lat0,cell.lon0,w,h),v287yPainterProject(cell.lat0,cell.lon1,w,h),v287yPainterProject(cell.lat1,cell.lon1,w,h),v287yPainterProject(cell.lat1,cell.lon0,w,h)];if(ps.every(q=>!q.front))continue;const custom=v287yLandscapeTileForPlanet(planet,cell.midLat,cell.midLon);ctx.fillStyle=custom?.color||cell.color;ctx.beginPath();ctx.moveTo(ps[0].x,ps[0].y);for(let i=1;i<4;i++)ctx.lineTo(ps[i].x,ps[i].y);ctx.closePath();ctx.fill()}
+  ctx.restore();ctx.strokeStyle='rgba(150,216,245,.45)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke()
+}
+function ensureCountryBorderPainter(){
+  let panel=$('countryBorderPainter');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='countryBorderPainter';panel.className='country-border-painter hidden';
+  panel.innerHTML=`<div class="country-border-head"><div><div class="eyebrow">Country Place</div><h3>Border Painter</h3></div><button id="closeCountryBorderPainter" class="icon-btn">×</button></div>
+    <div class="country-border-tools"><button data-border-mode="draw" class="active">✎ Draw</button><button data-border-mode="erase">⌫ Erase</button><button data-border-mode="rotate">↻ Rotate Globe</button><button id="countryBorderProcedural">Procedural</button><button id="countryBorderClear">Clear All</button></div>
+    <canvas id="countryBorderCanvas" width="720" height="720"></canvas>
+    <div class="country-border-status"><b id="countryBorderCount">0 border segments</b><small id="countryBorderPlanetNote">Draw directly on the globe. Right-drag rotates. Right-click while drawing erases.</small></div>`;
+  document.body.appendChild(panel);prepareDetachedEditorPanel(panel,panel.querySelector('.country-border-head'));
+  const canvas=$('countryBorderCanvas'),ctx=canvas.getContext('2d');let mode='draw',drag=false,lastClient=null,strokeChanged=false;
+  const persist=()=>{const n=editingId?byId(editingId):null;if(n?.type==='place'&&String(n.placeScale||inferPlaceScale(n.placeType))==='country'){n.countryBorderSegments=normalizeCountryBorderSegments(countryBorderDraft);save()}requestPlanetDraw?.()};
+  const redraw=()=>{
+    const w=canvas.width,h=canvas.height,planet=countryBorderPainterPlanet();ctx.clearRect(0,0,w,h);ctx.fillStyle='#07101a';ctx.fillRect(0,0,w,h);
+    const note=$('countryBorderPlanetNote');if(note)note.textContent=planet?`${planet.name||'Planet'} · draw on the real terrain globe · left-drag ${mode==='erase'?'erases':'draws'} · right-drag rotates`:(countryUsesImplicitPlanet()?'Planet-scale system · open the world map once so the active planet can be sampled.':'Choose a planet in the Country Editor before painting.');
+    if($('countryBorderCount'))$('countryBorderCount').textContent=`${countryBorderDraft.length} border segment${countryBorderDraft.length===1?'':'s'}`;
+    if(!planet){ctx.fillStyle='#dbe7f8';ctx.font='600 18px system-ui';ctx.textAlign='center';ctx.fillText('Choose a planet first',w/2,h/2);return}
+    v287yRenderActualPlanetModel(ctx,w,h,planet);
+    const R=Math.min(w,h)*.43,cx=w/2,cy=h/2;ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();ctx.strokeStyle='#ffffff';ctx.lineWidth=5;ctx.lineCap='round';ctx.lineJoin='round';ctx.shadowColor='rgba(0,0,0,.95)';ctx.shadowBlur=5;ctx.beginPath();
+    for(const key of normalizeCountryBorderSegments(countryBorderDraft)){const a=countryBorderLatLonEndpoint(key,0),b=countryBorderLatLonEndpoint(key,1),A=countryPainterProject(a.lat,a.lon,w,h),B=countryPainterProject(b.lat,b.lon,w,h);if(A.front&&B.front&&Math.hypot(A.x-B.x,A.y-B.y)<R*.38){ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y)}}
+    ctx.stroke();ctx.restore();
+  };
+  panel._redraw=redraw;
+  const inverseAt=(clientX,clientY)=>countryPainterInverse(canvas,clientX,clientY);
+  const keyForPoint=(clientX,clientY)=>{const q=inverseAt(clientX,clientY);if(!q)return null;const gx=(q.lon+Math.PI)/(Math.PI*2)*COUNTRY_BORDER_COLS,gy=(Math.PI/2-q.lat)/Math.PI*COUNTRY_BORDER_ROWS;const vx=Math.round(gx),hy=Math.round(gy),dv=Math.abs(gx-vx),dh=Math.abs(gy-hy);if(dv<=dh)return countryBorderKey('v',((vx%COUNTRY_BORDER_COLS)+COUNTRY_BORDER_COLS)%COUNTRY_BORDER_COLS,Math.max(0,Math.min(COUNTRY_BORDER_ROWS-1,Math.floor(gy))));return countryBorderKey('h',Math.max(0,Math.min(COUNTRY_BORDER_COLS-1,Math.floor(gx))),Math.max(0,Math.min(COUNTRY_BORDER_ROWS,hy)))};
+  const applyKey=(key,erase=false)=>{if(!key)return;const set=new Set(countryBorderDraft),before=set.size;erase?set.delete(key):set.add(key);countryBorderDraft=[...set];if(set.size!==before)strokeChanged=true};
+  const paintSegment=(a,b,erase=false)=>{if(!a||!b)return;const dist=Math.hypot(b.x-a.x,b.y-a.y),steps=Math.max(1,Math.ceil(dist/5));for(let i=0;i<=steps;i++){const t=i/steps;applyKey(keyForPoint(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t),erase)}redraw()};
+  canvas.addEventListener('contextmenu',e=>e.preventDefault());
+  canvas.addEventListener('pointerdown',e=>{drag=true;strokeChanged=false;lastClient={x:e.clientX,y:e.clientY};canvas.setPointerCapture?.(e.pointerId);if(mode==='rotate'||e.button===2)return;paintSegment(lastClient,lastClient,mode==='erase')});
+  canvas.addEventListener('pointermove',e=>{if(!drag||!lastClient)return;const now={x:e.clientX,y:e.clientY};if(mode==='rotate'||(e.buttons&2)){const dx=now.x-lastClient.x,dy=now.y-lastClient.y;countryBorderView.yaw+=dx*.009;countryBorderView.pitch=Math.max(-1.25,Math.min(1.25,countryBorderView.pitch+dy*.007));redraw()}else paintSegment(lastClient,now,mode==='erase');lastClient=now});
+  const stop=()=>{if(strokeChanged)persist();drag=false;lastClient=null;strokeChanged=false};canvas.addEventListener('pointerup',stop);canvas.addEventListener('pointercancel',stop);
+  panel.querySelectorAll('[data-border-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.borderMode;panel.querySelectorAll('[data-border-mode]').forEach(x=>x.classList.toggle('active',x===b));canvas.style.cursor=mode==='rotate'?'grab':'crosshair';redraw()});
+  $('countryBorderClear').onclick=()=>{countryBorderDraft=[];persist();redraw()};
+  $('countryBorderProcedural').onclick=()=>{const seed=[...String(value('eName')||'Country')].reduce((a,c)=>a+c.charCodeAt(0),0),cx=8+(seed%48),cy=6+((seed*7)%20),rx=5+(seed%7),ry=3+((seed*3)%5),pts=[];for(let i=0;i<36;i++){const a=i/36*Math.PI*2,x=Math.round(cx+Math.cos(a)*rx*(.78+.22*Math.sin(a*3+seed))),y=Math.round(cy+Math.sin(a)*ry*(.82+.18*Math.cos(a*4+seed)));pts.push([Math.max(0,Math.min(63,x)),Math.max(0,Math.min(31,y))])}const out=new Set();for(let i=0;i<pts.length;i++){let [x,y]=pts[i],[tx,ty]=pts[(i+1)%pts.length],guard=0;while((x!==tx||y!==ty)&&guard++<100){if(Math.abs(tx-x)>=Math.abs(ty-y)){const nx=x+Math.sign(tx-x);out.add(countryBorderKey('v',((Math.max(x,nx)%64)+64)%64,Math.max(0,Math.min(31,y))));x=nx}else{const ny=y+Math.sign(ty-y);out.add(countryBorderKey('h',Math.max(0,Math.min(63,x)),Math.max(0,Math.min(32,Math.max(y,ny)))));y=ny}}}countryBorderDraft=[...out];persist();redraw()};
+  $('closeCountryBorderPainter').onclick=()=>panel.classList.add('hidden');return panel
+}
+function openCountryBorderPainter(){const panel=ensureCountryBorderPainter();panel.classList.remove('hidden');panel._redraw?.();requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel))}
+
+function systemScaleIsLargerThanPlanet(){return ['solar','galaxy','universe'].includes(systemScale())}
+function countryUsesImplicitPlanet(){return systemScale()==='planet'}
+function countryPlanetMatches(country,planet){
+  if(!country||!planet)return false;
+  return countryUsesImplicitPlanet()?true:country.surfacePlanetId===planet.id
+}
+function countryContainedCandidatePlaces(country){
+  const countryRank=PLACE_LEVELS.findIndex(([v])=>v==='country');
+  return ofType('place').filter(p=>{
+    if(p.id===country?.id||p.isHub)return false;
+    const scale=String(p.placeScale||inferPlaceScale(p.placeType||p.category||'')).toLowerCase();
+    const rank=PLACE_LEVELS.findIndex(([v])=>v===scale);
+    // Unknown old Places are still useful choices; only explicit Country+ scales are excluded.
+    if(rank>=countryRank&&rank>=0)return false;
+    if(systemScaleIsLargerThanPlanet()&&country?.surfacePlanetId&&p.surfacePlanetId&&p.surfacePlanetId!==country.surfacePlanetId)return false;
+    return true
+  })
+}
+function syncCountryContainedPlaceEdges(country){
+  if(!country||String(country.placeScale||inferPlaceScale(country.placeType))!=='country')return;
+  const chosen=new Set(Array.isArray(country.countryContainedPlaceIds)?country.countryContainedPlaceIds:[]);
+  edges=edges.filter(e=>!(e.countryExplicitContainment&&e.a===country.id));
+  for(const id of chosen){
+    const child=byId(id);if(!child)continue;
+    edges.push({id:uid(),a:country.id,b:id,type:'relationship',linkType:'containment',label:'Contains',direction:'forward',manual:true,strength:'solid',thickness:1.6,placeContainment:true,countryExplicitContainment:true});
+    if(systemScaleIsLargerThanPlanet()&&country.surfacePlanetId&&!child.surfacePlanetId)child.surfacePlanetId=country.surfacePlanetId
+  }
+}
+
+function placeAllowsSideControls(place){
+  const scale=String(place?.placeScale||inferPlaceScale(place?.placeType||place?.category||'')).toLowerCase();
+  const country=PLACE_LEVELS.findIndex(x=>x[0]==='country'),rank=PLACE_LEVELS.findIndex(x=>x[0]===scale);
+  // Country-and-smaller Places use these controls normally. Planet is the one intentional
+  // larger-scale exception because it owns planet-surface Structure population/wilderness.
+  return scale==='planet'||rank<0||rank<=country
+}
+let v287yTilePaintMode='__auto__';
+let v287zLandscapePlanetId='',v287zLandscapeSampleColor='',v287zLandscapeView={yaw:.45,pitch:-.12},v287zLandscapeEditingColor='';
+const v287afPlanetSnapshotCache=new Map();
+function v287afSnapshotSignature(planet){return JSON.stringify([planet?.id,planet?.planetModelSeed,planet?.gasGiant,planet?.planetPaletteSaved,planet?.planetLandCoverage,planet?.planetLandEnabled,planet?.planetOceanEnabled,planet?.planetLandColor,planet?.planetLandColor2,planet?.planetLandColor3,planet?.planetOceanColor,planet?.planetOceanColor2,planet?.planetSkyColor,planet?.planetGasColor,planet?.planetGasColor2,planet?.planetGasColor3,planet?.planetGasContrast]);}
+function v287afInvalidatePlanetPreview(planet){if(planet?.id)v287afPlanetSnapshotCache.delete(planet.id)}
+let v287adPendingLandscapeAfterPalette=false,v287adPaletteTargetPlanetId='';
+function v287adPaletteOwner(){
+  const editing=editingId?byId(editingId):null;
+  if(editing&&editing.type==='place'&&String(value('ePlaceScale')||editing.placeScale||inferPlaceScale(editing.placeType))==='planet')return editing;
+  if(selected&&selected.type==='place'&&String(selected.placeScale||inferPlaceScale(selected.placeType))==='planet')return selected;
+  const picked=v287zPlanetCandidates().find(p=>p.id===v287adPaletteTargetPlanetId)||v287zLandscapePlanet();
+  return picked&&picked.id!=='__active_planet__'?picked:null
+}
+function v287adHasSavedPalette(planet){
+  // Explicit save is intentional: older projects are prompted once so Landscape authoring
+  // never starts from an unsaved palette draft.
+  return !!planet?.planetPaletteSaved
+}
+function v287adCommitPlanetPalette(){
+  const planet=v287adPaletteOwner();
+  if(!planet)return false;
+  Object.assign(planet,{
+    planetLandColor:value('ePlanetLandColor')||planet.planetLandColor||'#5d8f5a',
+    planetLandColor2:value('ePlanetLandColor2')||planet.planetLandColor2||'#78915b',
+    planetLandColor3:value('ePlanetLandColor3')||planet.planetLandColor3||'#8d8655',
+    // v28.7ak: a saved custom palette intentionally disables the old hidden
+    // biome accents (legacy Accent 2/3/4). Keep the fields null so old saves
+    // cannot leak green/rock/polar patches back into the globe or Surface.
+    planetLandColor4:null,
+    planetLandColor5:null,
+    planetLandColor6:null,
+    planetOceanColor:value('ePlanetOceanColor')||planet.planetOceanColor||'#315f9f',
+    planetOceanColor2:value('ePlanetOceanColor2')||planet.planetOceanColor2||'#102f58',
+    isMoon:!!$('ePlanetIsMoon')?.checked,
+    orbitingId:$('ePlanetIsMoon')?.checked?(value('eMoonOrbiting')||null):null,
+    gasGiant:!!$('ePlanetGasGiant')?.checked,
+    planetGasColor:value('ePlanetGasColor')||planet.planetGasColor||'#d6b783',
+    planetGasColor2:value('ePlanetGasColor2')||planet.planetGasColor2||'#a87a58',
+    planetGasColor3:value('ePlanetGasColor3')||planet.planetGasColor3||'#eee0b5',
+    planetGasContrast:Math.max(0,Math.min(100,+value('ePlanetGasContrast')||55)),
+    planetLandCoverage:Math.max(0,Math.min(100,+value('ePlanetLandCoverage')||45)),
+    planetLandEnabled:$('ePlanetLandEnabled')?.checked!==false,
+    planetOceanEnabled:$('ePlanetOceanEnabled')?.checked!==false,
+    planetSkyColor:value('ePlanetSkyColor')||planet.planetSkyColor||'#8fc8ee',
+    planetCloudsEnabled:$('ePlanetCloudsEnabled')?.checked!==false,
+    planetCloudColor:value('ePlanetCloudColor')||planet.planetCloudColor||'#eef8ff',
+    planetCloudCoverage:Math.max(0,Math.min(100,+value('ePlanetCloudCoverage')||45)),
+    planetCloudOpacity:Math.max(0,Math.min(100,+value('ePlanetCloudOpacity')||38)),
+    planetCountryBordersEnabled:$('ePlanetCountryBordersEnabled')?.checked!==false,
+    planetProceduralBorders:!!$('ePlanetProceduralBorders')?.checked,
+    planetPaletteSaved:true,
+    planetModelSeed:planet.planetModelSeed||v287yPlanetSeed(planet)
+  });
+  v287afInvalidatePlanetPreview(planet);invalidateWorldStateForNode?.(planet);save();
+  const status=$('planetPaletteSaveStatus');if(status){status.textContent='Palette saved';setTimeout(()=>{if(status)status.textContent=''},1300)}
+  return true
+}
+function v287adOpenPaletteForLandscape(planet){
+  if(!planet)return;
+  v287adPaletteTargetPlanetId=planet.id;
+  v287zLandscapePlanetId=planet.id;
+  v287adPendingLandscapeAfterPalette=true;
+  const palette=$('planetPalettePanel');if(!palette){console.error('Planet palette panel is missing');return}
+  palette.classList.remove('hidden');
+  prepareDetachedEditorPanel(palette,palette.querySelector('.auto-panel-head'));
+  const status=$('planetPaletteSaveStatus');if(status)status.textContent='Save this palette to continue to Landscape Editor';
+  requestAnimationFrame(()=>keepDetachedPanelOnscreen(palette))
+}
+
+function v287zPlanetCandidates(){
+  const authored=ofType('place').filter(p=>String(p.placeScale||inferPlaceScale(p.placeType))==='planet'&&!p.isHub);
+  if(authored.length)return authored;
+  const active=activeSurfacePlanetNode()||activePlanetPlace();if(active)return[active];
+  if(simState.planet)return[{id:'__active_planet__',name:simState.planet.name||'Active Planet',gasGiant:!!simState.planet.gasGiant,__useActiveModel:true}];
+  return[]
+}
+function v287zLandscapePlanet(){return v287zPlanetCandidates().find(p=>p.id===v287zLandscapePlanetId)||v287zPlanetCandidates()[0]||null}
+function v287zLandscapeRules(planet=v287zLandscapePlanet()){if(!planet)return{};planet.planetLandscapeColorRules=planet.planetLandscapeColorRules||{};return planet.planetLandscapeColorRules}
+function v287zNormHex(c){const m=/^#?([0-9a-f]{6})$/i.exec(String(c||''));return m?'#'+m[1].toLowerCase():''}
+function v287zColorDistance(a,b){const A=v271ParseHex(a),B=v271ParseHex(b);if(!A||!B)return 999;return Math.hypot(A.r-B.r,A.g-B.g,A.b-B.b)}
+function v287zLandscapeRuleForSurface(planet,color){const rules=planet?.planetLandscapeColorRules||{},exact=rules[v287zNormHex(color)];if(exact)return exact;return Object.values(rules).find(r=>r&&v287zColorDistance(r.color,color)<=Math.max(0,+r.tolerance||0))||null}
+function v287ajRgbHex(r,g,b){return '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,v|0)).toString(16).padStart(2,'0')).join('')}
+function v287ajNearestPaletteColor(planet,color){
+  const key=v287zNormHex(color);if(!planet||!key)return'';
+  const candidates=v287agLandscapePaletteEntries(planet).map(([label,c])=>({label,color:v287zNormHex(c)})).filter(x=>x.color);
+  if(!candidates.length)return key;
+  let best=candidates[0],bestD=Infinity;
+  for(const c of candidates){const d=v287zColorDistance(key,c.color);if(d<bestD){best=c;bestD=d}}
+  return best.color
+}
+function v287ajLandscapeColorLabel(planet,color){const key=v287zNormHex(color);const hit=v287agLandscapePaletteEntries(planet).find(([,c])=>v287zNormHex(c)===key);return hit?.[0]||'Terrain'}
+function v287zLandscapeSampleAt(canvas,clientX,clientY,planetOverride=null){
+  // v28.7ak: sample the pixels that are ACTUALLY visible on the preview globe.
+  // The older inverse-lat/lon picker could select a neighboring terrain cell near
+  // projected cell edges, so the model opened for a different color than the one
+  // the user had visibly clicked.
+  const planet=planetOverride||canvas?.closest?.('#landscapeEditor')?._planet||v287zLandscapePlanet();if(!planet||!canvas)return'';
+  const r=canvas.getBoundingClientRect();if(!r.width||!r.height)return'';
+  const sx=canvas.width/r.width,sy=canvas.height/r.height;
+  const x=(clientX-r.left)*sx,y=(clientY-r.top)*sy;
+  const R=Math.min(canvas.width,canvas.height)*.43,cx=canvas.width/2,cy=canvas.height/2;
+  if((x-cx)*(x-cx)+(y-cy)*(y-cy)>R*R)return'';
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});if(!ctx)return'';
+  // A tiny neighborhood makes anti-aliased cell boundaries reliable. Choose the
+  // palette color whose rendered RGB is closest to any nearby visible pixel.
+  const ix=Math.max(0,Math.min(canvas.width-1,Math.round(x))),iy=Math.max(0,Math.min(canvas.height-1,Math.round(y)));
+  const rad=2,x0=Math.max(0,ix-rad),y0=Math.max(0,iy-rad),x1=Math.min(canvas.width-1,ix+rad),y1=Math.min(canvas.height-1,iy+rad);
+  let data;try{data=ctx.getImageData(x0,y0,x1-x0+1,y1-y0+1).data}catch(_){return''}
+  const palette=v287agLandscapePaletteEntries(planet).map(([label,c])=>({label,color:v287zNormHex(c)})).filter(v=>v.color);
+  if(!palette.length)return'';
+  let best='',bestD=Infinity;
+  for(let i=0;i<data.length;i+=4){if(data[i+3]<180)continue;const actual=v287ajRgbHex(data[i],data[i+1],data[i+2]);for(const p of palette){const d=v287zColorDistance(actual,p.color);if(d<bestD){bestD=d;best=p.color}}}
+  return best
+}
+function v287zRenderLandscapePlanetPreview(ctx,w,h,planet){const old=countryBorderView;countryBorderView=v287zLandscapeView;v287yRenderActualPlanetModel(ctx,w,h,planet);countryBorderView=old}
+function v287alWeatherDefaultTint(type){return type==='sandstorm'?'#c49345':type==='storm'?'#242333':'#56616b'}
+function v287alNormalizeLandscapeWeather(src={},planet=null){
+  const type=['rain','storm','sandstorm'].includes(src?.type)?src.type:'none';
+  return{
+    skyColor:v287zNormHex(src?.skyColor)||planet?.planetSkyColor||'#8fc8ee',
+    type,
+    weatherSkyColor:v287zNormHex(src?.weatherSkyColor)||v287alWeatherDefaultTint(type),
+    intensity:Math.max(0,Math.min(1,Number.isFinite(+src?.intensity)?+src.intensity:.82)),
+    preview:src?.preview!==false
+  }
+}
+function v287alScenePreviewSky(){
+  const d=sceneLandscapeWeatherDraft||{},base=v287zNormHex(d.skyColor)||scene3DModel?.skyColor||scene3DTargetNode?.planetSkyColor||'#8fc8ee';
+  if(scene3DTargetType!=='landscape'||!d.preview||d.type==='none')return base;
+  return v271HexMix(base,v287zNormHex(d.weatherSkyColor)||v287alWeatherDefaultTint(d.type),Math.max(0,Math.min(.92,(+d.intensity||0)*.82)))
+}
+function v287alDrawSceneWeatherPreview(overlay){
+  if(scene3DTargetType!=='landscape'||!overlay||!sceneLandscapeWeatherDraft?.preview||sceneLandscapeWeatherDraft.type==='none')return;
+  const ctx=overlay.getContext('2d'),w=overlay.width,h=overlay.height,d=sceneLandscapeWeatherDraft,I=Math.max(0,Math.min(1,+d.intensity||0)),t=performance.now()*.001;
+  ctx.save();
+  if(d.type==='rain'){
+    ctx.strokeStyle=`rgba(190,225,248,${.25+.5*I})`;ctx.lineWidth=1.25;const n=Math.round(35+120*I);
+    for(let i=0;i<n;i++){const x=(i*83+t*130)%w,y=(i*47+t*250)%h;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-5,y+13+I*10);ctx.stroke()}
+  }else if(d.type==='sandstorm'){
+    ctx.fillStyle=`rgba(191,135,64,${.08+.18*I})`;ctx.fillRect(0,0,w,h);ctx.strokeStyle=`rgba(245,210,145,${.18+.25*I})`;ctx.lineWidth=2;
+    for(let i=0;i<50+I*70;i++){const y=(i*31)%h,x=(i*97+t*180)%w;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+30+I*42,y+2);ctx.stroke()}
+  }else{
+    ctx.fillStyle=`rgba(21,20,31,${.10+.22*I})`;ctx.fillRect(0,0,w,h);
+    if(Math.floor(t*2.3)%17===0){ctx.fillStyle=`rgba(240,240,255,${.07+.08*I})`;ctx.fillRect(0,0,w,h)}
+  }
+  ctx.restore()
+}
+let sceneLandscapeWeatherPreviewRAF=0,sceneLandscapeWeatherPreviewLast=0;
+function v287alStartLandscapeWeatherPreview(){
+  if(sceneLandscapeWeatherPreviewRAF)return;
+  const tick=ts=>{
+    const panel=$('scene3DPanel'),canvas=$('scene3DCanvas'),overlay=$('scene3DGizmo');
+    if(!panel||panel.classList.contains('hidden')||scene3DTargetType!=='landscape'||!sceneLandscapeWeatherDraft?.preview||sceneLandscapeWeatherDraft.type==='none'){sceneLandscapeWeatherPreviewRAF=0;return}
+    if(ts-sceneLandscapeWeatherPreviewLast>42&&canvas&&overlay&&scene3DLastViewProj){sceneLandscapeWeatherPreviewLast=ts;scene3DDrawGizmo(canvas,overlay,scene3DLastViewProj);v287alDrawSceneWeatherPreview(overlay)}
+    sceneLandscapeWeatherPreviewRAF=requestAnimationFrame(tick)
+  };
+  sceneLandscapeWeatherPreviewRAF=requestAnimationFrame(tick)
+}
+function v287alEnsureLandscapeWeatherPanel(){
+  let p=$('sceneLandscapeWeatherPanel');if(p)return p;
+  p=document.createElement('aside');p.id='sceneLandscapeWeatherPanel';p.className='scene-landscape-weather-panel hidden';
+  p.innerHTML=`<div class="scene-landscape-weather-head"><div><div class="eyebrow">Landscape Editor</div><h3>Weather Editor</h3></div><button type="button" id="sceneLandscapeWeatherClose" class="icon-btn">×</button></div>
+    <p>These settings belong to this sampled terrain color. The event becomes the default weather whenever this landscape color is visited.</p>
+    <label>Landscape sky<input id="sceneLandscapeSkyColor" type="color"></label>
+    <label>Special weather event<select id="sceneLandscapeWeatherType"><option value="none">None</option><option value="rain">Rain</option><option value="storm">Storm + lightning</option><option value="sandstorm">Sandstorm</option></select></label>
+    <label>Weather sky / haze color<input id="sceneLandscapeWeatherSkyColor" type="color"></label>
+    <label>Intensity <output id="sceneLandscapeWeatherIntensityOut">82%</output><input id="sceneLandscapeWeatherIntensity" type="range" min="0" max="100" value="82"></label>
+    <label class="inline-check"><input id="sceneLandscapeWeatherPreview" type="checkbox" checked> Preview event while modelling</label>
+    <button type="button" id="sceneLandscapeUsePlanetSky" class="ghost">Use Planet Sky</button>
+    <small>Manual Surface weather still overrides this default event.</small>`;
+  document.body.appendChild(p);prepareDetachedEditorPanel(p,p.querySelector('.scene-landscape-weather-head'));
+  $('sceneLandscapeWeatherClose').onclick=()=>p.classList.add('hidden');
+  const pull=()=>{if(scene3DTargetType!=='landscape')return;sceneLandscapeWeatherDraft={...sceneLandscapeWeatherDraft,skyColor:$('sceneLandscapeSkyColor').value,type:$('sceneLandscapeWeatherType').value,weatherSkyColor:$('sceneLandscapeWeatherSkyColor').value,intensity:(+$('sceneLandscapeWeatherIntensity').value||0)/100,preview:!!$('sceneLandscapeWeatherPreview').checked};scene3DModel.skyColor=sceneLandscapeWeatherDraft.skyColor;$('sceneLandscapeWeatherIntensityOut').textContent=Math.round(sceneLandscapeWeatherDraft.intensity*100)+'%';scene3DRenderViewport();v287alStartLandscapeWeatherPreview()};
+  for(const id of ['sceneLandscapeSkyColor','sceneLandscapeWeatherType','sceneLandscapeWeatherSkyColor','sceneLandscapeWeatherIntensity','sceneLandscapeWeatherPreview'])$(id).addEventListener('input',pull);
+  $('sceneLandscapeWeatherType').addEventListener('change',()=>{const type=$('sceneLandscapeWeatherType').value;if(type!=='none')$('sceneLandscapeWeatherSkyColor').value=v287alWeatherDefaultTint(type);pull()});
+  $('sceneLandscapeUsePlanetSky').onclick=()=>{$('sceneLandscapeSkyColor').value=scene3DTargetNode?.planetSkyColor||'#8fc8ee';pull()};
+  return p
+}
+function v287alSyncLandscapeWeatherPanel(rule,planet){
+  const p=v287alEnsureLandscapeWeatherPanel();sceneLandscapeWeatherDraft=v287alNormalizeLandscapeWeather({...rule?.weather,skyColor:rule?.skyColor||rule?.weather?.skyColor},planet);
+  $('sceneLandscapeSkyColor').value=sceneLandscapeWeatherDraft.skyColor;$('sceneLandscapeWeatherType').value=sceneLandscapeWeatherDraft.type;$('sceneLandscapeWeatherSkyColor').value=sceneLandscapeWeatherDraft.weatherSkyColor;$('sceneLandscapeWeatherIntensity').value=Math.round(sceneLandscapeWeatherDraft.intensity*100);$('sceneLandscapeWeatherIntensityOut').textContent=Math.round(sceneLandscapeWeatherDraft.intensity*100)+'%';$('sceneLandscapeWeatherPreview').checked=sceneLandscapeWeatherDraft.preview;
+  p.classList.remove('hidden');v287alStartLandscapeWeatherPreview();requestAnimationFrame(()=>keepDetachedPanelOnscreen(p));return p
+}
+function v287zEnsureSceneLandscapeExtras(){const panel=ensureScene3DPanel();let extra=$('sceneLandscapeExtras');if(!extra){extra=document.createElement('section');extra.id='sceneLandscapeExtras';extra.className='scene-landscape-extras hidden';extra.innerHTML=`<div class="scene3d-section-title">Landscape Placement</div><label>Placement<select id="sceneLandscapePlacementMode"><option value="single">Single placement — no repetition</option><option value="procedural">Procedural repetition</option></select></label><label>Occurrence pattern<select id="sceneLandscapeSeedMode"><option value="same-color">Same procedural layout for every matching color tile</option><option value="per-tile">Unique procedural layout for each occurrence</option></select></label><button type="button" id="sceneLandscapeWeatherOpen" class="ghost">☁ Weather Editor</button><small>Single placement keeps exactly the objects you model. Procedural repetition uses the Repetition section above; Area fills a true 2D area, while Radial places around a circle.</small>`;panel.querySelector('.scene3d-inspector')?.appendChild(extra);$('sceneLandscapePlacementMode').onchange=e=>{if(scene3DTargetType!=='landscape'||!scene3DModel?.repetition)return;scene3DModel.repetition.enabled=e.target.value==='procedural';if($('sceneRepeatEnabled'))$('sceneRepeatEnabled').checked=scene3DModel.repetition.enabled;scene3DSyncRepeatUI();scene3DRenderViewport()};$('sceneLandscapeWeatherOpen').onclick=()=>{const wp=v287alEnsureLandscapeWeatherPanel();wp.classList.remove('hidden');requestAnimationFrame(()=>keepDetachedPanelOnscreen(wp))}}return extra}
+function v287zBindSceneSaveHandler(){const b=$('scene3DSaveReturn');if(!b)return;b.onclick=()=>{syncScene3DLegacyParts();if(scene3DTargetType==='landscape'){const planet=scene3DTargetNode||v287zLandscapePlanet(),color=v287zLandscapeEditingColor||v287zLandscapeSampleColor;if(planet&&color){const rules=v287zLandscapeRules(planet),key=v287zNormHex(color),old=rules[key]||{};rules[key]={...old,color:key,model:scene3DModelForSave(scene3DModel),skyColor:v287zNormHex(sceneLandscapeWeatherDraft?.skyColor)||scene3DModel.skyColor||planet.planetSkyColor||'#8fc8ee',weather:{type:['rain','storm','sandstorm'].includes(sceneLandscapeWeatherDraft?.type)?sceneLandscapeWeatherDraft.type:'none',weatherSkyColor:v287zNormHex(sceneLandscapeWeatherDraft?.weatherSkyColor)||v287alWeatherDefaultTint(sceneLandscapeWeatherDraft?.type),intensity:Math.max(0,Math.min(1,+sceneLandscapeWeatherDraft?.intensity||0)),preview:sceneLandscapeWeatherDraft?.preview!==false},seedMode:$('sceneLandscapeSeedMode')?.value||old.seedMode||'same-color',replaceScenery:true,tolerance:Math.max(0,+old.tolerance||0)};save();v287yEnsureLandscapeEditor()._redraw?.()}$('scene3DPanel')?.classList.add('hidden');$('sceneLandscapeWeatherPanel')?.classList.add('hidden');const le=$('landscapeEditor');if(le){le.classList.remove('hidden');le._redraw?.();requestAnimationFrame(()=>keepDetachedPanelOnscreen(le))}return}structureModelDraft=scene3DModelForSave(scene3DModel);if(scene3DTargetType==='structure'&&scene3DTargetNode?.type==='structure'&&!scene3DTargetNode.isMegastructure){scene3DTargetNode.structureModel=deepCloneState(structureModelDraft);save()}const s=$('structureModelSummary');if(s)s.textContent=`${scene3DModel.variants.length} variant${scene3DModel.variants.length===1?'':'s'} · ${scene3DRepeatInstances(scene3DModel).length} instance${scene3DRepeatInstances(scene3DModel).length===1?'':'s'}`;$('scene3DPanel')?.classList.add('hidden')}}
+function openShared3DModelEditor(node,targetType='structure'){
+  if(targetType!=='structure'||(node&&node.type!=='structure'))return;
+  const panel=ensureScene3DPanel();scene3DTargetNode=node||null;scene3DTargetType='structure';v287zEnsureSceneLandscapeExtras().classList.add('hidden');$('sceneLandscapeWeatherPanel')?.classList.add('hidden');$('sceneLandscapeFootprintHint')?.classList.add('hidden');$('sceneEnvironmentWrap')?.classList.remove('hidden');document.querySelector('.scene-environment-only')?.classList.remove('hidden');
+  const src=structureModelDraft||node?.structureModel;scene3DModel=normalizeScene3DModel(src);structureModelDraft=scene3DModel;scene3DSelected=scene3DActiveVariant()?.parts[0]?.id||null;scene3DCamera={yaw:.72,pitch:.42,distance:28,target:[0,2,0]};scene3DKeyMode='';
+  $('scene3DEyebrow').textContent='Structure';$('scene3DTitle').textContent=(node?.name||$('eName')?.value||'Untitled')+' · 3D Model';$('sceneEnvironment').value=scene3DModel.environment;scene3DSyncVariantUI();scene3DSyncInspector();v287zBindSceneSaveHandler();panel.classList.remove('hidden');requestAnimationFrame(()=>{keepDetachedPanelOnscreen(panel);scene3DRenderViewport();$('scene3DCanvas')?.focus()})
+}
+function v287zOpenLandscapeModelEditor(color,planetOverride=null){
+  // v28.7ak: never rediscover the planet after the user has sampled it. The old
+  // flow could lose the active/editing planet between the Landscape panel and
+  // the shared modeller, causing this function to silently return.
+  const planet=planetOverride||v287zLandscapePlanet();
+  const key=v287zNormHex(color);
+  if(!planet||!key)throw new Error(!planet?'Landscape planet was lost before the 3D modeller opened.':'The sampled landscape color is invalid.');
+  if(planet.id)v287zLandscapePlanetId=planet.id;
+  const rule=v287zLandscapeRules(planet)[key]||{};v287zLandscapeEditingColor=key;
+  const panel=ensureScene3DPanel();
+  if(!panel)throw new Error('The shared 3D modeller panel could not be created.');
+  // Make the window visible FIRST. Even if a later UI refresh fails, the user is
+  // not left with a mysterious no-op.
+  panel.classList.remove('hidden');panel.style.zIndex='10250';
+  const extra=v287zEnsureSceneLandscapeExtras();
+  scene3DTargetNode=planet;scene3DTargetType='landscape';
+  scene3DModel=normalizeScene3DModel(rule.model||{environment:'grass',groundColor:key,skyColor:rule.skyColor||planet.planetSkyColor||'#8fc8ee',variants:[{id:'default',name:'Default',parts:[]}],activeVariantId:'default',repetition:{enabled:false,mode:'area',count:18,areaWidth:150,areaDepth:150,scaleVariation:18,variantMode:'active'}});
+  scene3DModel.groundColor=key;scene3DModel.skyColor=rule.skyColor||scene3DModel.skyColor||planet.planetSkyColor||'#8fc8ee';scene3DSelected=scene3DActiveVariant()?.parts[0]?.id||null;scene3DCamera={yaw:.72,pitch:.48,distance:335,target:[0,0,0]};scene3DKeyMode='';
+  if($('scene3DEyebrow'))$('scene3DEyebrow').textContent='Landscape Color';
+  if($('scene3DTitle'))$('scene3DTitle').textContent=`${planet.name||'Planet'} · ${key} Landscape`;
+  if($('sceneEnvironment'))$('sceneEnvironment').value=scene3DModel.environment;
+  $('sceneEnvironmentWrap')?.classList.add('hidden');document.querySelector('.scene-environment-only')?.classList.add('hidden');
+  extra?.classList.remove('hidden');
+  if($('sceneLandscapePlacementMode'))$('sceneLandscapePlacementMode').value=scene3DModel.repetition?.enabled?'procedural':'single';
+  if($('sceneLandscapeSeedMode'))$('sceneLandscapeSeedMode').value=rule.seedMode||'same-color';
+  $('sceneLandscapeFootprintHint')?.classList.remove('hidden');v287alSyncLandscapeWeatherPanel(rule,planet);
+  scene3DSyncVariantUI();scene3DSyncInspector();v287zBindSceneSaveHandler();
+  requestAnimationFrame(()=>{keepDetachedPanelOnscreen(panel);try{scene3DRenderViewport()}catch(err){console.error('Landscape modeller viewport render failed:',err);if($('scene3DStatus'))$('scene3DStatus').textContent='Viewport error: '+(err?.message||err)}$('scene3DCanvas')?.focus()});
+  return panel
+}
+function v287agLandscapePaletteEntries(planet){
+  if(!planet)return[];
+  if(planet.gasGiant)return[
+    ['Gas Primary',planet.planetGasColor||'#d6b783'],['Gas Secondary',planet.planetGasColor2||'#a87a58'],['Gas Accent',planet.planetGasColor3||'#eee0b5']
+  ];
+  return[
+    ['Land Primary',planet.planetLandColor||'#5d8f5a'],['Land Secondary',planet.planetLandColor2||'#78915b'],['Land Accent',planet.planetLandColor3||'#8d8655'],
+    ['Ocean',planet.planetOceanColor||'#315f9f'],['Deep Ocean',planet.planetOceanColor2||'#102f58']
+  ];
+}
+function v287agOpenLandscapeColor(color,planetOverride=null){
+  const key=v287zNormHex(color);if(!key)return false;
+  const landscape=$('landscapeEditor'),planet=planetOverride||landscape?._planet||v287zLandscapePlanet();
+  v287zLandscapeSampleColor=key;
+  const sw=$('landscapeSampleSwatch'),lab=$('landscapeSampleLabel'),btn=$('landscapeModelColor');
+  if(sw)sw.style.background=key;if(lab)lab.textContent=`Selected ${key} · opening 3D modeller…`;if(btn)btn.disabled=false;
+  try{
+    const scene=v287zOpenLandscapeModelEditor(key,planet);
+    if(!scene||scene.classList.contains('hidden'))throw new Error('The 3D modeller did not become visible.');
+    // Only hide the sampler after we know the modeller exists and is visible.
+    if(landscape)landscape.classList.add('hidden');
+    requestAnimationFrame(()=>keepDetachedPanelOnscreen(scene));
+    return true
+  }catch(err){
+    console.error('Landscape 3D modeller failed to open:',err);
+    if(lab)lab.textContent='3D modeller failed to open — '+(err?.message||err);
+    if(landscape)landscape.classList.remove('hidden');
+    return false
+  }
+}
+function v287yEnsureLandscapeEditor(){
+  let p=$('landscapeEditor');if(p)return p;p=document.createElement('aside');p.id='landscapeEditor';p.className='planet-authoring-panel landscape-editor landscape-color-editor hidden';p.innerHTML=`<div class="planet-authoring-head"><div><div class="eyebrow">Planet Surface</div><h3>Landscape Editor</h3></div><button class="icon-btn" id="closeLandscapeEditor">×</button></div>
+    <p>Choose a planet, then click a terrain color on its real globe. The 3D model you author for that sampled color is used everywhere the same color appears.</p>
+    <div class="landscape-planet-row"><label>Planet<select id="landscapePlanetSelect"></select></label><button id="landscapeResetView" class="ghost">Reset Globe</button></div>
+    <canvas id="landscapePlanetCanvas" width="720" height="720"></canvas>
+    <div class="scene3d-section-title">Saved planet colors</div><div id="landscapePaletteSwatches" class="landscape-palette-swatches"></div>
+    <div class="landscape-sample-card"><span id="landscapeSampleSwatch"></span><div><b id="landscapeSampleLabel">Click the globe to sample a color</b><small>Click a terrain color to open its 3D landscape modeller · right-drag rotates.</small></div><button id="landscapeModelColor" class="primary" disabled>◫ Model This Color in 3D</button></div>
+    <div class="scene3d-section-title">Authored color landscapes</div><div id="landscapeRuleList" class="landscape-rule-list"></div>`;
+  document.body.appendChild(p);prepareDetachedEditorPanel(p,p.querySelector('.planet-authoring-head'));$('closeLandscapeEditor').onclick=()=>p.classList.add('hidden');
+  const c=$('landscapePlanetCanvas'),ctx=c.getContext('2d');let rotating=false,last=null;
+  const redraw=()=>{const planet=p._planet||v287zLandscapePlanet();ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#07101a';ctx.fillRect(0,0,c.width,c.height);if(!planet){ctx.fillStyle='#dce8f8';ctx.font='600 18px system-ui';ctx.textAlign='center';ctx.fillText('Save a Planet Color Palette first',c.width/2,c.height/2);return}v287zRenderLandscapePlanetPreview(ctx,c.width,c.height,planet);const palHost=$('landscapePaletteSwatches');if(palHost){palHost.innerHTML=v287agLandscapePaletteEntries(planet).map(([label,color])=>`<button type="button" class="landscape-palette-swatch" data-landscape-palette-color="${E.esc(v287zNormHex(color))}"><i style="background:${E.esc(color)}"></i><span>${E.esc(label)}</span><small>${E.esc(v287zNormHex(color))}</small></button>`).join('');palHost.querySelectorAll('[data-landscape-palette-color]').forEach(b=>b.onclick=()=>v287agOpenLandscapeColor(b.dataset.landscapePaletteColor,planet))}const rules=v287zLandscapeRules(planet),host=$('landscapeRuleList');host.innerHTML=Object.values(rules).length?Object.values(rules).map(r=>`<div class="landscape-rule-row" data-land-color="${E.esc(r.color)}"><span style="background:${E.esc(r.color)}"></span><div><b>${E.esc(r.color)}</b><small>${r.seedMode==='per-tile'?'Unique per occurrence':'Same pattern everywhere'} · ${scene3DRepeatInstances(normalizeScene3DModel(r.model||{}),r.color).length} local instance${scene3DRepeatInstances(normalizeScene3DModel(r.model||{}),r.color).length===1?'':'s'}</small></div><button data-edit-land class="ghost">Edit 3D</button><button data-delete-land class="danger ghost">Delete</button></div>`).join(''):'<small>No sampled-color landscapes yet.</small>';host.querySelectorAll('[data-edit-land]').forEach(b=>b.onclick=()=>v287zOpenLandscapeModelEditor(b.closest('[data-land-color]').dataset.landColor,planet));host.querySelectorAll('[data-delete-land]').forEach(b=>b.onclick=()=>{const color=b.closest('[data-land-color]').dataset.landColor;delete v287zLandscapeRules(planet)[color];save();redraw()})};p._redraw=redraw;
+  let redrawQueued=false;const queueRedraw=()=>{if(redrawQueued)return;redrawQueued=true;requestAnimationFrame(()=>{redrawQueued=false;redraw()})};
+  c.addEventListener('contextmenu',e=>e.preventDefault());c.addEventListener('pointerdown',e=>{if(e.button===2){rotating=true;last={x:e.clientX,y:e.clientY};c.setPointerCapture?.(e.pointerId);c.style.cursor='grabbing';return}if(e.button!==0)return;const planet=p._planet||v287zLandscapePlanet(),color=v287zLandscapeSampleAt(c,e.clientX,e.clientY,planet);if(!color){$('landscapeSampleLabel').textContent='Click directly on a visible planet color';return}v287agOpenLandscapeColor(color,planet)});c.addEventListener('pointermove',e=>{if(rotating&&last){const dx=e.clientX-last.x,dy=e.clientY-last.y;v287zLandscapeView.yaw+=dx*.009;v287zLandscapeView.pitch=Math.max(-1.25,Math.min(1.25,v287zLandscapeView.pitch-dy*.007));last={x:e.clientX,y:e.clientY};queueRedraw();return}const planet=p._planet||v287zLandscapePlanet(),color=v287zLandscapeSampleAt(c,e.clientX,e.clientY,planet);if(color){const sw=$('landscapeSampleSwatch'),lab=$('landscapeSampleLabel');if(sw)sw.style.background=color;if(lab)lab.textContent=`Under cursor: ${v287ajLandscapeColorLabel(planet,color)} · ${color} · click to model`}});const stopRotate=()=>{rotating=false;last=null;c.style.cursor='crosshair'};c.addEventListener('pointerup',stopRotate);c.addEventListener('pointercancel',stopRotate);
+  $('landscapePlanetSelect').onchange=e=>{v287zLandscapePlanetId=e.target.value;v287zLandscapeSampleColor='';$('landscapeModelColor').disabled=true;$('landscapeSampleLabel').textContent='Click the globe to sample a color';$('landscapeSampleSwatch').style.background='transparent';redraw()};$('landscapeResetView').onclick=()=>{v287zLandscapeView={yaw:.45,pitch:-.12};redraw()};$('landscapeModelColor').onclick=()=>v287agOpenLandscapeColor(v287zLandscapeSampleColor,p._planet||v287zLandscapePlanet());return p
+}
+function v287yOpenLandscapeEditor(){
+  const p=v287yEnsureLandscapeEditor(),sel=$('landscapePlanetSelect');
+  let list=v287zPlanetCandidates();
+  const editing=editingId?byId(editingId):null;
+  const selectedPlanet=selected&&selected.type==='place'&&String(selected.placeScale||inferPlaceScale(selected.placeType))==='planet'?selected:null;
+  const editorPlanet=editing&&editing.type==='place'&&String(value('ePlaceScale')||editing.placeScale||inferPlaceScale(editing.placeType))==='planet'?editing:null;
+  const current=editorPlanet||selectedPlanet;
+  if(current&&!list.some(q=>q.id===current.id))list=[current,...list];
+  sel.innerHTML=list.map(q=>`<option value="${E.esc(q.id)}">${E.esc(q.name||'Planet')}</option>`).join('');
+  if(!list.length){
+    const fallback=editing&&editing.type==='place'?editing:selected&&selected.type==='place'?selected:null;
+    if(fallback){v287adOpenPaletteForLandscape(fallback);return}
+    console.warn('Landscape Editor: no planet is available to author.');
+    return
+  }
+  if(current)v287zLandscapePlanetId=current.id;
+  if(!list.some(q=>q.id===v287zLandscapePlanetId))v287zLandscapePlanetId=list[0].id;
+  sel.value=v287zLandscapePlanetId;
+  const planet=list.find(q=>q.id===v287zLandscapePlanetId)||v287zLandscapePlanet();
+  if(planet&&!v287adHasSavedPalette(planet)){v287adOpenPaletteForLandscape(planet);return}
+  p._planet=planet||null;
+  p.classList.remove('hidden');
+  p._redraw?.();
+  requestAnimationFrame(()=>keepDetachedPanelOnscreen(p))
+}
+
+function ensurePlaceControlsSidePanel(){
+  let panel=$('placeControlsSidePanel');if(panel)return panel;
+  panel=document.createElement('aside');panel.id='placeControlsSidePanel';panel.className='place-controls-side-panel hidden';
+  panel.innerHTML=`<div class="place-controls-side-head"><div><b>Place Controls</b><small>Planet location, placement & Structure population</small></div><button type="button" id="placeControlsSideClose" class="ghost">×</button></div><div id="placeControlsSideBody" class="place-controls-side-body"></div>`;
+  document.body.appendChild(panel);$('placeControlsSideClose').onclick=()=>panel.classList.add('hidden');prepareDetachedEditorPanel(panel,panel.querySelector('.place-controls-side-head'));return panel
+}
+function syncPlanetPlaceEditorSafety(scale){
+  const planetMode=String(scale||'').toLowerCase()==='planet';
+  // v28.7ac: keep the REAL Place editor intact. Only remove the old population/icon
+  // controls that are meaningless for a root Planet and could trigger huge/recursive
+  // placement paths. Do not hide ownership, description, relationships, etc.
+  const hideIds=[
+    'ePlaceIconText','ePlaceIconSymbol','editPlaceIconSymbols',
+    'ePlacePopulationMode',
+    'ePlaceStructureDensity','ePlaceStructureSpread','ePlaceStructureY','ePlaceStructurePlacementMode','ePlaceStructureVariantMode'
+  ];
+  for(const id of hideIds){
+    const el=$(id);if(!el)continue;
+    const host=el.closest('label,.editor-hint');
+    if(host)host.classList.toggle('hidden',planetMode);
+  }
+  // Planet-wide controls remain available through the detached Planet Controls panel.
+  // The main editor itself is never collapsed or replaced.
+}
+function syncPlaceControlsVisibility(){
+  const panel=$('placeControlsSidePanel');if(!panel||editingType!=='place')return;
+  const draft={...(editingId?byId(editingId):{}),placeScale:$('ePlaceScale')?.value||'building',placeType:$('ePlaceType')?.value||''};
+  panel.classList.toggle('hidden',!placeAllowsSideControls(draft));
+  const scale=String(draft.placeScale).toLowerCase(),countryMode=scale==='country',planetMode=scale==='planet';
+  syncPlanetPlaceEditorSafety(scale);
+
+  const paletteLauncher=$('planetPaletteLauncher');if(paletteLauncher)paletteLauncher.classList.toggle('hidden',!planetMode);
+  if(!planetMode)$('planetPalettePanel')?.classList.add('hidden');
+  const headTitle=panel.querySelector('.place-controls-side-head b'),headSmall=panel.querySelector('.place-controls-side-head small');
+  if(headTitle)headTitle.textContent=countryMode?'Country Editor':planetMode?'Planet Controls':'Place Controls';
+  if(headSmall)headSmall.textContent=countryMode?'Politics, borders & contained Places':planetMode?'Planet-wide generation & palette':'Planet location, placement & Structure population';
+  panel.classList.toggle('country-controls-mode',countryMode);
+  panel.classList.toggle('planet-controls-mode',planetMode);
+
+  const countryBox=panel.querySelector('.country-editor-fields');if(countryBox)countryBox.classList.toggle('hidden',!countryMode);
+  const planetHost=$('eSurfacePlanet')?.closest('label');if(planetHost){
+    // v28.7aq: restore the parent-planet selector for every non-Planet Place.
+    // Countries in Planet-scale systems still use the implicit active globe.
+    const hidePlanetAssignment=planetMode||(countryMode&&countryUsesImplicitPlanet());
+    planetHost.classList.toggle('hidden',hidePlanetAssignment);
+    planetHost.dataset.placeControlGroup=countryMode?'country':'general';
+  }
+  const implicit=panel.querySelector('.country-implicit-planet-note');if(implicit)implicit.classList.toggle('hidden',!countryMode||!countryUsesImplicitPlanet());
+
+  const populationCard=panel.querySelector('.place-population-card');
+  if(populationCard){
+    populationCard.classList.toggle('hidden',countryMode);
+    // At Planet scale, remove ONLY the old controls from the screenshot / legacy Place population path.
+    // Keep: Generate everywhere, tile authoring, Landscape Editor, and permitted Structure checkboxes.
+    const hideForPlanet=['ePlacePopulationMode','ePlaceStructureDensity','ePlaceStructureSpread','ePlaceStructureY','ePlaceStructurePlacementMode','ePlaceStructureVariantMode'];
+    for(const id of hideForPlanet){const host=populationCard.querySelector('#'+id)?.closest('label');if(host)host.classList.toggle('hidden',planetMode)}
+    populationCard.querySelector('.planet-everywhere-control')?.classList.toggle('hidden',!planetMode);
+    populationCard.querySelector('.planet-tile-authoring-controls')?.classList.toggle('hidden',!planetMode);
+        const title=populationCard.querySelector('#placePopulationTitle'),help=populationCard.querySelector('#placePopulationHelp');
+    if(title)title.textContent=planetMode?'Planet-wide Structure Generation':'Place Structure Population';
+    if(help)help.textContent=planetMode?'Choose which authored Structures may generate across streamed planet tiles. Legacy Place scatter controls have been removed; planet population uses streamed tiles only.':'City markers can populate automatically. Custom markers can use only the Structures you choose.';
+  }
+
+  // Any legacy icon controls that older builds may have already moved into the side panel are never shown for Planet mode.
+  for(const id of ['ePlaceIconText','ePlaceIconSymbol','editPlaceIconSymbols']){
+    const el=panel.querySelector('#'+id);const host=el?.closest('label,.editor-hint');if(host)host.classList.toggle('hidden',planetMode);
+  }
+  requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel));
+}
+function movePlaceControlsToSidePanel(){
+  const panel=ensurePlaceControlsSidePanel(),body=$('placeControlsSideBody');if(!panel||!body)return;body.innerHTML='';
+  const paletteLauncher=document.createElement('div');
+  paletteLauncher.id='planetPaletteLauncher';
+  paletteLauncher.className='planet-palette-launcher hidden';
+  paletteLauncher.innerHTML=`<button type="button" id="openPlanetPalette" class="ghost planet-palette-open">🎨 Planet Color Palette</button><small>Edit land, ocean, gas-band, cloud, coverage, and Moon/planet colors. This is the palette used by the actual globe and sampled-color Landscape Editor.</small>`;
+  body.appendChild(paletteLauncher);
+  // launcher is handled by the delegated editor-button handler so moving panels cannot break it.
+
+  const moved=new Set();
+  const addHost=(host,group='general')=>{if(host&&!moved.has(host)){moved.add(host);host.dataset.placeControlGroup=group;body.appendChild(host)}};
+
+  // Country-specific controls still intentionally live in the side panel.
+  const country=document.querySelector('#editorModal .country-editor-fields');addHost(country,'country');
+  if(country&&!country.querySelector('.country-implicit-planet-note'))country.insertAdjacentHTML('afterbegin','<div class="country-implicit-planet-note editor-hint hidden"><b>Planet:</b> This magic system is Planet-scale, so this Country automatically belongs to the active globe.</div>');
+  // v28.7aq: this is a general Place-location control, not a Country-only control.
+  const planetHost=$('eSurfacePlanet')?.closest('label');addHost(planetHost,'general');
+
+  // IMPORTANT v28.7ac: do NOT move Planet icon / generic Place controls into this panel.
+  // That was the screenshot bug. Keep those in the real Place editor.
+  // The side menu gets only the population card, whose unsafe planet controls are hidden by syncPlaceControlsVisibility().
+  addHost(document.querySelector('#editorModal .place-population-card'),'general');
+
+  $('ePlaceScale')?.addEventListener('change',syncPlaceControlsVisibility);
+  syncPlaceControlsVisibility();
+  panel.classList.remove('hidden');requestAnimationFrame(()=>keepDetachedPanelOnscreen(panel));
+}
+function hidePlaceControlsSidePanel(){$('placeControlsSidePanel')?.classList.add('hidden');$('countryBorderPainter')?.classList.add('hidden')}
 function openEditor(type,node=null){
+  if(type==='place')countryBorderDraft=normalizeCountryBorderSegments(node?.countryBorderSegments||[]);
+  // v25.3k stability: editorModal used to live inside .graph-wrap, whose layout
+  // could make fixed-position editor geometry relative to the graph column.
+  // Mount it at document.body so all viewport bounds are real viewport bounds.
+  const editorModal=$('editorModal');
+  if(editorModal&&editorModal.parentElement!==document.body)document.body.appendChild(editorModal);
   resetDraggableEditorPanels();
-  pendingConnectionPlan=null;editingId=node?.id||null;editingType=type;$('editorModal').classList.remove('hidden');$('createMenu').classList.add('hidden');$('editorKindLabel').textContent=node?'Edit':'Create';$('editorTitle').textContent=(node?'Edit ':creatingHub?'New Hub: ':'New ')+(type==='magicalObject'?'Magical Object':type[0].toUpperCase()+type.slice(1));
+  pendingConnectionPlan=null;editingId=node?.id||null;editingType=type;$('editorModal').classList.remove('hidden');$('editorModal').classList.remove('place-side-editor');$('createMenu').classList.add('hidden');$('editorKindLabel').textContent=node?'Edit':'Create';$('editorTitle').textContent=(node?'Edit ':creatingHub?'New Hub: ':'New ')+(type==='magicalObject'?'Magical Object':type[0].toUpperCase()+type.slice(1));
   const f=E.field.bind(E);let html='<div class="editor-grid">';
-  if(type==='mana')html+=`<div class="editor-hint">Mana is the root source of this magical system. You can rename it and define what kind of magical energy it represents without removing its role as the central source.</div>`
+  const creatorDef=generatedCreatorType(type);
+  if(creatorDef){html=generatedEditorHtml(creatorDef,node);}
+  else if(type==='mana')html+=`<div class="editor-hint">Mana is the root source of this magical system. You can rename it and define what kind of magical energy it represents without removing its role as the central source.</div>`
     +f('Mana name','eName',node?.name||'MANA',false,'input','placeholder="e.g. Mana, Aggressive Mana, Aether, Arcane Current"')
     +f('Nature / behavior','eManaNature',node?.nature||'',true,'textarea','placeholder="e.g. Aggressive, volatile energy that amplifies forceful intent."')
     +f('Magical system scale','eSystemScale',['planet','solar','galaxy','universe'].map(v=>`<option value="${v}" ${(node?.systemScale||'planet')===v?'selected':''}>${({planet:'Planet',solar:'Solar System',galaxy:'Galaxy',universe:'Universe'})[v]}</option>`).join(''),false,'select')+f('Description','eDescription',node?.description||'',true,'textarea','placeholder="e.g. The fundamental magical energy permeating living things and enchanted matter."');
@@ -2154,6 +4517,7 @@ function openEditor(type,node=null){
     +f('Structure','eStructure',node?.structure||'',false,'input','placeholder="e.g. Beam, Radial, Touch, Field, Chain"')
     +f('Target','eTarget',node?.target||'',false,'input','placeholder="e.g. Self, Object, Creature, Area"')
     +f('Output','eOutput',node?.output||'',false,'input','placeholder="e.g. Light, Force, Heat, Information, Barrier"')
+    +failOutputControlHtml('eFailOutput',node?.failOutput||'','Fail output')
     +f('Duration','eDuration',node?.duration||'',false,'input','placeholder="e.g. Instant, 0.5 s, 1 minute, Sustained"')
     +f('Range','eRange',node?.range||'',false,'input','placeholder="e.g. Touch, 10 m, Line of sight, Room-wide"')
     +f('Source','eSource',node?.source||'Mana',false,'input','placeholder="e.g. Mana, Ambient magic, Stored crystal"')
@@ -2181,6 +4545,12 @@ function openEditor(type,node=null){
     +f('Exceptions','eExceptions',node?.exceptions||'',true,'textarea','placeholder="e.g. May be bypassed during an eclipse using Moonstone."');
   else if(type==='material'){
     html+=f('Name','eName',node?.name||'',false,'input')
+      +`<div class="full material-rarity-card">
+        <div class="material-rarity-head"><div><b>Material rarity</b><small>Left = rarer · Right = more common</small></div><strong id="materialRarityTier">${materialRarityInfo(node?.materialRarity??55,node?.name||'This material').tier}</strong></div>
+        <input id="eMaterialRarity" class="material-rarity-slider" type="range" min="0" max="100" step="1" value="${Number.isFinite(node?.materialRarity)?node.materialRarity:55}">
+        <div class="material-rarity-axis"><span>DIVINE / ALMOST NONE</span><span>COMMON / WIDESPREAD</span></div>
+        <div id="materialRarityComparison" class="material-rarity-comparison">${E.esc(materialRarityInfo(node?.materialRarity??55,node?.name||'This material').comparison)}</div>
+      </div>`
       +f('Category','eCategory',node?.category||'',false,'input')
       +f('Composition','eComposition',node?.composition||'',true,'textarea')
       +f('Properties','eProperty',node?.property||'',true,'textarea')
@@ -2188,7 +4558,17 @@ function openEditor(type,node=null){
       +f('Uses','eUses',node?.uses||'',true,'textarea')
       +f('Interaction','eInteraction',node?.interaction||'',true,'textarea')
       +f('Description','eDescription',node?.description||'',true,'textarea');
+    const materialPlaces=nodes.filter(x=>x.type==='place'&&!x.virtual&&!x.isHub);
+    html+=f('Primary occurrence','eMaterialPlace','<option value="">No primary place</option>'+materialPlaces.map(p=>`<option value="${p.id}" ${node?.materialPlaceId===p.id?'selected':''}>${E.esc(p.name)}</option>`).join(''),false,'select')
+      +f('Occurrence relationship','eMaterialPlaceMode',['commonly-found','mostly-found','only-found'].map(v=>`<option value="${v}" ${(node?.materialPlaceMode||'commonly-found')===v?'selected':''}>${v==='only-found'?'Only found here':v==='mostly-found'?'Found mostly here':'Commonly found here'}</option>`).join(''),false,'select');
+    const variantMaterials=nodes.filter(x=>x.type==='material'&&!x.isHub&&x.id!==node?.id);
+    html+=f('Variant of material','eMaterialVariantOf',
+      '<option value="">None</option>'+variantMaterials.map(m=>`<option value="${m.id}" ${node?.variantOfMaterialId===m.id?'selected':''}>${E.esc(m.name||'Unnamed material')}</option>`).join(''),
+      false,'select')
+      +`<div class="full material-variant-note"><small>Use this for forms of the same underlying material: refined, corrupted, charged, crystalline, alloyed, synthetic, etc. The graph will create a <b>Variant of</b> relationship automatically.</small></div>`;
+    html+=f('Acronym / short name','eMaterialAcronym',node?.materialAcronym||node?.acronym||'',false,'input','placeholder="e.g. Dia, HD, HDB" maxlength="16"');
     const prices=new Map((node?.currencyPrices||[]).map(p=>[p.currencyId,p.amount]));
+    html+=`<div class="full material-texture-launcher"><div><b>Material Texture</b><small>Open the larger pixel painter on the right. Choose anything from 8×8 pixel-art up to a 256×256 material texture in the larger painter.</small></div><div class="material-texture-launch-actions"><div id="materialTextureInlinePreview" class="material-texture-mini"></div><button type="button" id="openMaterialTexturePanel" class="primary">▦ Open Material Painter</button></div></div>`;
     html+=`<div class="full organization-rel-editor"><div class="organization-rel-head"><b>Currency Pricing</b><small>Assign this Material a price in any authored Currency.</small></div>
       ${civilizationUtils('currency').map(c=>`<div class="material-price-row"><label>${E.esc(c.name)}</label><input data-material-currency="${c.id}" type="number" min="0" step="0.01" value="${prices.get(c.id)??''}" placeholder="No price"><span>${E.esc(c.currencySymbol||'¤')}</span></div>`).join('')||'<div class="auto-empty">Create a Currency utility to price this material.</div>'}
     </div>`
@@ -2210,6 +4590,7 @@ function openEditor(type,node=null){
         +f('Writing direction','eLanguageDirection',
           ['Left → Right','Right → Left','Top → Bottom','Custom'].map(v=>`<option ${node?.languageDirection===v?'selected':''}>${v}</option>`).join(''),false,'select')
         +f('Primary reusable symbol','eUtilitySymbol',symbolOptions(node?.symbolId||''),false,'select')
+        +`<div class="full special-editor-launcher"><div><b>Language Graph Editor</b><small>Build the language visually from Sounds, Symbols, Words, Phrases, grammar ideas and other pieces around the central language orb.</small></div><button type="button" id="openLanguageGraphEditor" class="primary">◉ Open Language Editor</button></div>`
         +`<div class="full language-map-editor">
           ${languageMappingSection('symbolSymbol','Symbol → Symbol','Map one written symbol to another.',groups.symbolSymbol)}
           ${languageMappingSection('symbolSound','Symbol → Sound','Define how written symbols are pronounced.',groups.symbolSound)}
@@ -2240,13 +4621,31 @@ function openEditor(type,node=null){
         +f('Backing','eCurrencyBacking',node?.currencyBacking||'',false,'input','placeholder="None, government, Moonstone, magic..."')
         +f('Description','eDescription',node?.description||'',true,'textarea');
     }else if(subtype==='disease'){
-      html+=`<div class="editor-hint"><b>Disease.</b> Linked Life nodes become the explicitly susceptible species.</div>`
+      const diseaseKind=node?.diseaseKind||'Disease';
+      const symptoms=ofType('civilizationUtil').filter(u=>u.utilityType==='disease'&&u.diseaseKind==='Symptom'&&u.id!==node?.id);
+      const linkedSymptoms=node?edges.filter(e=>!e.blocked&&e.type==='diseaseSymptom'&&(e.a===node.id||e.b===node.id))
+        .map(e=>byId(e.a===node.id?e.b:e.a)).filter(Boolean):[];
+
+      html+=`<div class="editor-hint"><b>Disease / Symptom.</b> Symptoms are reusable building blocks. A Disease needs at least one linked Symptom before it can be saved.</div>`
+        +f('Kind','eDiseaseKind',['Disease','Symptom'].map(v=>`<option ${diseaseKind===v?'selected':''}>${v}</option>`).join(''),false,'select')
         +f('Spread','eDiseaseSpread',['Low','Moderate','High','Extreme'].map(v=>`<option ${node?.diseaseSpread===v?'selected':''}>${v}</option>`).join(''),false,'select')
         +f('Severity','eDiseaseSeverity',['Mild','Moderate','Serious','Severe'].map(v=>`<option ${node?.diseaseSeverity===v?'selected':''}>${v}</option>`).join(''),false,'select')
         +f('Duration','eDiseaseDuration',['Short','Medium','Long','Chronic'].map(v=>`<option ${node?.diseaseDuration===v?'selected':''}>${v}</option>`).join(''),false,'select')
         +f('Mortality %','eDiseaseMortality',node?.diseaseMortality??10,false,'input','type="number" min="0" max="100" step="1"')
         +f('Known cure / treatment','eDiseaseCure',node?.diseaseCure||'',false,'input','placeholder="Object, Material, Technique..."')
         +f('Origin','eDiseaseOrigin',node?.diseaseOrigin||'',false,'input','placeholder="Place or region"')
+        +`<div class="full pathogen-genome-editor">
+          <div class="pathogen-genome-head"><div><b>Pathogen DNA-style genome</b><small>Fictional worldbuilding genetics: paired strands and abstract gene blocks. It is not a real biological model.</small></div><div class="pathogen-genome-actions"><button type="button" id="shortenPathogenGenome" class="ghost">½</button><button type="button" id="extendPathogenGenome" class="ghost">+ DNA</button><button type="button" id="regeneratePathogenGenome" class="ghost">Regenerate</button></div></div>
+          <div id="pathogenGenomeView" class="pathogen-genome-view dna-helix-view"></div>
+          <div id="pathogenGenomeStats" class="pathogen-genome-stats"></div>
+          <div class="pathogen-gene-tools"><select id="eDiseaseGeneSelect"></select><button type="button" id="mutatePathogenGene">Mutate gene</button><button type="button" id="addPathogenGene" class="ghost">+ Gene</button><button type="button" id="removePathogenGene" class="ghost">− Gene</button><button type="button" id="radiatePathogenGenome" class="danger-soft">☢ Abstract radiation</button></div>
+          <small class="pathogen-safety-note">Mutation and radiation are intentionally abstract/randomized simulation controls for fictional worldbuilding.</small>
+          <textarea id="eDiseaseGenome" maxlength="512" spellcheck="false" placeholder="ACGT...">${E.esc(sanitizePathogenGenome(node?.diseaseGenome||generatePathogenGenome(72)))}</textarea>
+        </div>`
+        +`<div class="full disease-symptom-picker">
+          <div class="organization-rel-head"><b>Symptoms used by this Disease</b><small>Required for Disease; ignored when Kind is Symptom.</small></div>
+          ${symptoms.length?symptoms.map(s=>`<label class="life-check"><input class="disease-symptom-check" value="${s.id}" type="checkbox" ${linkedSymptoms.some(x=>x.id===s.id)?'checked':''}><span><b>${E.esc(s.name)}</b><small>Symptom</small></span></label>`).join(''):'<div class="auto-empty">No Symptoms exist yet. Create a Symptom first.</div>'}
+        </div>`
         +f('Description','eDescription',node?.description||'',true,'textarea');
     }else if(subtype==='calendar'){
       html+=`<div class="editor-hint"><b>Calendar.</b> Define how a civilization names and divides time.</div>`
@@ -2287,7 +4686,7 @@ function openEditor(type,node=null){
     }
 
     const linked=node?linkedLifeForUtility(node):[];
-    html+=`<div class="full organization-rel-editor"><div class="organization-rel-head"><b>Exclusive Life Access</b><small>If at least one Life node is linked, only linked Life naturally ${subtype==='language'?'speaks this language':subtype==='currency'?'uses this currency':subtype==='disease'?'is susceptible to this disease':'uses this civilization utility'}.</small></div>
+    html+=`<div class="full organization-rel-editor"><div class="organization-rel-head"><b>Exclusive Life Access</b><small>If at least one Life node is linked, only linked Life naturally ${subtype==='language'?'speaks this language':subtype==='currency'?'uses this currency':subtype==='disease'?(node?.diseaseKind==='Symptom'?'can experience this symptom':'is susceptible to this disease'):'uses this civilization utility'}.</small></div>
       ${ofType('life').map(l=>`<label class="life-check"><input class="utility-life-check" value="${l.id}" type="checkbox" ${linked.some(x=>x.id===l.id)?'checked':''}><span><b>${E.esc(l.name)}</b><small>${civilizationUtilityLinkLabel({utilityType:subtype})}</small></span></label>`).join('')||'<div class="auto-empty">No Life nodes yet.</div>'}
     </div>`
   }
@@ -2305,6 +4704,7 @@ function openEditor(type,node=null){
       +f('Custom type','eOrganizationCustomType',node?.organizationCustomType||'',false,'input','placeholder="e.g. Mage Banking Syndicate"')
       +f('Ideology / purpose','eOrganizationPurpose',node?.organizationPurpose||node?.property||'',true,'textarea','placeholder="e.g. Centralize galactic authority; regulate magic; control trade"')
       +f('Members / population','eOrganizationMembers',node?.organizationMembers??1000,false,'input','type="number" min="0" step="1"')
+      +f('Inhabitants / peoples','eOrganizationInhabitants',node?.organizationInhabitants||'',true,'textarea','placeholder="e.g. Ewoks; Humans; Vorians — matching Life names create graph links"')
       +f('Capital / headquarters','eOrganizationCapital',node?.organizationCapital||'',false,'input','placeholder="e.g. Coruscant, Ministry Tower"')
       +f('Resources / exports','eOrganizationResources',node?.organizationResources||'',true,'textarea','placeholder="e.g. Kyber crystals; enchanted machinery; food"')
       +f('Description','eDescription',node?.description||'',true,'textarea','placeholder="e.g. A centralized interstellar government controlling hundreds of systems."');
@@ -2326,7 +4726,55 @@ function openEditor(type,node=null){
   else if(type==='place')html+=`<div class="editor-hint">Places are physical or magical locations in the setting. Referencing existing Life, Structures, Materials, spells, or other nodes by name helps automatic connections understand what belongs here.</div>`
     +f('Place name','eName',node?.name||'',false,'input','placeholder="e.g. Hogwarts, Diagon Alley, Goblin Settlement, Forbidden Forest"')
     +f('Place type','ePlaceType',node?.placeType||node?.category||'',false,'input','placeholder="e.g. Jedi Temple, City, Mine, Fortress, School, Trade Port"')
-    +f('Place scale','ePlaceScale',placeScaleOptions(node?.placeScale||inferPlaceScale(node?.placeType||node?.category||'')),false,'select')
+    +f('Place scale','ePlaceScale',placeScaleOptions(node?.gasGiant?'planet':(node?.placeScale||inferPlaceScale(node?.placeType||node?.category||''))),false,'select')
+    +f('Located on planet','eSurfacePlanet',
+      '<option value="">Not placed on a planet surface</option>'+
+      nodes.filter(x=>x.type==='place'&&x.id!==node?.id&&(x.gasGiant||String(x.placeScale||inferPlaceScale(x.placeType))==='planet')).map(p=>`<option value="${p.id}" ${node?.surfacePlanetId===p.id?'selected':''}>${E.esc(p.name)}</option>`).join(''),
+      false,'select')
+    +`<div class="full country-editor-fields ${(node?.placeScale||inferPlaceScale(node?.placeType))==='country'?'':'hidden'}">
+      <div class="country-editor-title"><b>Country Editor</b><button type="button" id="openCountryBorderPainter" class="ghost">▱ Paint Borders</button></div>
+      <div class="country-editor-grid">
+        <label>Population<input id="eCountryPopulation" type="number" min="0" step="1" value="${Math.max(0,+node?.countryPopulation||0)}"></label>
+        <label>Capital<input id="eCountryCapital" value="${E.esc(node?.countryCapital||'')}" placeholder="e.g. Aurelia City"></label>
+        <label>Area / size<input id="eCountryArea" value="${E.esc(node?.countryArea||'')}" placeholder="e.g. 1.2 million km²"></label>
+        <label>Government type<input id="eCountryGovernmentType" value="${E.esc(node?.countryGovernmentType||'')}" placeholder="e.g. Federation"></label>
+        <label class="full">Economy / development<input id="eCountryEconomy" value="${E.esc(node?.countryEconomy||'')}" placeholder="e.g. Industrial, post-scarcity, agrarian"></label>
+        <label class="full">Places inside this country
+          <select id="eCountryContainedPlaces" multiple size="3">${countryContainedCandidatePlaces(node).map(p=>`<option value="${p.id}" ${(node?.countryContainedPlaceIds||[]).includes(p.id)?'selected':''}>${E.esc(p.name)} · ${E.esc(String(p.placeScale||inferPlaceScale(p.placeType)))}</option>`).join('')}</select>
+          <small>${countryContainedCandidatePlaces(node).length?'Ctrl/Cmd-click to pick multiple smaller Places. Leave everything unselected for none.':'No smaller Place nodes exist yet — this country contains none.'}</small>
+        </label>
+      </div>
+      <small>Borders and contained Places are stored directly on this Country.</small>
+    </div>`
+    +f('Planet-level icon text','ePlaceIconText',node?.placeIconText||'',false,'input','placeholder="e.g. ⛩, CITY, ✦, △"')
+    +f('Planet-level custom symbol','ePlaceIconSymbol',symbolOptions(node?.placeIconSymbolId||''),false,'select')
+    +`<div class="full editor-hint place-icon-hint"><div><b>Planet icon:</b> choose a custom Symbol or type any short icon/text. No icon means entering this Place shows barren landscape only.</div><button type="button" id="editPlaceIconSymbols" class="ghost">✎ Edit Symbols</button></div>`
+    +`<div class="full place-population-card">
+      <div class="place-population-head"><div><b id="placePopulationTitle">Place Structure Population</b><small id="placePopulationHelp">City markers can populate automatically. Custom markers can use only the Structures you choose.</small></div></div>
+      <label>Population rule<select id="ePlacePopulationMode">
+        <option value="auto" ${(node?.placePopulationMode||'auto')==='auto'?'selected':''}>Auto — city markers use authored Structures</option>
+        <option value="custom" ${node?.placePopulationMode==='custom'?'selected':''}>Custom structure set</option>
+        <option value="none" ${node?.placePopulationMode==='none'?'selected':''}>Landscape only</option>
+      </select></label>
+      <label class="inline-check planet-everywhere-control hidden"><input id="ePlanetStructuresEverywhere" type="checkbox" ${node?.planetStructuresEverywhere?'checked':''}> Generate permitted Structures everywhere across the planet</label><div class="planet-tile-authoring-controls hidden"><button type="button" id="openPlanetTileEditor" class="ghost">▦ Structure/Countryside Tiles</button><button type="button" id="openLandscapeEditor" class="ghost">⛰ Landscape Editor</button><small>Tile rules are streamed per visited surface tile, so planet-wide generation does not instantiate the whole globe at once.</small></div>
+      <label>Density<input id="ePlaceStructureDensity" type="number" min="1" max="80" value="${Math.max(1,Math.min(80,+node?.placeStructureDensity||14))}"></label>
+      <div class="place-placement-mode" id="ePlaceStructurePlacementMode"><span>Placement</span><label class="inline-check"><input id="ePlacePlacementGrid" name="placeStructurePlacement" type="radio" value="grid" ${(node?.placeStructurePlacement||'scatter')==='grid'?'checked':''}> Grid</label><label class="inline-check"><input id="ePlacePlacementScatter" name="placeStructurePlacement" type="radio" value="scatter" ${(node?.placeStructurePlacement||'scatter')!=='grid'?'checked':''}> Scatter</label><small>Grid keeps neat rows. Scatter distributes Structures across a real area while still obeying Density and Spreadness.</small></div>
+      <label id="ePlaceStructureVariantMode">Structure variants<select id="ePlaceVariantMode">
+        <option value="active" ${(!node?.placeStructureVariantMode&&!node?.placeRandomStructureVariants)||node?.placeStructureVariantMode==='active'?'selected':''}>Current variant only</option>
+        <option value="cycle" ${node?.placeStructureVariantMode==='cycle'?'selected':''}>Cycle through variants</option>
+        <option value="random" ${node?.placeStructureVariantMode==='random'||(!node?.placeStructureVariantMode&&node?.placeRandomStructureVariants)?'selected':''}>Random variant per placement</option>
+      </select><small>Controls which authored Structure variant each generated placement uses. Cycle repeats variants in order; Random makes a deterministic mixed population.</small></label>
+      <label>Spreadness <output id="ePlaceStructureSpreadOut">${Math.max(25,Math.min(300,+node?.placeStructureSpread||100))}%</output>
+        <input id="ePlaceStructureSpread" type="range" min="25" max="300" step="5" value="${Math.max(25,Math.min(300,+node?.placeStructureSpread||100))}">
+        <small>25% = compact · 100% = normal · 300% = very spread out.</small>
+      </label>
+      <label>Structure Y alteration<input id="ePlaceStructureY" type="number" step="0.1" min="-500" max="500" value="${Math.max(-500,Math.min(500,Number.isFinite(+node?.placeStructureY)?+node.placeStructureY:0))}"><small>Raises or lowers repeated Structures when this Place is rendered in the landscape.</small></label>
+      <div class="place-structure-choices">${nodes.filter(x=>x.type==='structure'&&!x.isMegastructure).map(s=>`<label class="place-structure-choice"><input class="place-structure-check" type="checkbox" value="${s.id}" ${(node?.placeStructureIds||[]).includes(s.id)?'checked':''}><span>${E.esc(s.name)}</span></label>`).join('')||'<small>No authored Structures yet.</small>'}</div>
+    </div>`
+    +f('Variant of Place','eVariantOfPlace',
+      '<option value="">None — original place</option>'+nodes.filter(x=>x.type==='place'&&!x.isHub&&x.id!==node?.id).map(x=>`<option value="${x.id}" ${node?.variantOfPlaceId===x.id?'selected':''}>${E.esc(x.name)}</option>`).join(''),
+      false,'select')
+    +`<div class="full place-side-editor-note"><b>Place Editor</b><small>Place-specific world controls now live here directly. Places no longer have a separate 3D modelling workspace.</small></div>`
 
     +f('Owner / faction','eOwnerFaction',
       '<option value="">Unclaimed / none</option>'+
@@ -2356,21 +4804,68 @@ function openEditor(type,node=null){
       +f('Compatible nodes, spells, classes, or others on this graph','eUses',node?.uses||'',true,'textarea',`placeholder="${ex[5]}"`)
       +f('Limitations / interactions','eInteraction',node?.interaction||'',true,'textarea',`placeholder="${ex[6]}"`)
       +f('Description','eDescription',node?.description||'',true,'textarea',`placeholder="${ex[7]}"`);
+    if(type==='material'){
+      const places=nodes.filter(x=>x.type==='place'&&!x.virtual&&!x.isHub);
+      html+=f('Primary occurrence','eMaterialPlace',
+        '<option value="">No primary place</option>'+places.map(p=>`<option value="${p.id}" ${node?.materialPlaceId===p.id?'selected':''}>${E.esc(p.name)}</option>`).join(''),
+        false,'select')
+        +f('Occurrence relationship','eMaterialPlaceMode',
+          ['commonly-found','mostly-found','only-found'].map(v=>`<option value="${v}" ${(node?.materialPlaceMode||'commonly-found')===v?'selected':''}>${v==='only-found'?'Only found here':v==='mostly-found'?'Found mostly here':'Commonly found here'}</option>`).join(''),
+          false,'select');
+      const variantMaterials=nodes.filter(x=>x.type==='material'&&!x.isHub&&x.id!==node?.id);
+      html+=f('Variant of material','eMaterialVariantOf',
+        '<option value="">None</option>'+variantMaterials.map(m=>`<option value="${m.id}" ${node?.variantOfMaterialId===m.id?'selected':''}>${E.esc(m.name||'Unnamed material')}</option>`).join(''),
+        false,'select');
+    }
     if(type==='structure')html+=`
       <label class="full life-check mega-structure-check">
         <input id="eIsMegastructure" type="checkbox" ${node?.isMegastructure?'checked':''}>
-        <span><b>Megastructure</b><small>Give this Structure a physical civilization-scale appearance, from planetary construction up to galactic engineering.</small></span>
-      </label>`;
-    if(type==='magicalObject')html+=`
+        <span><b>Megastructure</b><small>Give this Structure a physical civilization-scale appearance, from planetary construction up to galactic engineering. Ordinary 3D modelling is disabled while this is on.</small></span>
+      </label>
+      <label class="full">Variant of Structure
+        <select id="eVariantOfStructure"><option value="">None — original structure</option>${nodes.filter(x=>x.type==='structure'&&!x.isHub&&!x.isMegastructure&&x.id!==node?.id).map(x=>`<option value="${x.id}" ${node?.variantOfStructureId===x.id?'selected':''}>${E.esc(x.name)}</option>`).join('')}</select>
+        <small>Use this for building families, architectural variants, alternate towers, repeated city blocks, and related structural designs.</small>
+      </label>
+      <div id="structureModelLauncher" class="full place-model-launcher ${node?.isMegastructure?'hidden':''}"><div><b>3D Structure Model</b><small>Uses the exact same WebGL modeller as Places, including environment, variants, repetition, camera navigation, and gizmos.</small></div><div><span id="structureModelSummary">${node?.structureModel?.variants?.length||1} model variant${(node?.structureModel?.variants?.length||1)===1?'':'s'}</span><button type="button" id="openStructureModelEditor" class="primary">◫ Open 3D Software</button></div></div>`;
+    if(type==='magicalObject'){
+      const recipe=node?.craftingRecipe||{ingredients:[],process:''};
+      html+=`
       <label class="full life-check tech-object-check"><input id="eTechnological" type="checkbox" ${node?.technological?'checked':''}>
         <span><b>Technological</b><small>Add this Magical Object to the Technology Tree and technological history. It can become part of civilization research and advancement.</small></span>
-      </label>`;
+      </label>
+      <label class="full life-check component-object-check"><input id="eIsComponent" type="checkbox" ${node?.isComponent?'checked':''}>
+        <span><b>Component</b><small>Allows this object to be selected as an ingredient/component while crafting other Magical Objects.</small></span>
+      </label>
+      <div class="full material-texture-launcher magical-object-drawer-launcher"><div><b>2D Magical Object Drawer</b><small>Draw this object's icon / appearance with the exact same 8×8 → 256×256 pixel tools as the Material Painter.</small></div><div class="material-texture-launch-actions"><div id="materialTextureInlinePreview" class="material-texture-mini"></div><button type="button" id="openMaterialTexturePanel" class="primary">▦ Open 2D Drawer</button></div></div>
+      <div class="full crafting-editor-shell" ${node?.isHub?'data-hub-disabled="true"':''}><button type="button" id="toggleCraftingPanel" ${node?.isHub?'disabled title="Hubs do not have crafting recipes"':''} class="crafting-open-button">⚒ Open Crafting Graph</button><div id="craftingOpenStatus" class="crafting-open-status"></div><small class="crafting-inline-help">Opens as a graph to the right. Name this object first, then insert Materials, Components, Magical Objects, or Tools and connect them through named processes.</small></div>`;
+    }
     if(type==='life')html+=`
       <div class="full life-role-editor">
         <div class="life-role-title">Civilization role</div>
         <label class="life-check"><input id="eSentient" type="checkbox" ${node?.sentient?'checked':''}><span><b>Sentient</b><small>Can reason, organize, communicate, form settlements, alliances, governments, raids, or wars.</small></span></label>
         <label class="life-check"><input id="eMainLife" type="checkbox" ${node?.main?'checked':''}><span><b>Main</b><small>A dominant / controlling civilization-building creature in this world. Main automatically means Sentient. Multiple Main species are allowed.</small></span></label>
         <label class="life-check"><input id="eIndividual" type="checkbox" ${node?.individual?'checked':''}><span><b>Individual</b><small>This node represents one specific person or unique creature rather than a whole species. Useful for famous people, rulers, inventors, heroes, historical figures, or singular beings.</small></span></label>
+
+        <div id="individualFamilyWrap" class="life-family-wrap ${node?.individual?'':'hidden'}">
+          <div class="life-family-head">
+            <div><b>Family Tree</b><small>Optional relationships between Individual Life nodes.</small></div>
+            <label class="life-family-enable"><input id="eFamilyEnabled" type="checkbox" ${node?.familyEnabled?'checked':''}> Enable</label>
+          </div>
+          <div id="lifeFamilyFields" class="life-family-fields ${node?.familyEnabled?'':'hidden'}">
+            ${(()=>{
+              const people=nodes.filter(x=>x.type==='life'&&x.individual&&!x.isHub&&x.id!==node?.id);
+              const opts=(selectedId)=>'<option value="">None</option>'+people.map(p=>`<option value="${p.id}" ${selectedId===p.id?'selected':''}>${E.esc(p.name||'Unnamed individual')}</option>`).join('');
+              return `
+                <label>Parent 1<select id="eFamilyParent1">${opts(node?.familyParent1Id||'')}</select></label>
+                <label>Parent 2<select id="eFamilyParent2">${opts(node?.familyParent2Id||'')}</select></label>
+                <label>Partner / spouse<select id="eFamilyPartner">${opts(node?.familyPartnerId||'')}</select></label>
+                <div class="life-family-children"><b>Children</b><div id="eFamilyChildrenPreview">${
+                  nodes.filter(x=>x.type==='life'&&x.individual&&!x.isHub&&(x.familyParent1Id===node?.id||x.familyParent2Id===node?.id))
+                    .map(x=>`<span>${E.esc(x.name||'Unnamed individual')}</span>`).join('') || '<small>None linked yet.</small>'
+                }</div><small>Children are derived automatically from other Individual Life nodes that list this person as a parent.</small></div>`;
+            })()}
+          </div>
+        </div>
         <div id="individualMoralityWrap" class="life-relationship-wrap ${node?.individual?'':'hidden'}">
           <div class="relationship-slider-head"><b>Individual Morality</b><output id="eIndividualMoralityOut">${Number.isFinite(node?.individualMorality)?(node.individualMorality>0?'+':'')+node.individualMorality:'0'}</output></div>
           <input id="eIndividualMorality" class="relationship-slider" type="range" min="-100" max="100" step="1" value="${Number.isFinite(node?.individualMorality)?node.individualMorality:0}">
@@ -2383,34 +4878,69 @@ function openEditor(type,node=null){
         </div>
       </div>`;
   }
-  // Existing nodes can be promoted/demoted without recreating them.
-  // V20.6c uses a compact vertical snap slider on the LEFT of the editor.
-  if(node&&type!=='mana'&&!node.virtual){
-    const role=nodeHubRole(node);
-    html+=`
-      <div id="hubRoleRail" class="hub-role-rail" data-role="${role}">
-        <div class="hub-role-rail-label hub-label">Hub</div>
-        <div class="hub-role-track">
-          <button type="button" class="hub-role-stop stop-hub" data-hub-role="hub" aria-label="Hub"></button>
-          <button type="button" class="hub-role-stop stop-semi" data-hub-role="semi" aria-label="Semi-Hub"></button>
-          <button type="button" class="hub-role-stop stop-normal" data-hub-role="normal" aria-label="Node"></button>
-          <div id="hubRoleThumb" class="hub-role-thumb" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="2" aria-valuenow="${role==='hub'?2:role==='semi'?1:0}" aria-label="Node role"></div>
-        </div>
-        <div class="hub-role-rail-label semi-label">Semi-Hub</div>
-        <div class="hub-role-rail-label node-label">Node</div>
-        <input id="eHubRole" type="hidden" value="${role}">
-      </div>`;
+  // v28: role value lives in the form, while the actual controller is a
+  // detached draggable viewport widget.
+  if(type!=='mana'&&!node?.virtual){
+    const role=node?nodeHubRole(node):(creatingHub?'hub':'normal');
+    html+=`<input id="eHubRole" type="hidden" value="${role}">`;
   }
 
   $('editorBody').innerHTML=html+'</div>' 
+  bindFailOutputControls($('editorBody'));
+  showUniversalCategoryPanel(node,type);
+
+  $('craftingGraphPanel')?.classList.add('hidden');
+  $('materialTexturePanel')?.classList.add('hidden');$('editorModal')?.querySelector('.editor-shell')?.classList.remove('material-painter-open');
   $('autoConnectionsPanel').classList.add('hidden');
   if(type==='civilizationUtil'){
     bindCivilizationUtilSymbolPalette();
-    if((node?.utilityType||window.__pendingCivilizationUtilType)==='language'){
-      bindLanguageMappingEditor()
+
+    const utilType=node?.utilityType||window.__pendingCivilizationUtilType;
+    if(utilType==='language'){
+      bindLanguageMappingEditor();
+      bindLanguageGraphEditor(node);
+    }
+    if(utilType==='disease'){
+      $('eDiseaseKind')?.addEventListener('change',updateDiseaseKindEditor);
+      bindPathogenGenomeEditor();
+      updateDiseaseKindEditor()
     }
   }
+  if(type==='material'){bindMaterialTextureEditor(node,'material');bindMaterialRarityEditor();bindMaterialUpgradeTreeEditor()}
+  if(type==='magicalObject')bindMaterialTextureEditor(node,'object')
+
+  if(type==='life'){
+    const famEnabled=$('eFamilyEnabled'),famFields=$('lifeFamilyFields'),individualBox=$('eIndividual');
+    const syncFamilyVisibility=()=>{
+      const isIndividual=!!individualBox?.checked;
+      $('individualFamilyWrap')?.classList.toggle('hidden',!isIndividual);
+      famFields?.classList.toggle('hidden',!(isIndividual&&famEnabled?.checked));
+    };
+    famEnabled?.addEventListener('change',syncFamilyVisibility);
+    individualBox?.addEventListener('change',syncFamilyVisibility);
+    syncFamilyVisibility();
+  }
+
+  if(type!=='place')hidePlaceControlsSidePanel();
+  if(type==='magicalObject')bindCraftingEditor(node);
+  if(type==='place'){
+    placeModelDraft=null;
+    const spread=$('ePlaceStructureSpread'),spreadOut=$('ePlaceStructureSpreadOut');
+    if(spread&&spreadOut){
+      const syncSpread=()=>{spreadOut.textContent=`${spread.value}%`};
+      spread.addEventListener('input',syncSpread);
+      syncSpread()
+    }
+    const iconBtn=$('editPlaceIconSymbols');
+    if(iconBtn)iconBtn.onclick=()=>{$('symbolLibraryModal')?.classList.remove('hidden');renderSymbolLibrary()};
+    requestAnimationFrame(movePlaceControlsToSidePanel);
+  }
+  if(type==='structure')bindStructureModelEditor(node);
+  // v28.7o: conventional editor cards (including Place) use the same drag engine
+  // as the other editors. This call was previously defined but never invoked here.
+  requestAnimationFrame(bindDraggableEditorPanels);
   $('previewAutoConnections').classList.toggle('hidden',type==='mana');
+  if($('eHubRole'))showHubRolePanel(value('eHubRole')||'normal');else hideHubRolePanel();
 
   if($('eHubRole')&&$('hubRoleRail')){
     const rail=$('hubRoleRail');
@@ -2441,6 +4971,7 @@ function openEditor(type,node=null){
 
       currentRole=role;
       hidden.value=role;
+      hidden.dispatchEvent(new Event('change',{bubbles:true}));
 
       // The role attribute is the authoritative resting position.
       // Set it before removing the temporary drag coordinate.
@@ -2456,6 +4987,7 @@ function openEditor(type,node=null){
 
       // Only now return control of the thumb position to CSS.
       rail.style.removeProperty('--hub-role-drag-y');
+      const craftBtn=$('toggleCraftingPanel');if(craftBtn){const hub=role==='hub';craftBtn.disabled=hub;craftBtn.title=hub?'Hubs do not have crafting recipes':'';craftBtn.closest('.crafting-editor-shell')?.toggleAttribute('data-hub-disabled',hub);if(hub)$('craftingGraphPanel')?.classList.add('hidden')}
 
       if(changed&&playSound)playHubRoleClick()
     };
@@ -2486,6 +5018,7 @@ function openEditor(type,node=null){
       if(role!==currentRole){
         currentRole=role;
         hidden.value=role;
+        hidden.dispatchEvent(new Event('change',{bubbles:true}));
         const idx=roleIndex(role);
         thumb.setAttribute('aria-valuenow',String(idx));
         thumb.setAttribute('aria-valuetext',role==='hub'?'Hub':role==='semi'?'Semi-Hub':'Node');
@@ -2603,6 +5136,7 @@ function openEditor(type,node=null){
       $('ePlanetLandColor3').value=n?.planetLandColor3||'#8d8655';
       $('ePlanetOceanColor').value=n?.planetOceanColor||'#315f9f';
       $('ePlanetOceanColor2').value=n?.planetOceanColor2||'#102f58';
+      $('ePlanetSkyColor').value=n?.planetSkyColor||'#8fc8ee';
       $('ePlanetIsMoon').checked=!!n?.isMoon;
       $('ePlanetGasGiant').checked=!!n?.gasGiant;
       $('ePlanetGasColor').value=n?.planetGasColor||'#d6b783';
@@ -2618,6 +5152,8 @@ function openEditor(type,node=null){
       $('ePlanetCloudColor').value=n?.planetCloudColor||'#eef8ff';
       $('ePlanetCloudCoverage').value=String(n?.planetCloudCoverage??45);
       $('ePlanetCloudOpacity').value=String(n?.planetCloudOpacity??38);
+      $('ePlanetCountryBordersEnabled').checked=n?.planetCountryBordersEnabled!==false;
+      $('ePlanetProceduralBorders').checked=!!n?.planetProceduralBorders;
       $('ePlanetCloudCoverageOut').textContent=$('ePlanetCloudCoverage').value+'%';
       $('ePlanetCloudOpacityOut').textContent=$('ePlanetCloudOpacity').value+'%';
     };
@@ -2711,6 +5247,7 @@ function openEditor(type,node=null){
     };
 
     setPalette(node);setSystem(node);setStar(node);renderMoonTargets(node);
+    $('eSurfacePlanet')?.addEventListener('change',()=>{$('countryBorderPainter')?._redraw?.()});
     land.addEventListener('input',()=>syncCoverage('land'));
     ocean.addEventListener('input',()=>syncCoverage('ocean'));
     $('ePlanetCloudCoverage').addEventListener('input',()=>{$('ePlanetCloudCoverageOut').textContent=$('ePlanetCloudCoverage').value+'%'});
@@ -2841,19 +5378,34 @@ $('eCreatedMegaSize')?.addEventListener('input',()=>{renderMegaPlanetGuide();ren
   if(type==='spell')requestAnimationFrame(bindMoralitySlider);
   requestEditorFit();
   requestAnimationFrame(bindDraggableEditorPanels);
-  requestAnimationFrame(bindDraggableEditorPanels);
+  requestAnimationFrame(bindGlobalDraggableMenus);
 }
 
 
 
 function closeEditor(){
-  resetDraggableEditorPanels();if(megaPainterState?.expanded)toggleMegaPainterExpanded(false);$('autoConnectionsPanel').classList.add('hidden');$('planetPalettePanel')?.classList.add('hidden');$('solarSystemEditorPanel')?.classList.add('hidden');$('starEditorPanel')?.classList.add('hidden');$('megastructureEditorPanel')?.classList.add('hidden');$('editorModal').classList.add('hidden');editingId=null;editingType=null;creatingHub=false;pendingConnectionPlan=null}
+  hidePlaceControlsSidePanel();hideHubRolePanel();hideUniversalCategoryPanel();$('diseaseStrandSidePanel')?.classList.add('hidden');
+  resetDraggableEditorPanels();if(megaPainterState?.expanded)toggleMegaPainterExpanded(false);$('autoConnectionsPanel').classList.add('hidden');$('planetPalettePanel')?.classList.add('hidden');$('solarSystemEditorPanel')?.classList.add('hidden');$('starEditorPanel')?.classList.add('hidden');$('megastructureEditorPanel')?.classList.add('hidden');$('materialTexturePanel')?.classList.add('hidden');$('craftingGraphPanel')?.classList.add('hidden');$('languageGraphPanel')?.classList.add('hidden');$('scene3DPanel')?.classList.add('hidden');$('editorModal')?.querySelector('.editor-shell')?.classList.remove('material-painter-open','crafting-panel-open');$('editorModal').classList.remove('place-side-editor');$('editorModal').classList.add('hidden');editingId=null;editingType=null;creatingHub=false;pendingConnectionPlan=null}
 const value=id=>$(id)?.value?.trim()||'';
 function saveCivilizationUtilEditor(){
   if(editingType!=='civilizationUtil')return false;
 
   const name=value('eName');
   if(!name)return false;
+
+  const requestedSubtype=value('eUtilityType')||window.__pendingCivilizationUtilType||'language';
+  if(requestedSubtype==='disease'&&(value('eDiseaseKind')||'Disease')==='Disease'){
+    const selectedSymptoms=[...document.querySelectorAll('.disease-symptom-check:checked')];
+    if(!selectedSymptoms.length){
+      const saveBtn=$('saveEditor');
+      if(saveBtn){
+        saveBtn.textContent='Add a symptom';
+        setTimeout(()=>{saveBtn.textContent='Save'},1400)
+      }
+      document.querySelector('.disease-symptom-picker')?.classList.add('requirement-missing');
+      return false
+    }
+  }
 
   checkpointHistory();
 
@@ -2892,7 +5444,8 @@ function saveCivilizationUtilEditor(){
       languageDirection:value('eLanguageDirection')||'Left → Right',
       languageMappingGroups:languageGroups,
       languageMode:'Multiple',
-      languageMappings:Object.values(languageGroups).flat()
+      languageMappings:Object.values(languageGroups).flat(),
+      languageEditorGraph:languageGraphDraft?{nodes:languageGraphDraft.nodes.map(x=>({...x})),links:languageGraphDraft.links.map(x=>({...x}))}:(n.languageEditorGraph||null)
     })
   }
 
@@ -2908,14 +5461,30 @@ function saveCivilizationUtilEditor(){
   }
 
   if(subtype==='disease'){
+    const diseaseKind=value('eDiseaseKind')||'Disease';
     Object.assign(n,{
+      diseaseKind,
+      category:diseaseKind,
       diseaseSpread:value('eDiseaseSpread'),
       diseaseSeverity:value('eDiseaseSeverity'),
       diseaseDuration:value('eDiseaseDuration'),
       diseaseMortality:Math.max(0,Math.min(100,+value('eDiseaseMortality')||0)),
       diseaseCure:value('eDiseaseCure'),
-      diseaseOrigin:value('eDiseaseOrigin')
-    })
+      diseaseOrigin:value('eDiseaseOrigin'),
+      diseaseGenome:normalizePathogenGenome(value('eDiseaseGenome'))
+    });
+
+    edges=edges.filter(e=>!(e.type==='diseaseSymptom'&&(e.a===n.id||e.b===n.id)));
+    if(diseaseKind==='Disease'){
+      document.querySelectorAll('.disease-symptom-check:checked').forEach(ch=>{
+        const symptom=byId(ch.value);
+        if(symptom)edges.push({
+          id:uid(),a:n.id,b:symptom.id,type:'diseaseSymptom',
+          linkType:'relationship',label:'Has Symptom',direction:'forward',
+          manual:true,strength:'solid',thickness:1.5
+        })
+      })
+    }
   }
 
   if(subtype==='calendar'){
@@ -2984,6 +5553,9 @@ function saveCivilizationUtilEditor(){
     n.connectionPlan=pendingConnectionPlan.map(p=>({...p}))
   }
 
+  // Universal category is independent of the utility's semantic subtype.
+  applyUniversalCategoryToNode(n);
+
   // Persist FIRST, then close. This avoids editor cleanup clearing state
   // before the Civilization Utility has been written.
   rebuildEdges();
@@ -3000,7 +5572,52 @@ function saveCivilizationUtilEditor(){
   return true
 }
 
+
+function removeAutoRelationshipEdgesFor(nodeId,relationKinds){
+  for(let i=edges.length-1;i>=0;i--){
+    const e=edges[i];
+    if(e?.v26RelationshipAuto&&e.a===nodeId&&relationKinds.includes(e.v26RelationshipKind))edges.splice(i,1);
+  }
+}
+function ensureV26RelationshipEdge(aId,bId,label,kind,direction='forward'){
+  if(!aId||!bId||aId===bId)return;
+  const existing=edges.find(e=>e.a===aId&&e.b===bId&&e.v26RelationshipAuto&&e.v26RelationshipKind===kind);
+  if(existing){existing.label=label;return existing}
+  const e={id:uid(),a:aId,b:bId,type:'relationship',linkType:'relationship',label,direction,manual:false,strength:'solid',thickness:1.6,v26RelationshipAuto:true,v26RelationshipKind:kind};
+  edges.push(e);return e
+}
+function syncFamilyTreeEdges(n){
+  if(!n||n.type!=='life')return;
+  removeAutoRelationshipEdgesFor(n.id,['family-parent-1','family-parent-2','family-partner']);
+  if(!n.individual||!n.familyEnabled)return;
+  if(n.familyParent1Id)ensureV26RelationshipEdge(n.id,n.familyParent1Id,'child of','family-parent-1');
+  if(n.familyParent2Id)ensureV26RelationshipEdge(n.id,n.familyParent2Id,'child of','family-parent-2');
+  if(n.familyPartnerId){
+    ensureV26RelationshipEdge(n.id,n.familyPartnerId,'partner','family-partner','both');
+    const p=byId(n.familyPartnerId);
+    if(p?.type==='life'&&p.individual&&p.familyEnabled&&!p.familyPartnerId)p.familyPartnerId=n.id;
+  }
+}
+function syncMaterialVariantEdge(n){
+  if(!n||n.type!=='material')return;
+  removeAutoRelationshipEdgesFor(n.id,['material-variant']);
+  if(n.variantOfMaterialId)ensureV26RelationshipEdge(n.id,n.variantOfMaterialId,'variant of','material-variant');
+}
+function syncV28NodeVariantEdge(n){
+  if(!n||!['place','structure'].includes(n.type))return;
+  removeAutoRelationshipEdgesFor(n.id,['place-variant','structure-variant']);
+  const id=n.type==='place'?n.variantOfPlaceId:n.variantOfStructureId;if(id)ensureV26RelationshipEdge(n.id,id,'variant of',n.type==='place'?'place-variant':'structure-variant')
+}
+function syncV282PlaceLocationEdge(n){
+  if(!n||n.type!=='place')return;
+  edges=edges.filter(e=>!(e.placePlanetLocation&&e.a===n.id));
+  if(n.surfacePlanetId&&byId(n.surfacePlanetId))edges.push({id:uid(),a:n.id,b:n.surfacePlanetId,type:'relationship',linkType:'relationship',label:'Is located in',direction:'forward',manual:false,strength:'solid',thickness:1.6,placePlanetLocation:true})
+}
+function placeHasPlanetIcon(n){return!!(n&&(String(n.placeIconText||'').trim()||n.placeIconSymbolId))}
+
+
 function saveEditor(){
+  if(generatedCreatorType(editingType)){saveGeneratedCreatorNode(editingType);return}
   if(editingType==='civilizationUtil'){
     saveCivilizationUtilEditor();
     return
@@ -3012,7 +5629,7 @@ function saveEditor(){
   if(!n&&type==='mana')n=byId('mana');
   if(!n){const a=Math.random()*Math.PI*2,d=220+Math.random()*180;n={id:uid(),type,name,x:Math.cos(a)*d,y:Math.sin(a)*d,vx:0,vy:0,r:type==='spell'?17:16};nodes.push(n)}n.name=name;
   if(type==='mana')Object.assign(n,{name,nature:value('eManaNature'),systemScale:value('eSystemScale')||'planet',description:value('eDescription')});
-  else if(type==='spell')Object.assign(n,{spellClass:value('eClass')||'Unclassified',intent:value('eIntent'),structure:value('eStructure'),target:value('eTarget'),output:value('eOutput'),duration:value('eDuration'),range:value('eRange'),source:value('eSource')||'Mana',morality:+($('eMorality')?.value||0),extra:value('eExtra')});
+  else if(type==='spell')Object.assign(n,{spellClass:value('eClass')||'Unclassified',intent:value('eIntent'),structure:value('eStructure'),target:value('eTarget'),output:value('eOutput'),duration:value('eDuration'),range:value('eRange'),source:value('eSource')||'Mana',failOutput:value('eFailOutput'),morality:+($('eMorality')?.value||0),extra:value('eExtra')});
   else if(type==='rule')Object.assign(n,{strength:value('eStrength'),spellClass:value('eRuleClass'),text:value('eText'),scope:value('eScope')||'All magic',exceptions:value('eExceptions'),spellIds:[...document.querySelectorAll('.rule-spell-check:checked')].map(x=>x.value)});
   else if(type==='place')Object.assign(n,{
     placeType:value('ePlaceType'),
@@ -3020,8 +5637,12 @@ function saveEditor(){
     planetLandColor:value('ePlanetLandColor')||'#5d8f5a',
     planetLandColor2:value('ePlanetLandColor2')||'#78915b',
     planetLandColor3:value('ePlanetLandColor3')||'#8d8655',
+    planetLandColor4:n?.planetPaletteSaved?null:n?.planetLandColor4,
+    planetLandColor5:n?.planetPaletteSaved?null:n?.planetLandColor5,
+    planetLandColor6:n?.planetPaletteSaved?null:n?.planetLandColor6,
     planetOceanColor:value('ePlanetOceanColor')||'#315f9f',
     planetOceanColor2:value('ePlanetOceanColor2')||'#102f58',
+    planetSkyColor:value('ePlanetSkyColor')||n.planetSkyColor||'#8fc8ee',
     isMoon:!!$('ePlanetIsMoon')?.checked&&value('ePlaceScale')==='planet',
     orbitingId:(!!$('ePlanetIsMoon')?.checked&&value('ePlaceScale')==='planet')?value('eMoonOrbiting'):null,
     gasGiant:!!$('ePlanetGasGiant')?.checked&&value('ePlaceScale')==='planet',
@@ -3036,25 +5657,59 @@ function saveEditor(){
     planetCloudColor:value('ePlanetCloudColor')||'#eef8ff',
     planetCloudCoverage:Math.max(0,Math.min(100,+value('ePlanetCloudCoverage')||45)),
     planetCloudOpacity:Math.max(0,Math.min(100,+value('ePlanetCloudOpacity')||38)),
+    planetCountryBordersEnabled:$('ePlanetCountryBordersEnabled')?.checked!==false,
+    planetProceduralBorders:!!$('ePlanetProceduralBorders')?.checked,
+    planetPaletteSaved:value('ePlaceScale')==='planet'?(n.planetPaletteSaved||false):n.planetPaletteSaved,
+    planetModelSeed:n.planetModelSeed||v287yPlanetSeed(n),
+    planetStructureTiles:n.planetStructureTiles||{},
+    planetLandscapeTiles:n.planetLandscapeTiles||{},
+    planetLandscapeModels:n.planetLandscapeModels||{},
+    planetLandscapeColorRules:n.planetLandscapeColorRules||{},
+    countryPopulation:Math.max(0,+value('eCountryPopulation')||0),
+    countryCapital:value('eCountryCapital'),
+    countryArea:value('eCountryArea'),
+    countryGovernmentType:value('eCountryGovernmentType'),
+    countryEconomy:value('eCountryEconomy'),
+    countryBorderSegments:normalizeCountryBorderSegments(countryBorderDraft),
+    countryContainedPlaceIds:[...($('eCountryContainedPlaces')?.selectedOptions||[])].map(o=>o.value),
     starPreset:value('eStarPreset')||n.starPreset||'G',
     starColor:value('eStarColor')||n.starColor||STAR_PRESETS.G.core,
     starColor2:value('eStarColor2')||n.starColor2||STAR_PRESETS.G.outer,
     starGlow:value('eStarGlow')||n.starGlow||STAR_PRESETS.G.glow,
     starSize:Math.max(.4,Math.min(3,+value('eStarSize')||n.starSize||1)),
-    ownerFactionId:value('eOwnerFaction')||null,
-    inhabitants:value('eInhabitants'),
-    government:value('eGovernment'),
-    access:value('eAccess'),
-    associations:value('eAssociations'),
-    interaction:value('ePlaceInteraction'),
-    description:value('eDescription'),
+    surfacePlanetId:value('ePlaceScale')==='planet'?null:((value('ePlaceScale')==='country'&&countryUsesImplicitPlanet())?null:(value('eSurfacePlanet')||null)),
+    placeIconText:value('ePlaceScale')==='planet'?'':value('ePlaceIconText'),
+    placeIconSymbolId:value('ePlaceScale')==='planet'?null:(value('ePlaceIconSymbol')||null),
+    allowWildernessStructures:false,
+    placePopulationMode:value('ePlaceScale')==='planet'?'custom':(value('ePlacePopulationMode')||'auto'),
+    placeRandomStructures:false,
+    planetStructuresEverywhere:!!$('ePlanetStructuresEverywhere')?.checked,
+    placeRandomStructureVariants:value('ePlaceVariantMode')==='random',
+    placeStructureVariantMode:['active','cycle','random'].includes(value('ePlaceVariantMode'))?value('ePlaceVariantMode'):'active',
+    placeStructureDensity:Math.max(1,Math.min(80,+value('ePlaceStructureDensity')||14)),
+    placeStructurePlacement:$('ePlacePlacementGrid')?.checked?'grid':'scatter',
+    placeStructureSpread:Math.max(25,Math.min(300,+value('ePlaceStructureSpread')||100)),
+    placeStructureY:Math.max(-500,Math.min(500,Number.isFinite(+value('ePlaceStructureY'))?+value('ePlaceStructureY'):0)),
+    placeStructureIds:[...document.querySelectorAll('.place-structure-check:checked')].map(x=>x.value),
+    structurePlacementOffsets:n.structurePlacementOffsets||{},
+    surfaceLat:Number.isFinite(+n.surfaceLat)?+n.surfaceLat:(Math.random()-.5)*1.6,
+    surfaceLon:Number.isFinite(+n.surfaceLon)?+n.surfaceLon:(Math.random()-.5)*Math.PI*2,
+    placeModel:null,
+    variantOfPlaceId:value('ePlaceScale')==='planet'?null:(value('eVariantOfPlace')||null),
+    ownerFactionId:value('ePlaceScale')==='planet'?null:(value('eOwnerFaction')||null),
+    inhabitants:value('ePlaceScale')==='planet'?'':value('eInhabitants'),
+    government:value('ePlaceScale')==='planet'?'':value('eGovernment'),
+    access:value('ePlaceScale')==='planet'?'':value('eAccess'),
+    associations:value('ePlaceScale')==='planet'?'':value('eAssociations'),
+    interaction:value('ePlaceScale')==='planet'?'':value('ePlaceInteraction'),
+    description:value('ePlaceScale')==='planet'?'':value('eDescription'),
     // Mirror into the generic relationship fields so the existing V15
     // automatic-connection engine understands Places without a rewrite.
     category:value('ePlaceType'),
-    composition:value('eInhabitants'),
-    property:value('eGovernment'),
-    requirements:value('eAccess'),
-    uses:value('eAssociations')
+    composition:value('ePlaceScale')==='planet'?'':value('eInhabitants'),
+    property:value('ePlaceScale')==='planet'?'':value('eGovernment'),
+    requirements:value('ePlaceScale')==='planet'?'':value('eAccess'),
+    uses:value('ePlaceScale')==='planet'?'':value('eAssociations')
   });
   else if(type==='civilizationUtil'){
     const subtype=value('eUtilityType')||'language';
@@ -3116,6 +5771,7 @@ function saveEditor(){
       organizationCustomType:value('eOrganizationCustomType'),
       organizationPurpose:value('eOrganizationPurpose'),
       organizationMembers:Math.max(0,+value('eOrganizationMembers')||0),
+      organizationInhabitants:value('eOrganizationInhabitants'),
       organizationCapital:value('eOrganizationCapital'),
       organizationResources:value('eOrganizationResources'),
       category:value('eOrganizationType')||'Organization',
@@ -3124,6 +5780,20 @@ function saveEditor(){
       description:value('eDescription')
     });
 
+    edges=edges.filter(e=>!(e.type==='organizationInhabitant'&&(e.a===n.id||e.b===n.id)));
+    const inhabitantNames=String(n.organizationInhabitants||'')
+      .split(/[;,\n|]+/)
+      .map(x=>x.trim().toLowerCase())
+      .filter(Boolean);
+    for(const life of ofType('life')){
+      if(!inhabitantNames.includes(String(life.name||'').trim().toLowerCase()))continue;
+      edges.push({
+        id:uid(),a:n.id,b:life.id,type:'organizationInhabitant',
+        linkType:'relationship',label:'Inhabited By',direction:'forward',
+        manual:true,strength:'solid',thickness:1.5
+      })
+    }
+
     document.querySelectorAll('[data-org-rel]').forEach(row=>{
       const other=byId(row.dataset.orgRel);
       const slider=row.querySelector('.org-rel-slider');
@@ -3131,8 +5801,17 @@ function saveEditor(){
     })
   }
   else {
-    Object.assign(n,{category:value('eCategory'),composition:value('eComposition'),property:value('eProperty'),requirements:value('eRequirements'),uses:value('eUses'),interaction:value('eInteraction'),description:value('eDescription')});
+    Object.assign(n,{category:value('eCategory'),parentCategory:n.parentCategory||'',composition:value('eComposition'),property:value('eProperty'),requirements:value('eRequirements'),uses:value('eUses'),interaction:value('eInteraction'),description:value('eDescription')});
     if(type==='material'){
+      n.materialRarity=Math.max(0,Math.min(100,+value('eMaterialRarity')||0));
+      n.materialPlaceId=value('eMaterialPlace')||'';
+      n.materialPlaceMode=value('eMaterialPlaceMode')||'commonly-found';
+      n.variantOfMaterialId=value('eMaterialVariantOf')||'';
+      if(n.variantOfMaterialId===n.id)n.variantOfMaterialId='';
+      n.materialTexture=materialTextureEditorData();
+      n.materialAcronym=value('eMaterialAcronym').trim();n.acronym=n.materialAcronym;
+      // Upgrade relationships are edited from the separate Material Tools toolbar.
+      if(n.materialUpgradeFromId===n.id)n.materialUpgradeFromId='';
       n.currencyPrices=[...document.querySelectorAll('[data-material-currency]')].map(el=>({
         currencyId:el.dataset.materialCurrency,amount:+el.value
       })).filter(p=>Number.isFinite(p.amount)&&p.amount>=0&&String(document.querySelector(`[data-material-currency="${p.currencyId}"]`)?.value||'')!=='');
@@ -3143,6 +5822,8 @@ function saveEditor(){
     }
     if(type==='structure'){
       n.isMegastructure=!!$('eIsMegastructure')?.checked;
+      n.variantOfStructureId=n.isMegastructure?null:(value('eVariantOfStructure')||null);
+      if(!n.isMegastructure)n.structureModel=structureModelDraft?scene3DModelForSave(structureModelDraft):(n.structureModel||normalizeScene3DModel(null));
       if(n.isMegastructure){
         n.megaEditorMode=megaEditorMode||n.megaEditorMode||'attached';
         n.megastructureScale=value('eMegastructureScale')||'planetary';
@@ -3176,7 +5857,11 @@ function saveEditor(){
         }
       }
     }
-    if(type==='magicalObject')n.technological=!!$('eTechnological')?.checked;
+    if(type==='magicalObject'){
+      n.technological=!!$('eTechnological')?.checked;n.isComponent=!!$('eIsComponent')?.checked;
+      n.objectTexture=materialTextureEditorData();
+      if(!n.isHub)n.craftingRecipe=collectCraftingRecipe(); else delete n.craftingRecipe;
+    }
     if(type==='life'){
       n.sentient=!!$('eSentient')?.checked;
       n.main=!!$('eMainLife')?.checked;
@@ -3185,18 +5870,28 @@ function saveEditor(){
       n.relationshipWithMain=(n.sentient&&!n.main)?+(value('eRelationshipMain')||0):0;
       n.individual=!!$('eIndividual')?.checked;
       n.individualMorality=n.individual?Math.max(-100,Math.min(100,+value('eIndividualMorality')||0)):0;
+      n.familyEnabled=n.individual&&!!$('eFamilyEnabled')?.checked;
+      n.familyParent1Id=n.familyEnabled?(value('eFamilyParent1')||''):'';
+      n.familyParent2Id=n.familyEnabled?(value('eFamilyParent2')||''):'';
+      n.familyPartnerId=n.familyEnabled?(value('eFamilyPartner')||''):'';
+      if(n.familyParent2Id&&n.familyParent2Id===n.familyParent1Id)n.familyParent2Id='';
+      if(n.familyPartnerId===n.id)n.familyPartnerId='';
     }
   }
-  if(editingId&&$('eHubRole')&&type!=='mana'){
+  if($('eHubRole')&&type!=='mana'){
     setNodeHubRole(n,value('eHubRole'))
-  }
-
-  if(!editingId&&creatingHub&&type!=='spell'){
+  }else if(!editingId&&creatingHub&&type!=='spell'){
     setNodeHubRole(n,'hub')
   }
   if(type!=='mana'&&pendingConnectionPlan){
     n.connectionPlan=pendingConnectionPlan.map(p=>({...p}));
   }
+
+  applyUniversalCategoryToNode(n);
+  if(type==='life')syncFamilyTreeEdges(n);
+  if(type==='material')syncMaterialVariantEdge(n);
+  if(type==='place'||type==='structure')syncV28NodeVariantEdge(n);
+  if(type==='place'){syncV282PlaceLocationEdge(n);syncCountryContainedPlaceEdges(n)}
 
   if(type==='place'){
     // Keep the graph's visible Orbiting relationship synchronized with
@@ -3399,7 +6094,7 @@ function saveLink(){
     }
     e={id:uid(),a,b,type:'manual',manual:true};edges.push(e)
   }
-  e.label=value('linkLabel')||value('linkType');e.linkType=value('linkType');e.strength=value('linkStrength');e.thickness=+value('linkThickness')||1.6;e.direction=value('linkDirection')||'forward';e.relationship=e.linkType==='relationship'?+(value('linkRelationship')||0):undefined;e.relationshipKind=e.linkType==='relationship'?(value('linkRelationshipKind')||'separate'):undefined;if(e.linkType==='relationship')e.label=`${relationshipKindLabel(e.relationshipKind)} · relationship ${e.relationship>0?'+':''}${e.relationship}`;
+  e.label=value('linkLabel')||value('linkType');e.linkType=value('linkType');const creatorLink=creatorLinkDef(e.linkType);e.strength=value('linkStrength');e.thickness=+value('linkThickness')||1.6;e.direction=value('linkDirection')||'forward';e.color=creatorLink?.color||e.color;e.creatorCategory=creatorLink?.category||'';e.relationship=e.linkType==='relationship'?+(value('linkRelationship')||0):undefined;e.relationshipKind=e.linkType==='relationship'?(value('linkRelationshipKind')||'separate'):undefined;if(e.linkType==='relationship')e.label=`${relationshipKindLabel(e.relationshipKind)} · relationship ${e.relationship>0?'+':''}${e.relationship}`;
   $('linkModal').classList.add('hidden');graph.setLinkMode(false);$('linkBtn').classList.remove('active');
   rebuildEdges();graph.setData(nodes,edges.filter(x=>!x.blocked));updateStats()
 }
@@ -3534,7 +6229,7 @@ function systemAudit(){
 
 
 
-const WORLD_RENDER_SCHEMA=22808;
+const WORLD_RENDER_SCHEMA=23207;
 try{
   const oldSchema=Number(localStorage.getItem('magicWorldRenderSchema')||0);
   if(oldSchema!==WORLD_RENDER_SCHEMA){
@@ -3723,6 +6418,7 @@ function generateProceduralMagicSystem(){
       organizationType:type,category:type,
       organizationPurpose:purpose,property:purpose,
       organizationMembers:[850000,42000,9800][i],
+      organizationInhabitants:mainLife?.name||'',
       organizationCapital:i===0?planet.name:v16Pick(ofType('place').filter(p=>placeRank(p)<placeRank(planet)))?.name||planet.name,
       organizationResources:i===1?`${ofType('material')[0]?.name||'Magical materials'}; enchanted tools`:'Knowledge; magical services',
       description:`Procedurally generated ${type.toLowerCase()} participating in civilization simulation.`,
@@ -3771,7 +6467,7 @@ function generateProceduralMagicSystem(){
     x:340,y:300,vx:0,vy:0,r:16
   };
   const disease={
-    id:uid(),type:'civilizationUtil',utilityType:'disease',category:'Disease',
+    id:uid(),type:'civilizationUtil',utilityType:'disease',category:'Disease',diseaseKind:'Disease',
     name:v16Unique(v16Pick(['Frostlung','Mana Fever','Glassblight'])),
     diseaseSpread:v16Pick(['Low','Moderate','High']),
     diseaseSeverity:v16Pick(['Mild','Moderate','Serious']),
@@ -3779,9 +6475,27 @@ function generateProceduralMagicSystem(){
     diseaseMortality:Math.floor(Math.random()*24),
     diseaseCure:ofType('material')[1]?.name||'Magical treatment',
     diseaseOrigin:planet.name,
+    diseaseGenome:generatePathogenGenome(72),
     description:'A procedurally generated disease used by ecology and history simulation.',
     x:380,y:340,vx:0,vy:0,r:16
   };
+  const symptomA={
+    id:uid(),type:'civilizationUtil',utilityType:'disease',category:'Symptom',diseaseKind:'Symptom',
+    name:v16Unique(v16Pick(['Mana Cough','Crystal Fever','Frost Chills'])),
+    diseaseSeverity:v16Pick(['Mild','Moderate','Serious']),
+    diseaseDuration:v16Pick(['Short','Medium','Long']),
+    description:'A procedurally generated symptom used by diseases.',
+    x:400,y:360,vx:0,vy:0,r:15
+  };
+  const symptomB={
+    id:uid(),type:'civilizationUtil',utilityType:'disease',category:'Symptom',diseaseKind:'Symptom',
+    name:v16Unique(v16Pick(['Arcane Fatigue','Glowrash','Resonance Ache'])),
+    diseaseSeverity:v16Pick(['Mild','Moderate','Serious']),
+    diseaseDuration:v16Pick(['Short','Medium','Long']),
+    description:'A procedurally generated symptom used by diseases.',
+    x:420,y:375,vx:0,vy:0,r:15
+  };
+
   const calendar={
     id:uid(),type:'civilizationUtil',utilityType:'calendar',category:'Calendar',
     name:v16Unique('Aetherian Calendar'),calendarDays:360+Math.floor(Math.random()*21),
@@ -3815,7 +6529,9 @@ function generateProceduralMagicSystem(){
     description:'A generated communication network.',
     x:540,y:500,vx:0,vy:0,r:16
   };
-  nodes.push(language,currency,disease,calendar,legal,ranks,communication);
+  nodes.push(language,currency,symptomA,symptomB,disease,calendar,legal,ranks,communication);
+  edges.push({id:uid(),a:disease.id,b:symptomA.id,type:'diseaseSymptom',linkType:'relationship',label:'Has Symptom',direction:'forward',manual:true,strength:'solid',thickness:1.5});
+  edges.push({id:uid(),a:disease.id,b:symptomB.id,type:'diseaseSymptom',linkType:'relationship',label:'Has Symptom',direction:'forward',manual:true,strength:'solid',thickness:1.5});
 
   const utilityEdge=(a,b,label)=>edges.push({
     id:uid(),a:a.id,b:b.id,type:'civilizationUtility',linkType:'relationship',
@@ -3871,7 +6587,7 @@ function generateProceduralMagicSystem(){
   rebuildEdges();renderLibraries();organize();graph.setData(nodes,edges.filter(e=>!e.blocked));graph.fit();showSelection();save();
 }
 
-let planetView={yaw:0,pitch:-.12,zoom:1,panX:0,panY:0,drag:false,dragMode:'rotate',lastX:0,lastY:0};
+let planetView={yaw:0,pitch:-.12,zoom:1,panX:0,panY:0,drag:false,dragMode:'rotate',lastX:0,lastY:0,political:false};
 let planetSpacePan=false;
 let planetTerrainCache=[];
 let planetDrawQueued=false;
@@ -3887,12 +6603,16 @@ function angularDistance(lat1,lon1,lat2,lon2){
 function buildContinents(seed,count){
   const continents=[];
   let attempts=0;
+  // v28.7y: deterministic planet geometry. The border painter and world map
+  // now resolve the exact same continent/island model for a given planet.
+  let rs=(Math.abs(Math.floor(+seed||1))>>>0)||1;
+  const rnd=()=>{rs=(Math.imul(rs,1664525)+1013904223)>>>0;return rs/4294967296};
 
   while(continents.length<count&&attempts<500){
     attempts++;
-    const lat=(Math.random()-.5)*Math.PI*1.25;
-    const lon=(Math.random()*2-1)*Math.PI;
-    const radius=.42+Math.random()*.34;
+    const lat=(rnd()-.5)*Math.PI*1.25;
+    const lon=(rnd()*2-1)*Math.PI;
+    const radius=.42+rnd()*.34;
 
     // Keep major continent seeds fairly separated so they form distinct,
     // readable landmasses instead of one noisy global blob.
@@ -3900,21 +6620,21 @@ function buildContinents(seed,count){
     if(tooClose)continue;
 
     const lobes=[];
-    const lobeCount=3+Math.floor(Math.random()*4);
+    const lobeCount=3+Math.floor(rnd()*4);
     for(let i=0;i<lobeCount;i++){
-      const a=Math.random()*Math.PI*2;
-      const d=radius*(.15+Math.random()*.42);
+      const a=rnd()*Math.PI*2;
+      const d=radius*(.15+rnd()*.42);
       lobes.push({
         lat:Math.max(-1.42,Math.min(1.42,lat+Math.sin(a)*d*.72)),
         lon:lon+Math.cos(a)*d,
-        radius:radius*(.28+Math.random()*.34)
+        radius:radius*(.28+rnd()*.34)
       });
     }
 
     continents.push({
       lat,lon,radius,
-      warpA:Math.random()*Math.PI*2,
-      warpB:Math.random()*Math.PI*2,
+      warpA:rnd()*Math.PI*2,
+      warpB:rnd()*Math.PI*2,
       lobes
     });
   }
@@ -3924,13 +6644,13 @@ function buildContinents(seed,count){
   const islands=[];
   const islandCount=Math.max(3,Math.floor(count*1.6));
   for(let i=0;i<islandCount;i++){
-    const parent=continents[Math.floor(Math.random()*continents.length)];
-    const a=Math.random()*Math.PI*2;
-    const d=parent.radius*(1.05+Math.random()*.95);
+    const parent=continents[Math.floor(rnd()*continents.length)];
+    const a=rnd()*Math.PI*2;
+    const d=parent.radius*(1.05+rnd()*.95);
     islands.push({
       lat:Math.max(-1.48,Math.min(1.48,parent.lat+Math.sin(a)*d*.7)),
       lon:parent.lon+Math.cos(a)*d,
-      radius:.07+Math.random()*.12
+      radius:.07+rnd()*.12
     });
   }
 
@@ -3989,30 +6709,27 @@ function buildPlanetTerrainCache(){
         planetLandValue(lat1,lon0)
       ].filter(v=>v>threshold).length;
 
-      if(simState.planet?.landEnabled===false)continue;
-      if(!(simState.planet?.oceanEnabled===false||centerField>threshold+.012||cornerHits>=2))continue;
-
+      const isLand=simState.planet?.oceanEnabled===false||(simState.planet?.landEnabled!==false&&(centerField>threshold+.012||cornerHits>=2));
       const n=planetSmooth(midLat*2.25,midLon*2.25,simState.planet.seed+99);
       const moist=planetSmooth(midLat*3.1,midLon*3.1,simState.planet.seed+301);
-      const polar=Math.abs(midLat)>1.22;
 
-      let color;
-      if(polar)color='#cad9df';
-      else if(n>.76)color='#7b7468';
-      else if(moist>.66)color='#4f7248';
-      else if(moist<.34)color='#8d8655';
-      else color=n>.58?'#78915b':'#58744d';
-
-      if(simState.planet?.landColor&&planetIsLand(midLat,midLon)){
-        const palette=[
-          simState.planet.landColor||'#5d8f5a',
-          simState.planet.landColor2||'#78915b',
-          simState.planet.landColor3||'#8d8655'
-        ];
-        color=palette[n>.68?2:moist>.54?1:0];
+      if(!isLand){
+        if(simState.planet?.oceanEnabled===false)continue;
+        // Deep Ocean is now an actual map/sphere terrain class instead of only
+        // being used as limb shading. Near coasts use Ocean; sufficiently deep
+        // water (plus a little broad variation) uses Deep Ocean.
+        const depth=threshold-centerField;
+        const deep=depth>.105||planetSmooth(midLat*4.15,midLon*4.15,simState.planet.seed+733)>.76;
+        const color=deep?(simState.planet?.oceanColor2||'#102f58'):(simState.planet?.oceanColor||'#315f9f');
+        planetTerrainCache.push({lat0,lat1,lon0,lon1,midLat,midLon,color,ocean:true,deepOcean:deep});
+        continue;
       }
-      if(simState.planet?.oceanEnabled===false)color=simState.planet?.landColor||'#8a7654';
-      planetTerrainCache.push({lat0,lat1,lon0,lon1,midLat,midLon,color});
+
+      const p0=simState.planet?.landColor||'#5d8f5a',p1=simState.planet?.landColor2||'#78915b',p2=simState.planet?.landColor3||'#8d8655';
+      // v28.7am: no legacy/hidden biome accents at all. The renderer and loader
+      // share exactly the three user-visible terrestrial palette colors.
+      const color=n>.69?p2:moist>.56?p1:p0;
+      planetTerrainCache.push({lat0,lat1,lon0,lon1,midLat,midLon,color,ocean:false});
     }
   }
 }
@@ -4039,8 +6756,12 @@ function generatePlanet(forcePlanet=false,forceRegenerate=false){
       simState.planet.landColor=simState.planetOverride.landColor;
       simState.planet.landColor2=simState.planetOverride.landColor2;
       simState.planet.landColor3=simState.planetOverride.landColor3;
+      simState.planet.paletteSaved=!!simState.planetOverride.paletteSaved;
+    simState.planet.landColor4=simState.planetOverride.landColor4;
+      simState.planet.landColor4=simState.planetOverride.landColor4;
       simState.planet.oceanColor=simState.planetOverride.oceanColor;
       simState.planet.oceanColor2=simState.planetOverride.oceanColor2;
+      simState.planet.skyColor=simState.planetOverride.skyColor||'#8fc8ee';
     simState.planet.isMoon=!!simState.planetOverride.isMoon;
     simState.planet.orbitingId=simState.planetOverride.orbitingId||null;
     simState.planet.gasGiant=!!simState.planetOverride.gasGiant;
@@ -4071,9 +6792,9 @@ function generatePlanet(forcePlanet=false,forceRegenerate=false){
     return;
   }
 
-  const seed=Math.floor(Math.random()*1e9);
-  const name=v16WorldName();
-  const continentCount=3+Math.floor(Math.random()*4);
+  const seed=Number.isFinite(+simState.planetOverride?.seed)?+simState.planetOverride.seed:Math.floor(Math.random()*1e9);
+  const name=simState.planetOverride?.name||v16WorldName();
+  const continentCount=3+(Math.abs(Math.floor(seed))%4);
   const structure=buildContinents(seed,continentCount);
 
   simState.planet={
@@ -4087,8 +6808,11 @@ function generatePlanet(forcePlanet=false,forceRegenerate=false){
     simState.planet.landColor=simState.planetOverride.landColor;
     simState.planet.landColor2=simState.planetOverride.landColor2;
     simState.planet.landColor3=simState.planetOverride.landColor3;
+    simState.planet.paletteSaved=!!simState.planetOverride.paletteSaved;
+    simState.planet.landColor4=simState.planetOverride.landColor4;
     simState.planet.oceanColor=simState.planetOverride.oceanColor;
     simState.planet.oceanColor2=simState.planetOverride.oceanColor2;
+    simState.planet.skyColor=simState.planetOverride.skyColor||'#8fc8ee';
     simState.planet.isMoon=!!simState.planetOverride.isMoon;
     simState.planet.orbitingId=simState.planetOverride.orbitingId||null;
     simState.planet.gasGiant=!!simState.planetOverride.gasGiant;
@@ -4185,10 +6909,62 @@ let megaPainterState={
   tool:'brush',mode:'paint',drawing:false,start:null,current:null,
   commands:[],heightCommands:[],imports:[],activeImport:null,
   paintFill:null,heightFill:0,
-  eraserMode:'object',
+  eraserMode:'object',selection:null,selectedCommands:[],hover:null,
   undoStack:[],redoStack:[],
-  importImageCache:new Map(),expanded:false
+  importImageCache:new Map(),expanded:false,
+  shiftBrushAxis:null,shiftBrushLastRaw:null,shiftBrushLastPoint:null
 };
+function megaBlockinessValue(){
+  // Kept as the stored command property for backwards compatibility, but in
+  // V23.2i this value controls EDGE SHARPNESS only. It no longer changes the
+  // geometry or quantizes a line onto a staircase.
+  return Math.max(0,Math.min(100,+$('eMegaBlockiness')?.value||0))
+}
+function megaSnapEnabled(){return !!$('eMegaSnapGrid')?.checked}
+function megaSnapGridValue(){return Math.max(4,Math.min(96,+$('eMegaSnapGridSize')?.value||24))}
+function snapMegaPoint(pt){
+  if(!pt||!megaSnapEnabled())return pt;
+  const g=megaSnapGridValue();
+  return {
+    x:Math.max(0,Math.min(1,Math.round(pt.x*768/g)*g/768)),
+    y:Math.max(0,Math.min(1,Math.round(pt.y*384/g)*g/384))
+  }
+}
+function megaCircleFromCenter(){
+  return !!$('eMegaCircleCenter')?.checked
+}
+function constrainMegaAxisPoint(start,pt){
+  if(!start||!pt)return pt;
+  // Compare in canonical painter pixels, not normalized units. The painter is
+  // 2:1, so this keeps Shift behavior visually 90 degrees in every UI size.
+  const dx=Math.abs(pt.x-start.x)*768,dy=Math.abs(pt.y-start.y)*384;
+  return dx>=dy?{x:pt.x,y:start.y}:{x:start.x,y:pt.y}
+}
+function resetMegaShiftBrush(){
+  megaPainterState.shiftBrushAxis=null;
+  megaPainterState.shiftBrushLastRaw=null;
+  megaPainterState.shiftBrushLastPoint=null
+}
+function orthogonalMegaBrushPoint(raw){
+  const lastRaw=megaPainterState.shiftBrushLastRaw||megaPainterState.start||raw;
+  const lastPoint=megaPainterState.shiftBrushLastPoint||megaPainterState.start||raw;
+  const dx=(raw.x-lastRaw.x)*768,dy=(raw.y-lastRaw.y)*384;
+  const ax=Math.abs(dx),ay=Math.abs(dy);
+
+  let axis=megaPainterState.shiftBrushAxis;
+  if(!axis)axis=ax>=ay?'x':'y';
+  else if(axis==='x'&&ay>ax*1.35&&ay>1.5)axis='y';
+  else if(axis==='y'&&ax>ay*1.35&&ax>1.5)axis='x';
+
+  let out=axis==='x'?{x:raw.x,y:lastPoint.y}:{x:lastPoint.x,y:raw.y};
+  if(megaSnapEnabled())out=snapMegaPoint(out);
+
+  megaPainterState.shiftBrushAxis=axis;
+  megaPainterState.shiftBrushLastRaw=raw;
+  megaPainterState.shiftBrushLastPoint=out;
+  return out
+}
+
 function megaPainterSnapshot(){
   return {
     commands:deepCloneState(megaPainterState.commands),
@@ -4227,7 +7003,7 @@ function megaPainterRedo(){
 function megaPaintCanvas(){return $('megaPaintCanvas')}
 function megaPaintPoint(e){
   const c=megaPaintCanvas(),r=c.getBoundingClientRect();
-  return {x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}
+  return {x:Math.max(0,Math.min(1,(e.clientX-r.left)/Math.max(1,r.width))),y:Math.max(0,Math.min(1,(e.clientY-r.top)/Math.max(1,r.height)))}
 }
 function loadMegaImportImage(src){
   if(!src)return null;
@@ -4238,18 +7014,29 @@ function loadMegaImportImage(src){
 function drawMegaVectorCommand(ctx,cmd,w,h,heightMode=false){
   if(!cmd)return;
   const P=v=>({x:v.x*w,y:v.y*h});
+  const block=Math.max(0,Math.min(100,Number(cmd.blockiness)||0));
   ctx.save();
   const tone=heightMode
     ?(()=>{const v=Math.max(-100,Math.min(100,cmd.height||0)),g=Math.round(128+v*1.27);return `rgb(${g},${g},${g})`})()
     :(cmd.color||'#6fdcff');
   ctx.strokeStyle=tone;ctx.fillStyle=tone;ctx.lineWidth=Math.max(1,cmd.width||4);
-  ctx.lineCap='round';ctx.lineJoin='round';
+  // Edge Sharpness affects only stroke styling, never authored geometry.
+  const shape=Math.max(0,Math.min(100,Number(cmd.brushShape??50)));ctx.lineCap=(cmd.type==='brush'&&shape>=60)||block>=55?'square':'round';
+  ctx.lineJoin=block>=75?'miter':block>=35?'bevel':'round';
+  ctx.miterLimit=2+block/10;
   if(cmd.type==='brush'){
     const pts=cmd.points||[];if(pts.length){ctx.beginPath();let a=P(pts[0]);ctx.moveTo(a.x,a.y);for(const q of pts.slice(1)){a=P(q);ctx.lineTo(a.x,a.y)}ctx.stroke()}
   }else if(cmd.type==='line'){
-    const a=P(cmd.a),b=P(cmd.b);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()
+    const a=P(cmd.a),b=P(cmd.b);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()
   }else if(cmd.type==='circle'){
-    const a=P(cmd.a),b=P(cmd.b);ctx.beginPath();ctx.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.max(1,Math.abs(b.x-a.x)/2),Math.max(1,Math.abs(b.y-a.y)/2),0,0,Math.PI*2);ctx.stroke()
+    const a=P(cmd.a),b=P(cmd.b);ctx.beginPath();
+    if(cmd.centerMode){
+      ctx.ellipse(a.x,a.y,Math.max(1,Math.abs(b.x-a.x)),Math.max(1,Math.abs(b.y-a.y)),0,0,Math.PI*2)
+    }else{
+      ctx.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.max(1,Math.abs(b.x-a.x)/2),Math.max(1,Math.abs(b.y-a.y)/2),0,0,Math.PI*2)
+    }
+    ctx.stroke()
   }else if(cmd.type==='rect'){
     const a=P(cmd.a),b=P(cmd.b);ctx.strokeRect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y))
   }else if(cmd.type==='pixelErase'){
@@ -4343,13 +7130,14 @@ function megaFloodFillCurrentLayer(at,heightMode=false){
 function drawMegaBoundaryCommand(ctx,cmd,w,h){
   if(!cmd)return;
   const P=v=>({x:v.x*w,y:v.y*h});
+  const block=Math.max(0,Math.min(100,Number(cmd.blockiness)||0));
 
   ctx.save();
   ctx.strokeStyle='#fff';
   ctx.fillStyle='#fff';
   ctx.lineWidth=1;
-  ctx.lineCap='round';
-  ctx.lineJoin='round';
+  const shape=Math.max(0,Math.min(100,Number(cmd.brushShape??50)));ctx.lineCap=(cmd.type==='brush'&&shape>=60)||block>=55?'square':'round';
+  ctx.lineJoin=block>=75?'miter':block>=35?'bevel':'round';
 
   if(cmd.type==='brush'){
     const pts=cmd.points||[];
@@ -4368,12 +7156,21 @@ function drawMegaBoundaryCommand(ctx,cmd,w,h){
   }else if(cmd.type==='circle'){
     const a=P(cmd.a),b=P(cmd.b);
     ctx.beginPath();
-    ctx.ellipse(
-      (a.x+b.x)/2,(a.y+b.y)/2,
-      Math.max(.5,Math.abs(b.x-a.x)/2),
-      Math.max(.5,Math.abs(b.y-a.y)/2),
-      0,0,Math.PI*2
-    );
+    if(cmd.centerMode){
+      ctx.ellipse(
+        a.x,a.y,
+        Math.max(.5,Math.abs(b.x-a.x)),
+        Math.max(.5,Math.abs(b.y-a.y)),
+        0,0,Math.PI*2
+      )
+    }else{
+      ctx.ellipse(
+        (a.x+b.x)/2,(a.y+b.y)/2,
+        Math.max(.5,Math.abs(b.x-a.x)/2),
+        Math.max(.5,Math.abs(b.y-a.y)/2),
+        0,0,Math.PI*2
+      )
+    }
     ctx.stroke()
   }else if(cmd.type==='rect'){
     const a=P(cmd.a),b=P(cmd.b);
@@ -4904,9 +7701,35 @@ function renderMegaHeightTexture(width=384,height=192){
 
   return c
 }
+function megaGuideDisplayMetrics(canvas){
+  const rect=canvas.getBoundingClientRect();
+  const sx=rect.width/Math.max(1,canvas.width);
+  const sy=rect.height/Math.max(1,canvas.height);
+
+  return{
+    rect,
+    sx:Math.max(.0001,sx),
+    sy:Math.max(.0001,sy),
+    // Convert a desired DISPLAY-pixel radius into canvas X/Y radii.
+    canvasRadius(displayRadius){
+      return{
+        rx:displayRadius/Math.max(.0001,sx),
+        ry:displayRadius/Math.max(.0001,sy)
+      }
+    }
+  }
+}
+
+function megaGuideScreenCircle(ctx,cx,cy,displayRadius,metrics){
+  const {rx,ry}=metrics.canvasRadius(displayRadius);
+  ctx.beginPath();
+  ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
+}
+
 function renderMegaPlanetGuide(){
   const c=$('megaPlanetGuide');if(!c)return;
   const ctx=c.getContext('2d'),w=c.width,h=c.height;
+  const metrics=megaGuideDisplayMetrics(c);
   ctx.clearRect(0,0,w,h);
 
   // New, unsaved megastructures have no editingId yet.
@@ -4917,38 +7740,42 @@ function renderMegaPlanetGuide(){
 
   // ATTACHED — exact old V19.7 Planet Surface Guide.
   if(mode==='attached'){
-    const cx=w/2,cy=h/2,R=Math.min(h*.43,w*.23);
+    const cx=w/2,cy=h/2;
+    const displayR=Math.min(metrics.rect.height*.43,metrics.rect.width*.23);
+    const {rx:Rrx,ry:Rry}=metrics.canvasRadius(displayR);
+    const R=Math.min(Rrx,Rry);
 
-    const g=ctx.createRadialGradient(cx-R*.35,cy-R*.38,R*.08,cx,cy,R);
+    const g=ctx.createRadialGradient(cx-Rrx*.35,cy-Rry*.38,R*.08,cx,cy,R);
     g.addColorStop(0,'rgba(150,205,235,.34)');
     g.addColorStop(.55,'rgba(62,112,150,.22)');
     g.addColorStop(1,'rgba(8,18,30,.12)');
     ctx.fillStyle=g;
-    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fill();
+    megaGuideScreenCircle(ctx,cx,cy,displayR,metrics);ctx.fill();
 
     ctx.save();
-    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
+    megaGuideScreenCircle(ctx,cx,cy,displayR,metrics);ctx.clip();
     ctx.strokeStyle='rgba(180,225,245,.16)';
     ctx.lineWidth=1;
 
     for(let i=-3;i<=3;i++){
-      const yy=cy+i*R/4;
-      const rx=Math.sqrt(Math.max(0,R*R-(yy-cy)*(yy-cy)));
+      const yy=cy+i*Rry/4;
+      const dy=(yy-cy)/Math.max(.0001,Rry);
+      const rx=Rrx*Math.sqrt(Math.max(0,1-dy*dy));
       ctx.beginPath();
-      ctx.ellipse(cx,yy,rx,R*.055,0,0,Math.PI*2);
+      ctx.ellipse(cx,yy,rx,Rry*.055,0,0,Math.PI*2);
       ctx.stroke()
     }
 
     for(let i=-3;i<=3;i++){
       ctx.beginPath();
-      ctx.ellipse(cx,cy,R*Math.cos(i*.18),R,0,0,Math.PI*2);
+      ctx.ellipse(cx,cy,Rrx*Math.cos(i*.18),Rry,0,0,Math.PI*2);
       ctx.stroke()
     }
     ctx.restore();
 
     ctx.strokeStyle='rgba(195,235,250,.55)';
     ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+    megaGuideScreenCircle(ctx,cx,cy,displayR,metrics);ctx.stroke();
 
     // If editing an existing mega, show linked planet name when available.
     const hostPlanet=n?ofType('place').find(p=>
@@ -4959,23 +7786,32 @@ function renderMegaPlanetGuide(){
     ctx.fillStyle='rgba(205,238,250,.8)';
     ctx.font='11px sans-serif';
     ctx.textAlign='center';
-    ctx.fillText(hostPlanet?`PLANET SURFACE GUIDE · ${hostPlanet.name}`:'PLANET SURFACE GUIDE',cx,cy+R+20);
+    ctx.fillText(hostPlanet?`PLANET SURFACE GUIDE · ${hostPlanet.name}`:'PLANET SURFACE GUIDE',cx,cy+Rry+20);
     return
   }
 
   // SEPARATE — relative-size guide must also work before the node is saved.
   if(mode==='separate'){
     const megaDiam=Math.max(.05,+value('eCreatedMegaSize')||1);
-    const usable=Math.min(w*.82,h*.78);
-    const planetD=Math.max(18,Math.min(usable,usable/megaDiam));
-    const megaD=Math.max(18,Math.min(usable,planetD*megaDiam));
+
+    // Calculate sizes in DISPLAY pixels, then compensate X/Y independently.
+    // This guarantees a sphere-like circular guide on screen.
+    const usableDisplay=Math.min(metrics.rect.width*.82,metrics.rect.height*.78);
+    const planetDisplayD=Math.max(18,Math.min(usableDisplay,usableDisplay/megaDiam));
+    const megaDisplayD=Math.max(18,Math.min(usableDisplay,planetDisplayD*megaDiam));
+
+    const planetR=metrics.canvasRadius(planetDisplayD/2);
+    const megaR=metrics.canvasRadius(megaDisplayD/2);
 
     ctx.save();
     ctx.setLineDash([7,5]);
     ctx.lineWidth=1.5;
     ctx.strokeStyle='rgba(120,190,235,.82)';
     ctx.fillStyle='rgba(70,135,180,.10)';
-    ctx.beginPath();ctx.arc(w/2,h/2,planetD/2,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(w/2,h/2,planetR.rx,planetR.ry,0,0,Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
 
     ctx.setLineDash([]);
     ctx.fillStyle='rgba(180,220,245,.92)';
@@ -4985,7 +7821,7 @@ function renderMegaPlanetGuide(){
 
     ctx.strokeStyle='rgba(245,220,145,.82)';
     ctx.setLineDash([3,4]);
-    ctx.beginPath();ctx.arc(w/2,h/2,megaD/2,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.ellipse(w/2,h/2,megaR.rx,megaR.ry,0,0,Math.PI*2);ctx.stroke();
 
     ctx.fillStyle='rgba(245,220,145,.92)';
     ctx.fillText(`Megastructure · ${megaDiam.toFixed(2)}× planet diameter`,w/2,Math.min(h-8,h/2+megaD/2+18));
@@ -5019,7 +7855,7 @@ function renderMegaPainter(preview=null){
     const heightTexture=renderMegaHeightTexture(w,h);
     ctx.save();ctx.globalAlpha=.82;ctx.drawImage(heightTexture,0,0,w,h);ctx.restore();
 
-    if(preview)drawMegaVectorCommand(ctx,preview,w,h,true)
+    if(preview){ctx.save();ctx.globalAlpha=.42;drawMegaVectorCommand(ctx,preview,w,h,true);ctx.restore()}
   }else{
     if(megaPainterState.paintFill){
       ctx.fillStyle=megaPainterState.paintFill;
@@ -5037,7 +7873,7 @@ function renderMegaPainter(preview=null){
       else drawMegaVectorCommand(ctx,cmd,w,h,false)
     }
 
-    if(preview)drawMegaVectorCommand(ctx,preview,w,h,false);
+    if(preview){ctx.save();ctx.globalAlpha=.42;drawMegaVectorCommand(ctx,preview,w,h,false);ctx.restore()};
     drawMegaImports(ctx,w,h)
   }
 
@@ -5054,63 +7890,23 @@ function renderMegaPainter(preview=null){
       ctx.save();ctx.strokeStyle='#9eeaff';ctx.setLineDash([6,4]);ctx.strokeRect(x,y,iw,ih);ctx.restore()
     }
   }
+  // Selection + pre-paint ghost are visual only.
+  if(megaPainterState.selection){ctx.save();ctx.fillStyle='rgba(93,201,255,.12)';ctx.strokeStyle='rgba(130,225,255,.9)';ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();const sel=megaPainterState.selection;if(sel.mode==='rect'){const a=sel.a,b=sel.b;ctx.rect(Math.min(a.x,b.x)*w,Math.min(a.y,b.y)*h,Math.abs(b.x-a.x)*w,Math.abs(b.y-a.y)*h)}else if(sel.points?.length){ctx.moveTo(sel.points[0].x*w,sel.points[0].y*h);for(const p of sel.points.slice(1))ctx.lineTo(p.x*w,p.y*h);ctx.closePath()}ctx.fill();ctx.stroke();ctx.restore()}
+  if(megaPainterState.hover&&['brush','eraser'].includes(megaPainterState.tool)&&!megaPainterState.drawing){const p=megaPainterState.hover,width=+$('eMegaPaintWidth')?.value||8,shape=+$('eMegaBrushShape')?.value||50;ctx.save();ctx.globalAlpha=.42;ctx.fillStyle=megaPainterState.tool==='eraser'?'#ff8f8f':($('eMegaPaintColor')?.value||'#6fdcff');const x=p.x*w,y=p.y*h;ctx.beginPath();if(shape<50)ctx.arc(x,y,width/2,0,Math.PI*2);else ctx.rect(x-width/2,y-width/2,width,width);ctx.fill();ctx.restore()}
   renderMegaIconPreview();
   renderMegaPlanetGuide();
   updateMegaDominantDebugPanel();
 
-  // Draw the guide directly over the visible paint canvas as a second safety path.
-  // Draft mode is enough; a saved node is NOT required.
-  if(megaEditorMode==='attached'){
-    const cx=w/2,cy=h/2,R=Math.min(h*.43,w*.23);
-
-    ctx.save();
-    ctx.fillStyle='rgba(70,140,185,.10)';
-    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fill();
-
-    ctx.strokeStyle='rgba(195,235,250,.72)';
-    ctx.lineWidth=1.7;
-    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
-
-    ctx.strokeStyle='rgba(180,225,245,.20)';
-    ctx.lineWidth=1;
-    for(let i=-3;i<=3;i++){
-      const yy=cy+i*R/4;
-      const rx=Math.sqrt(Math.max(0,R*R-(yy-cy)*(yy-cy)));
-      ctx.beginPath();ctx.ellipse(cx,yy,rx,R*.055,0,0,Math.PI*2);ctx.stroke()
-    }
-    ctx.fillStyle='rgba(205,238,250,.88)';
-    ctx.font='11px sans-serif';
-    ctx.textAlign='center';
-    ctx.fillText('PLANET SURFACE GUIDE',cx,cy+R+20);
-    ctx.restore()
-  }else if(megaEditorMode==='separate'){
-    // New Separate megastructures have no editingId yet; draw from draft mode.
-    const megaDiam=Math.max(.05,+value('eCreatedMegaSize')||1);
-    const usable=Math.min(w*.82,h*.78);
-    const planetD=Math.max(18,Math.min(usable,usable/megaDiam));
-    const megaD=Math.max(18,Math.min(usable,planetD*megaDiam));
-
-    ctx.save();
-    ctx.lineWidth=2;
-    ctx.setLineDash([9,7]);
-    ctx.strokeStyle='rgba(112,200,255,.92)';
-    ctx.beginPath();ctx.arc(w/2,h/2,planetD/2,0,Math.PI*2);ctx.stroke();
-
-    ctx.setLineDash([4,5]);
-    ctx.strokeStyle='rgba(255,224,140,.92)';
-    ctx.beginPath();ctx.arc(w/2,h/2,megaD/2,0,Math.PI*2);ctx.stroke();
-
-    ctx.setLineDash([]);
-    ctx.textAlign='center';
-    ctx.font='12px system-ui';
-    ctx.fillStyle='rgba(190,230,255,.95)';
-    ctx.fillText('Planet · 1×',w/2,Math.max(15,h/2-planetD/2-10));
-    ctx.restore()
-  }
+  
+}
+function updateMegaPainterToolUI(){
+  const tool=megaPainterState.tool;
+  document.querySelectorAll('[data-mega-tools]').forEach(el=>{const tools=el.dataset.megaTools.split(',');el.classList.toggle('tool-option-hidden',!tools.includes(tool))});
+  if($('eMegaPaintWidthOut'))$('eMegaPaintWidthOut').textContent=`${+$('eMegaPaintWidth')?.value||8} px`;if($('eMegaBrushShapeOut'))$('eMegaBrushShapeOut').textContent=`${+$('eMegaBrushShape')?.value||50}%`;
 }
 function setMegaPaintTool(tool){
-  megaPainterState.tool=tool;
-  document.querySelectorAll('.mega-paint-tool').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool))
+  megaPainterState.tool=tool;resetMegaShiftBrush();if(tool!=='select'){megaPainterState.selection=null;megaPainterState.selectedCommands=[]}
+  document.querySelectorAll('.mega-paint-tool').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));updateMegaPainterToolUI()
 }
 function setMegaPaintMode(mode){
   megaPainterState.mode=mode;
@@ -5120,13 +7916,16 @@ function setMegaPaintMode(mode){
   renderMegaPainter()
 }
 function megaPainterData(){
-  const solid=renderMegaSolidTexture(),height=renderMegaHeightTexture();
+  // Saving is always generated from the canonical texture space, never from
+  // the current DOM/CSS size or expanded-painter position.
+  const solid=renderMegaSolidTexture(768,384),height=renderMegaHeightTexture(768,384);
   return {
     commands:deepCloneState(megaPainterState.commands),
     heightCommands:deepCloneState(megaPainterState.heightCommands),
     imports:deepCloneState(megaPainterState.imports),
     paintFill:megaPainterState.paintFill,
     heightFill:megaPainterState.heightFill,
+    planetRelativeMapping:true,
     textureDataUrl:solid.toDataURL('image/png'),
     heightDataUrl:height.toDataURL('image/png')
   }
@@ -5156,33 +7955,67 @@ function bindMegaPainterBackdrop(){
 
 let megaPainterHome=null;
 function toggleMegaPainterExpanded(force=null){
-  const painter=document.querySelector('.mega-painter'),backdrop=$('megaPainterBackdrop');
-  if(!painter)return;
-  bindMegaPainterBackdrop();
-  megaPainterState.expanded=force===null?!megaPainterState.expanded:!!force;
+  const painter=document.querySelector('.mega-painter');
+  const backdrop=$('megaPainterBackdrop');
+  if(!painter||!backdrop)return;
 
-  if(megaPainterState.expanded){
-    if(!megaPainterHome)megaPainterHome={parent:painter.parentNode,next:painter.nextSibling};
+  bindMegaPainterBackdrop();
+
+  const expand=force===null
+    ?!painter.classList.contains('expanded')
+    :!!force;
+
+  if(expand){
+    if(!megaPainterHome){
+      megaPainterHome={parent:painter.parentNode,next:painter.nextSibling}
+    }
+
     document.body.appendChild(backdrop);
     document.body.appendChild(painter);
-    backdrop.classList.remove('hidden');painter.classList.add('expanded');
-    document.body.classList.add('mega-painter-open')
+
+    backdrop.classList.remove('hidden');
+    painter.classList.add('expanded');
+    document.body.classList.add('mega-painter-open');
+
+    setTimeout(()=>{
+      requestCleanMegaFit();
+      renderMegaPainter();
+      renderMegaPlanetGuide()
+    },30)
   }else{
-    backdrop.classList.add('hidden');painter.classList.remove('expanded');
+    backdrop.classList.add('hidden');
+    painter.classList.remove('expanded');
     document.body.classList.remove('mega-painter-open');
-    if(megaPainterHome?.parent){
-      if(megaPainterHome.next&&megaPainterHome.next.parentNode===megaPainterHome.parent)megaPainterHome.parent.insertBefore(painter,megaPainterHome.next);
-      else megaPainterHome.parent.appendChild(painter)
+
+    const stage=painter.querySelector('.mega-paint-stage');
+    if(stage){
+      stage.style.removeProperty('width');
+      stage.style.removeProperty('height')
     }
+
+    if(megaPainterHome?.parent){
+      if(
+        megaPainterHome.next &&
+        megaPainterHome.next.parentNode===megaPainterHome.parent
+      ){
+        megaPainterHome.parent.insertBefore(painter,megaPainterHome.next)
+      }else{
+        megaPainterHome.parent.appendChild(painter)
+      }
+    }
+
+    setTimeout(()=>{
+      renderMegaPainter();
+      renderMegaPlanetGuide()
+    },0)
   }
-  setTimeout(()=>{renderMegaPainter();renderMegaPlanetGuide()},30)
 }
 function megaCommandDistance(cmd,p){
   const seg=(p,a,b)=>{if(!a||!b)return Infinity;const vx=b.x-a.x,vy=b.y-a.y,wx=p.x-a.x,wy=p.y-a.y,l2=vx*vx+vy*vy||1,t=Math.max(0,Math.min(1,(wx*vx+wy*vy)/l2));return Math.hypot(p.x-(a.x+t*vx),p.y-(a.y+t*vy))};
   if(cmd.type==='brush'||cmd.type==='pixelErase'){const pts=cmd.points||[];let best=Infinity;for(let i=1;i<pts.length;i++)best=Math.min(best,seg(p,pts[i-1],pts[i]));if(pts.length===1)best=Math.hypot(p.x-pts[0].x,p.y-pts[0].y);return best}
   if(cmd.type==='line')return seg(p,cmd.a,cmd.b);
   if(cmd.type==='rect'){const a=cmd.a,b=cmd.b;return Math.min(seg(p,{x:a.x,y:a.y},{x:b.x,y:a.y}),seg(p,{x:b.x,y:a.y},{x:b.x,y:b.y}),seg(p,{x:b.x,y:b.y},{x:a.x,y:b.y}),seg(p,{x:a.x,y:b.y},{x:a.x,y:a.y}))}
-  if(cmd.type==='circle'){const cx=(cmd.a.x+cmd.b.x)/2,cy=(cmd.a.y+cmd.b.y)/2,rx=Math.abs(cmd.b.x-cmd.a.x)/2||.001,ry=Math.abs(cmd.b.y-cmd.a.y)/2||.001;return Math.abs(Math.sqrt(((p.x-cx)/rx)**2+((p.y-cy)/ry)**2)-1)*Math.min(rx,ry)}
+  if(cmd.type==='circle'){const cx=cmd.centerMode?cmd.a.x:(cmd.a.x+cmd.b.x)/2,cy=cmd.centerMode?cmd.a.y:(cmd.a.y+cmd.b.y)/2,rx=(cmd.centerMode?Math.abs(cmd.b.x-cmd.a.x):Math.abs(cmd.b.x-cmd.a.x)/2)||.001,ry=(cmd.centerMode?Math.abs(cmd.b.y-cmd.a.y):Math.abs(cmd.b.y-cmd.a.y)/2)||.001;return Math.abs(Math.sqrt(((p.x-cx)/rx)**2+((p.y-cy)/ry)**2)-1)*Math.min(rx,ry)}
   if(cmd.type==='depthRegion')return depthRegionContains(cmd,p)?0:Infinity;
   return Infinity
 }
@@ -5193,9 +8026,51 @@ function eraseMegaObjectAt(p){
   return false
 }
 function syncMegaEraserModeButton(){const b=$('eMegaEraserMode');if(!b)return;b.textContent=megaPainterState.eraserMode==='object'?'Object':'Pixel';b.title='Eraser mode: '+b.textContent}
+// ===================== V23.2f CLEAN EXPANDED PAINTER =====================
+function fitCleanExpandedMegaPainter(){
+  const painter=document.querySelector('body > .mega-painter.expanded');
+  const workspace=painter?.querySelector('.mega-paint-workspace');
+  const stage=painter?.querySelector('.mega-paint-stage');
+  const preview=painter?.querySelector('.mega-icon-preview-wrap');
+  if(!painter||!workspace||!stage)return;
+
+  const wr=workspace.getBoundingClientRect();
+  const pr=preview?.getBoundingClientRect();
+  // Measure the ACTUAL first grid column instead of reconstructing it from
+  // nominal widths. Reparenting into the expanded overlay can introduce
+  // fractional layout values; using the real column edge prevents the slight
+  // display/bake alignment drift that showed up after expansion.
+  const columnRight=pr&&pr.width?pr.left-12:wr.right;
+  const availableW=Math.max(160,columnRight-wr.left);
+  const availableH=Math.max(80,wr.height);
+
+  let width=Math.min(availableW,availableH*2);
+  let height=width/2;
+  if(height>availableH){height=availableH;width=height*2}
+
+  // Keep fractional CSS pixels. Flooring only one dimension can subtly break
+  // the exact 2:1 display transform on high-DPI/fractional layouts.
+  stage.style.width=`${width}px`;
+  stage.style.height=`${height}px`;
+  renderMegaPlanetGuide()
+}
+
+let cleanMegaFitRAF=0;
+function requestCleanMegaFit(){
+  cancelAnimationFrame(cleanMegaFitRAF);
+  cleanMegaFitRAF=requestAnimationFrame(fitCleanExpandedMegaPainter)
+}
+
+window.addEventListener('resize',requestCleanMegaFit);
+
+function megaSelectionSamplePoints(cmd){if(!cmd)return[];if(cmd.points)return cmd.points;if(cmd.a&&cmd.b)return[cmd.a,cmd.b,{x:(cmd.a.x+cmd.b.x)/2,y:(cmd.a.y+cmd.b.y)/2}];if(cmd.at)return[cmd.at];return[]}
+function megaSelectionContainsPoint(sel,p){if(!sel||!p)return false;if(sel.mode==='rect'){const x0=Math.min(sel.a.x,sel.b.x),x1=Math.max(sel.a.x,sel.b.x),y0=Math.min(sel.a.y,sel.b.y),y1=Math.max(sel.a.y,sel.b.y);return p.x>=x0&&p.x<=x1&&p.y>=y0&&p.y<=y1}return pointInPoly(p.x,p.y,sel.points||[])}
+function finalizeMegaSelection(){const collection=megaPainterState.mode==='height'?megaPainterState.heightCommands:megaPainterState.commands,sel=megaPainterState.selection;megaPainterState.selectedCommands=collection.filter(cmd=>megaSelectionSamplePoints(cmd).some(p=>megaSelectionContainsPoint(sel,p)))}
+function deleteMegaSelection(){if(!megaPainterState.selectedCommands?.length)return;pushMegaPainterHistory();const chosen=new Set(megaPainterState.selectedCommands),key=megaPainterState.mode==='height'?'heightCommands':'commands';megaPainterState[key]=megaPainterState[key].filter(x=>!chosen.has(x));megaPainterState.selectedCommands=[];megaPainterState.selection=null;renderMegaPainter()}
 function bindMegaPainter(){
   const c=megaPaintCanvas();if(!c||c.dataset.bound)return;c.dataset.bound='1';
   document.querySelectorAll('.mega-paint-tool').forEach(b=>b.addEventListener('click',()=>setMegaPaintTool(b.dataset.tool)));
+  $('eMegaPaintWidth')?.addEventListener('input',updateMegaPainterToolUI);$('eMegaBrushShape')?.addEventListener('input',()=>{if($('eMegaBrushShapeOut'))$('eMegaBrushShapeOut').textContent=`${+$('eMegaBrushShape').value||50}%`;renderMegaPainter()});$('eMegaDeleteSelection')?.addEventListener('click',deleteMegaSelection);updateMegaPainterToolUI();
   syncMegaEraserModeButton();
   $('eMegaEraserMode').addEventListener('click',()=>{megaPainterState.eraserMode=megaPainterState.eraserMode==='object'?'pixel':'object';syncMegaEraserModeButton()});
   $('eMegaPaintUndo').addEventListener('click',megaPainterUndo);
@@ -5203,6 +8078,7 @@ function bindMegaPainter(){
   $('eMegaImportButton').addEventListener('click',()=>$('eMegaImport').click());
   $('eMegaHeightMode').addEventListener('click',()=>setMegaPaintMode(megaPainterState.mode==='height'?'paint':'height'));
   $('eMegaExpandPaint').addEventListener('click',()=>toggleMegaPainterExpanded());
+  $('eMegaExpandedClose')?.addEventListener('click',()=>toggleMegaPainterExpanded(false));
   $('megaPainterBackdrop').addEventListener('click',e=>{if(e.target===$('megaPainterBackdrop'))toggleMegaPainterExpanded(false)});
   document.querySelector('.mega-painter')?.addEventListener('pointerdown',e=>e.stopPropagation());
   document.querySelector('.mega-painter')?.addEventListener('click',e=>e.stopPropagation());
@@ -5215,6 +8091,17 @@ function bindMegaPainter(){
   $('eMegaHeight').addEventListener('input',()=>{
     const v=+$('eMegaHeight').value||0;$('eMegaHeightOut').textContent=(v>0?'+':'')+v
   });
+  $('eMegaBlockiness')?.addEventListener('input',()=>{
+    const v=megaBlockinessValue();$('eMegaBlockinessOut').textContent=v+'%'
+  });
+  const syncMegaSnapUI=()=>{
+    const on=megaSnapEnabled(),wrap=$('eMegaSnapGridSizeWrap');
+    wrap?.classList.toggle('is-disabled',!on);
+    const out=$('eMegaSnapGridSizeOut');if(out)out.textContent=megaSnapGridValue()+'px'
+  };
+  $('eMegaSnapGrid')?.addEventListener('change',()=>{syncMegaSnapUI();renderMegaPainter()});
+  $('eMegaSnapGridSize')?.addEventListener('input',syncMegaSnapUI);
+  syncMegaSnapUI();
   $('eMegaImport').addEventListener('change',e=>{
     const f=e.target.files?.[0];if(!f)return;
     const reader=new FileReader();
@@ -5230,7 +8117,8 @@ function bindMegaPainter(){
   });
 
   c.addEventListener('pointerdown',e=>{
-    const pt=megaPaintPoint(e);
+    const pt=megaPaintPoint(e);megaPainterState.hover=pt;
+    if(megaPainterState.tool==='select'){megaPainterState.drawing=true;const mode=$('eMegaSelectMode')?.value||'rect';megaPainterState.selection={mode,a:pt,b:pt,points:[pt]};megaPainterState.selectedCommands=[];c.setPointerCapture(e.pointerId);renderMegaPainter();return}
     // Imported images behave as editable paint for Fill and Pixel Eraser.
     // For other tools they can still be clicked and repositioned normally.
     if(megaPainterState.mode==='paint'&&!['fill','eraser'].includes(megaPainterState.tool)){
@@ -5280,10 +8168,14 @@ function bindMegaPainter(){
       return
     }
 
-    megaPainterState.drawing=true;megaPainterState.start=pt;megaPainterState.current=pt;
+    const drawPt=snapMegaPoint(pt);
+    megaPainterState.drawing=true;megaPainterState.start=drawPt;megaPainterState.current=drawPt;
+    resetMegaShiftBrush();
+    megaPainterState.shiftBrushLastRaw=pt;
+    megaPainterState.shiftBrushLastPoint=drawPt;
     const collection=megaPainterState.mode==='height'?megaPainterState.heightCommands:megaPainterState.commands;
-    const base={color:$('eMegaPaintColor').value,width:+$('eMegaPaintWidth').value||8,height:+$('eMegaHeight').value||0};
-    if(megaPainterState.tool==='brush')collection.push({type:'brush',points:[pt],...base});
+    const base={color:$('eMegaPaintColor').value,width:+$('eMegaPaintWidth').value||8,height:+$('eMegaHeight').value||0,blockiness:megaBlockinessValue(),snapGrid:megaSnapEnabled()?megaSnapGridValue():0,centerMode:megaCircleFromCenter(),brushShape:+$('eMegaBrushShape')?.value||50};
+    if(megaPainterState.tool==='brush')collection.push({type:'brush',points:[drawPt],...base});
     else if(megaPainterState.tool==='eraser'){
       if(megaPainterState.eraserMode==='object'){
         eraseMegaObjectAt(pt);renderMegaPainter();megaPainterState.drawing=false
@@ -5300,26 +8192,52 @@ function bindMegaPainter(){
     c.setPointerCapture(e.pointerId)
   });
   c.addEventListener('pointermove',e=>{
-    if(!megaPainterState.drawing)return;
-    const pt=megaPaintPoint(e);megaPainterState.current=pt;
+    const rawPt=megaPaintPoint(e);megaPainterState.hover=rawPt;if(!megaPainterState.drawing){renderMegaPainter();return}
+    if(megaPainterState.tool==='select'){if(megaPainterState.selection?.mode==='lasso')megaPainterState.selection.points.push(rawPt);else megaPainterState.selection.b=rawPt;renderMegaPainter();return}
+
+    let pt=rawPt;
+    if(megaPainterState.tool==='brush'){
+      if(e.shiftKey)pt=orthogonalMegaBrushPoint(rawPt);
+      else{
+        // Releasing Shift starts a fresh freehand segment cleanly.
+        resetMegaShiftBrush();
+        megaPainterState.shiftBrushLastRaw=rawPt;
+        pt=snapMegaPoint(rawPt);
+        megaPainterState.shiftBrushLastPoint=pt
+      }
+    }else{
+      if(e.shiftKey&&megaPainterState.tool==='line')pt=constrainMegaAxisPoint(megaPainterState.start,rawPt);
+      pt=snapMegaPoint(pt)
+    }
+    megaPainterState.current=pt;
     if(megaPainterState.activeImport){
       megaPainterState.activeImport.x=Math.max(0,Math.min(1,pt.x));megaPainterState.activeImport.y=Math.max(0,Math.min(1,pt.y));renderMegaPainter();return
     }
     const collection=megaPainterState.mode==='height'?megaPainterState.heightCommands:megaPainterState.commands;
     if(megaPainterState.tool==='brush'||(megaPainterState.tool==='eraser'&&megaPainterState.eraserMode==='pixel')){collection.at(-1)?.points?.push(pt);renderMegaPainter()}
     else if(['line','circle','rect'].includes(megaPainterState.tool)){
-      renderMegaPainter({type:megaPainterState.tool,a:megaPainterState.start,b:pt,color:$('eMegaPaintColor').value,width:+$('eMegaPaintWidth').value||8,height:+$('eMegaHeight').value||0})
+      renderMegaPainter({type:megaPainterState.tool,a:megaPainterState.start,b:pt,color:$('eMegaPaintColor').value,width:+$('eMegaPaintWidth').value||8,height:+$('eMegaHeight').value||0,blockiness:megaBlockinessValue(),snapGrid:megaSnapEnabled()?megaSnapGridValue():0,centerMode:megaCircleFromCenter(),brushShape:+$('eMegaBrushShape')?.value||50})
     }
   });
   const finish=e=>{
     if(!megaPainterState.drawing)return;
-    const pt=megaPaintPoint(e),collection=megaPainterState.mode==='height'?megaPainterState.heightCommands:megaPainterState.commands;
-    if(!megaPainterState.activeImport&&['line','circle','rect'].includes(megaPainterState.tool)){
-      collection.push({type:megaPainterState.tool,a:megaPainterState.start,b:pt,color:$('eMegaPaintColor').value,width:+$('eMegaPaintWidth').value||8,height:+$('eMegaHeight').value||0})
+    const rawPt=megaPaintPoint(e);
+    if(megaPainterState.tool==='select'){if(megaPainterState.selection?.mode==='rect')megaPainterState.selection.b=rawPt;megaPainterState.drawing=false;finalizeMegaSelection();renderMegaPainter();return}
+    let pt=rawPt;
+    if(megaPainterState.tool==='brush'){
+      if(e.shiftKey)pt=orthogonalMegaBrushPoint(rawPt);
+      else pt=snapMegaPoint(rawPt)
+    }else{
+      if(e.shiftKey&&megaPainterState.tool==='line')pt=constrainMegaAxisPoint(megaPainterState.start,rawPt);
+      pt=snapMegaPoint(pt)
     }
-    megaPainterState.drawing=false;megaPainterState.start=null;megaPainterState.current=null;renderMegaPainter()
+    const collection=megaPainterState.mode==='height'?megaPainterState.heightCommands:megaPainterState.commands;
+    if(!megaPainterState.activeImport&&['line','circle','rect'].includes(megaPainterState.tool)){
+      collection.push({type:megaPainterState.tool,a:megaPainterState.start,b:pt,color:$('eMegaPaintColor').value,width:+$('eMegaPaintWidth').value||8,height:+$('eMegaHeight').value||0,blockiness:megaBlockinessValue(),snapGrid:megaSnapEnabled()?megaSnapGridValue():0,centerMode:megaCircleFromCenter(),brushShape:+$('eMegaBrushShape')?.value||50})
+    }
+    megaPainterState.drawing=false;megaPainterState.start=null;megaPainterState.current=null;resetMegaShiftBrush();renderMegaPainter()
   };
-  c.addEventListener('pointerup',finish);c.addEventListener('pointercancel',finish)
+  c.addEventListener('pointerup',finish);c.addEventListener('pointercancel',finish);c.addEventListener('pointerleave',()=>{if(!megaPainterState.drawing){megaPainterState.hover=null;renderMegaPainter()}})
 }
 
 const megaTextureCache=new Map();
@@ -5391,8 +8309,31 @@ function megaTexturePixel(dataUrl,u,v){
   const i=(y*w+x)*4,a=d.data[i+3];if(a<10)return null;
   return {r:d.data[i],g:d.data[i+1],b:d.data[i+2],a:a/255}
 }
+// V24 — Planet-relative paint coordinates.
+// The old painter used linear longitude/latitude UVs. That makes authored
+// widths look progressively larger/smaller once projected onto a sphere.
+// This mapping keeps painter size proportional to the planet's projected
+// diameter: a feature occupying 25% of the guide occupies ~25% of the globe
+// when it faces the camera, regardless of painter CSS stretching.
+function megaPlanetRelativeUV(u,v){
+  const lon=(u-.5)*Math.PI*2;
+  const lat=(.5-v)*Math.PI;
+  let q;
+  if(lon< -Math.PI/2)q=-2-Math.sin(lon);
+  else if(lon>Math.PI/2)q=2-Math.sin(lon);
+  else q=Math.sin(lon);
+  return{
+    u:Math.max(0,Math.min(1,.5+.25*q)),
+    v:Math.max(0,Math.min(1,.5-.5*Math.sin(lat)))
+  }
+}
+function megaSurfaceTexturePixel(mega,dataUrl,u,v){
+  if(!dataUrl)return null;
+  const mapped=megaPlanetRelativeUV(u,v);
+  return megaTexturePixel(dataUrl,mapped.u,mapped.v)
+}
 function megaHeightAtUV(mega,u,v){
-  const p=megaTexturePixel(mega?.megaPaintData?.heightDataUrl,u,v);if(!p)return 0;
+  const p=megaSurfaceTexturePixel(mega,mega?.megaPaintData?.heightDataUrl,u,v);if(!p)return 0;
   return Math.max(-1,Math.min(1,((p.r+p.g+p.b)/3-128)/127))
 }
 
@@ -5746,7 +8687,7 @@ function drawPlanetCavities(ctx,w,h){
 
 function megaMeshSurfaceColor(mega,u,v){
   const tex=mega?.megaPaintData?.textureDataUrl;
-  const p=tex?megaTexturePixel(tex,u,v):null;
+  const p=tex?megaSurfaceTexturePixel(mega,tex,u,v):null;
 
   if(p&&p.a>.02)return `rgba(${p.r},${p.g},${p.b},${p.a})`;
 
@@ -5837,7 +8778,7 @@ function drawAttachedMegaDisplacedMesh(ctx,mega,w,h){
       const u=(A.u+C.u)/2;
       const v=(A.v+C.v)/2;
 
-      const paint=tex?megaTexturePixel(tex,u,v):null;
+      const paint=tex?megaSurfaceTexturePixel(mega,tex,u,v):null;
       const displaced=Math.max(
         Math.abs(A.height),Math.abs(B.height),
         Math.abs(C.height),Math.abs(D.height)
@@ -6111,7 +9052,7 @@ function drawMegaPaintOnGlobe(ctx,mega,w,h){
     let ix=col0;
 
     while(ix<col1){
-      const c0=megaTexturePixel(tex,(ix+.5)/cols,vm);
+      const c0=megaSurfaceTexturePixel(mega,tex,(ix+.5)/cols,vm);
 
       if(!c0 || c0.a<=.01){
         ix++;
@@ -6125,7 +9066,7 @@ function drawMegaPaintOnGlobe(ctx,mega,w,h){
       let sr=c0.r,sg=c0.g,sb=c0.b,sa=c0.a,count=1;
 
       while(end<col1){
-        const c=megaTexturePixel(tex,(end+.5)/cols,vm);
+        const c=megaSurfaceTexturePixel(mega,tex,(end+.5)/cols,vm);
         if(!c || c.a<=.01)break;
 
         const ar=sr/count,ag=sg/count,ab=sb/count;
@@ -6206,7 +9147,7 @@ function drawPlanetClouds(ctx,w,h,phase='above'){
   for(let i=0;i<count;i++){
     if(seededUnit(seed,i,201.7)>coverage)continue;
     const a=seededUnit(seed,i,213.9)*Math.PI*2;
-    const rr=Math.sqrt(seededUnit(seed,i,226.1))*R*.92;
+    const rr=Math.sqrt(seededUnit(seed,i,227))*R*.92;
     const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr*.78;
     const size=R*(.035+.09*seededUnit(seed,i,239.3));
     const g=ctx.createRadialGradient(x,y,0,x,y,size);
@@ -6227,7 +9168,7 @@ function attachedMegaSurfaceHeightAtUV(u,v){
     if(!tex)continue;
 
     // Only consider an attached mega where authored paint actually exists.
-    const color=megaTexturePixel(tex,u,v);
+    const color=megaSurfaceTexturePixel(mega,tex,u,v);
     if(!color||color.a<=.01)continue;
 
     const h=megaHeightAtUV(mega,u,v);
@@ -6292,7 +9233,7 @@ function drawPlanetSurfaceOcclusion(ctx,w,h){
     // terrain mesh, without exposing sub-pixel cracks.
     const q=expandScreenPolygon([p00,p10,p11,p01],.35);
 
-    ctx.fillStyle=cell.color;
+    const authored=v287yLandscapeTileForPlanet(activeSurfacePlanetNode(),cell.midLat,cell.midLon);ctx.fillStyle=authored?.color||cell.color;
     ctx.globalAlpha=1;
     ctx.beginPath();
     ctx.moveTo(q[0].x,q[0].y);
@@ -6430,7 +9371,7 @@ function isPlanetSurfaceStructure(structure,planet,surfacePlaces){
 function activePlanetPlace(){
   const name=simState.planetOverride?.name||simState.planet?.name;
   if(!name)return null;
-  return ofType('place').find(p=>p.name===name&&String(p.placeScale||inferPlaceScale(p.placeType))==='planet')||null;
+  return ofType('place').find(p=>p.name===name&&(p.gasGiant||String(p.placeScale||inferPlaceScale(p.placeType))==='planet'))||null;
 }
 
 function generateWorldLocations(){
@@ -6754,7 +9695,941 @@ if(restoredWorldState?.scaleNav){
   scaleNav={...scaleNav,...restoredWorldState.scaleNav,transitioning:false,tween:null};
 }
 
-function hierarchyChildLevel(level){return level==='universe'?'galaxy':level==='galaxy'?'solar':level==='solar'?'planet':null}
+
+/* ============================ V27 PLANET SURFACE ZOOM ============================ */
+let surfaceView={active:false,lat:0,lon:0,biome:'green-landscape',sky:'#8ec8ef',ground:'#5f8a49',gas:false,cameraX:0,cameraZ:0,zoom:1,yaw:0,pitch:.30,dragPlaceId:null,dragStructureKey:null,focusPlaceId:null,lastRightDown:0,captions:true,tool:'move'};
+function inversePlanetScreenPoint(canvas,clientX,clientY){const r=canvas.getBoundingClientRect(),w=r.width,h=r.height,R=Math.min(w,h)*.39*planetView.zoom,zz=(clientX-r.left-w/2-planetView.panX)/R,yy=-(clientY-r.top-h/2-planetView.panY)/R;if(zz*zz+yy*yy>1)return null;let x=Math.sqrt(Math.max(0,1-zz*zz-yy*yy)),y=yy,z=zz;const cp=Math.cos(planetView.pitch),sp=Math.sin(planetView.pitch);[x,y]=[x*cp+y*sp,-x*sp+y*cp];const cy=Math.cos(planetView.yaw),sy=Math.sin(planetView.yaw);[x,z]=[x*cy+z*sy,-x*sy+z*cy];return{lat:Math.asin(Math.max(-1,Math.min(1,y))),lon:Math.atan2(z,x)}}
+function v271ParseHex(hex){const m=/^#?([0-9a-f]{6})$/i.exec(String(hex||''));if(!m)return null;const n=parseInt(m[1],16);return{r:(n>>16)&255,g:(n>>8)&255,b:n&255}}
+function v271HexMix(a,b,t=.5){const A=v271ParseHex(a)||{r:80,g:120,b:80},B=v271ParseHex(b)||A;return`#${[A.r+(B.r-A.r)*t,A.g+(B.g-A.g)*t,A.b+(B.b-A.b)*t].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('')}`}
+function planetTerrainColorAt(lat,lon){const twopi=Math.PI*2,L=((lon+Math.PI)%twopi+twopi)%twopi-Math.PI;const cell=(planetTerrainCache||[]).find(c=>lat>=c.lat0&&lat<=c.lat1&&L>=c.lon0&&L<=c.lon1);return cell?.color||null}
+function surfaceFromPlanetPoint(lat,lon){const p=simState.planet||{},active=activeSurfacePlanetNode(),custom=v287yLandscapeTileForPlanet(active,lat,lon),sample=custom?.color||planetTerrainColorAt(lat,lon),landRule=v287zLandscapeRuleForSurface(active,sample),authoredSky=landRule?.skyColor||active?.planetSkyColor||p.skyColor||'#8fc8ee';if(custom?.type==='lava'||custom?.type==='bright-lava')return{lat,lon,biome:'lava-landscape',ground:custom.color||'#cf4b18',sky:authoredSky,gas:false,sampledColor:custom.color};if(p.gasGiant){const gas=sample||p.gasColor||'#d6b783';return{lat,lon,biome:'gas-atmosphere',ground:gas,sky:authoredSky,gas:true,sampledColor:gas}}const col=sample||((planetIsLand(lat,lon)?p.landColor:p.oceanColor)||'#5d8f5a'),rgb=v271ParseHex(col)||{r:90,g:130,b:70};let biome;if(rgb.b>rgb.r*1.12&&rgb.b>rgb.g*1.05)biome='ocean-water';else if(rgb.r>rgb.b*1.35&&rgb.g>rgb.b*1.2&&Math.abs(rgb.r-rgb.g)<95)biome='desert';else biome='green-landscape';return{lat,lon,biome,ground:col,sky:authoredSky,gas:false,sampledColor:col}}
+function activeSurfacePlanetNode(){try{return activePlanetPlace()}catch{return null}}
+function surfacePlaces(){const planet=activeSurfacePlanetNode(),pid=planet?.id;if(!planet)return[];return nodes.filter(n=>n.type==='place'&&!n.isHub&&n.id!==pid&&(n.surfacePlanetId===pid||(countryUsesImplicitPlanet()&&String(n.placeScale||inferPlaceScale(n.placeType))==='country')))}
+function v287qSurfaceTool(){return['move','drag','weather'].includes(surfaceView.tool)?surfaceView.tool:'move'}
+function v287qWeatherType(){if(surfaceView.gas||surfaceView.biome==='gas-atmosphere')return'storm';if(surfaceView.biome==='desert')return'sandstorm';return'rain'}
+function v287qWeatherLabel(type=v287qWeatherType()){return type==='sandstorm'?'Sandstorm':type==='storm'?'Storm':'Rain'}
+function ensureSurfaceToolBar(){
+  const canvas=$('planetCanvas'),stage=canvas?.parentElement;if(!stage)return null;
+  let bar=$('surfaceToolBar');
+  if(!bar){
+    bar=document.createElement('div');bar.id='surfaceToolBar';bar.className='surface-tool-bar hidden';
+    bar.innerHTML=`<button type="button" data-surface-tool="move"><b>✥</b><span>Move</span></button><button type="button" data-surface-tool="drag"><b>↔</b><span>Drag</span></button><button type="button" data-surface-tool="weather"><b>☁</b><span>Weather</span></button><small id="surfaceToolHint"></small>`;
+    stage.appendChild(bar);
+    bar.querySelectorAll('[data-surface-tool]').forEach(btn=>btn.onclick=()=>{surfaceView.tool=btn.dataset.surfaceTool;v287qSyncSurfaceToolBar();requestPlanetDraw()})
+  }
+  v287qSyncSurfaceToolBar();return bar
+}
+function v287qSyncSurfaceToolBar(){
+  const bar=$('surfaceToolBar');if(!bar)return;
+  const show=surfaceView.active&&['surface','place'].includes(mapDisplayLevel());bar.classList.toggle('hidden',!show);
+  const tool=v287qSurfaceTool();bar.querySelectorAll('[data-surface-tool]').forEach(b=>b.classList.toggle('active',b.dataset.surfaceTool===tool));
+  const hint=$('surfaceToolHint');if(hint)hint.textContent=tool==='drag'?'Drag · enlarged Structure hitboxes':tool==='weather'?`Weather · ${v287qWeatherLabel()} · click to toggle · weather builds in`:'Move · pan · wheel zoom · right-drag rotate'
+}
+function v287qHideSurfaceToolBar(){$('surfaceToolBar')?.classList.add('hidden')}
+function v287qWeatherContextKey(){
+  if(mapDisplayLevel()==='place'){const place=byId(surfaceView.focusPlaceId||scaleNav.selected?.sourceId);return place?`place:${place.id}`:'place:none'}
+  return`surface:${v287pSurfacePixelIndex(surfaceView.lat||0,surfaceView.lon||0)}`
+}
+function v287qWeatherStore(){const planet=activeSurfacePlanetNode();if(!planet)return[];if(!Array.isArray(planet.surfaceWeatherSeeds))planet.surfaceWeatherSeeds=[];return planet.surfaceWeatherSeeds}
+function v287qWeatherSeedsForCurrentView(){const key=v287qWeatherContextKey();return v287qWeatherStore().filter(s=>s&&s.contextKey===key)}
+function v287qSeedWeatherAt(x,z){
+  const planet=activeSurfacePlanetNode();if(!planet)return null;
+  const type=v287qWeatherType(),contextKey=v287qWeatherContextKey(),store=v287qWeatherStore(),
+        current=store.findLast?.(s=>s?.contextKey===contextKey)||[...store].reverse().find(s=>s?.contextKey===contextKey)||null;
+
+  // Toggle: seeding the same weather again clears weather from this whole area.
+  if(current?.type===type){
+    for(let i=store.length-1;i>=0;i--)if(store[i]?.contextKey===contextKey)store.splice(i,1);
+    save();requestPlanetDraw();
+    return{off:true,type,contextKey}
+  }
+
+  // Otherwise replace any old weather for this exact Surface pixel / entered Place.
+  for(let i=store.length-1;i>=0;i--)if(store[i]?.contextKey===contextKey)store.splice(i,1);
+
+  const seed={
+    id:'weather-'+uid(),
+    contextKey,
+    type,
+    intensity:.82,
+    seed:Math.floor(Math.random()*1e9),
+    startedAt:Date.now()
+  };
+  store.push(seed);
+  save();v287qStartWeatherAnimation();requestPlanetDraw();
+  return seed
+}
+function v287qGroundPointFromClient(canvas,clientX,clientY){
+  const target=($('surfaceWebGLCanvas')&&!$('surfaceWebGLCanvas').classList.contains('hidden'))?$('surfaceWebGLCanvas'):canvas;if(!target)return null;
+  const world={x:surfaceView.cameraX||0,z:surfaceView.cameraZ||0},B=surface3DGroundScreenBasis(canvas,world);if(!B)return null;
+  const {vp}=surface3DCameraMatrices(target),P=surface3DProject([world.x,0,world.z],target,vp);if(!P)return null;
+  const tr=target.getBoundingClientRect(),sx=tr.width/target.width,sy=tr.height/target.height,px=tr.left+P.x*sx,py=tr.top+P.y*sy,D=v285SolveScreenBasis(clientX-px,clientY-py,B.ax,B.ay,B.bx,B.by);
+  return D?{x:world.x+D.x,z:world.z+D.z}:null
+}
+function v287tWeatherAgeSeconds(w=v287rActiveWeather()){
+  if(!w)return Infinity;
+  return Math.max(0,(Date.now()-(Number(w.startedAt)||Date.now()))/1000)
+}
+function v287tEase01(x){
+  x=Math.max(0,Math.min(1,x));
+  return x*x*(3-2*x)
+}
+function v287tWeatherPhase(w=v287rActiveWeather()){
+  const age=v287tWeatherAgeSeconds(w),I=Math.max(0,Math.min(1,Number.isFinite(+w?.intensity)?+w.intensity:1));
+  if(!w)return{age,sky:0,effect:0,stormSpin:0,lightning:0};
+  if(w.type==='rain'){
+    return{age,sky:v287tEase01(age/1.8)*I,effect:v287tEase01((age-1.15)/1.35)*I,stormSpin:0,lightning:0}
+  }
+  if(w.type==='sandstorm'){
+    return{age,sky:v287tEase01(age/1.65)*I,effect:v287tEase01((age-.85)/1.55)*I,stormSpin:0,lightning:0}
+  }
+  return{
+    age,
+    sky:v287tEase01(age/1.9)*I,
+    effect:v287tEase01((age-.7)/2.2)*I,
+    stormSpin:v287tEase01((age-.55)/4.5)*I,
+    lightning:v287tEase01((age-4.1)/2.2)*I
+  }
+}
+function v287alLandscapeWeatherForCurrentSurface(){
+  const planet=activeSurfacePlanetNode(),rule=v287zLandscapeRuleForSurface(planet,surfaceView.sampledColor||surfaceView.ground),w=rule?.weather;
+  if(!w||!['rain','storm','sandstorm'].includes(w.type))return null;
+  return{id:`landscape-weather:${rule.color}:${w.type}`,contextKey:v287qWeatherContextKey(),type:w.type,intensity:Math.max(0,Math.min(1,Number.isFinite(+w.intensity)?+w.intensity:.82)),seed:Math.floor(v283Hash(`landscape-weather:${planet?.id}:${rule.color}:${w.type}`)*1e9),startedAt:1,authoredLandscape:true,skyColor:v287zNormHex(w.weatherSkyColor)||v287alWeatherDefaultTint(w.type)}
+}
+function v287rActiveWeather(){
+  return v287qWeatherSeedsForCurrentView().at(-1)||v287alLandscapeWeatherForCurrentSurface()||null
+}
+function v287rWeatherSky(baseSky=surfaceView.sky||'#8fc8ee'){
+  const w=v287rActiveWeather();if(!w)return baseSky;
+  const phase=v287tWeatherPhase(w),m=phase.sky,custom=v287zNormHex(w.skyColor);
+  if(custom)return v271HexMix(baseSky,custom,Math.min(.95,m));
+  if(w.type==='rain')return v271HexMix(baseSky,'#56616b',.76*m);
+  if(w.type==='sandstorm')return v271HexMix(baseSky,'#c49345',.82*m);
+  if(w.type==='storm')return v271HexMix(baseSky,'#242333',.82*m);
+  return baseSky
+}
+function v287rWeatherGround(baseGround=surfaceView.ground||'#5f8a49'){
+  const w=v287rActiveWeather();if(!w)return baseGround;
+  const phase=v287tWeatherPhase(w),m=phase.sky;
+  if(w.type==='rain')return v271HexMix(baseGround,'#34413e',.38*m);
+  if(w.type==='sandstorm')return v271HexMix(baseGround,'#a87432',.70*m);
+  if(w.type==='storm')return v271HexMix(baseGround,'#343241',.42*m);
+  return baseGround
+}
+function v287qWeatherRand(seed,i){const x=Math.sin((seed||1)*.000013+i*12.9898)*43758.5453;return x-Math.floor(x)}
+function v287qDrawWeather(ctx,w,h,projectFn){
+  const s=v287rActiveWeather();if(!s)return;
+  const t=performance.now()*.001,phase=v287tWeatherPhase(s),skyP=phase.sky,effectP=phase.effect;
+  ctx.save();
+
+  if(s.type==='rain'){
+    ctx.fillStyle=`rgba(55,62,69,${.22*skyP})`;ctx.fillRect(0,0,w,h);
+    ctx.fillStyle=`rgba(35,42,49,${.22*skyP})`;ctx.fillRect(0,0,w,h*.48);
+    if(effectP>0){
+      ctx.globalAlpha=effectP;ctx.strokeStyle='rgba(184,220,244,.64)';ctx.lineWidth=1.3;
+      const rainCount=Math.round(180*effectP);
+      for(let i=0;i<rainCount;i++){
+        const x=((v287qWeatherRand(s.seed,i)*w+t*78+i*19)%(w+50))-25,
+              y=((v287qWeatherRand(s.seed,i+300)*h+t*190+i*27)%(h+50))-25,
+              len=9+v287qWeatherRand(s.seed,i+600)*14;
+        ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-4,y+len);ctx.stroke()
+      }
+      ctx.globalAlpha=1
+    }
+  }else if(s.type==='sandstorm'){
+    const g=ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,`rgba(214,171,91,${.44*skyP})`);
+    g.addColorStop(.48,`rgba(193,139,66,${.36*skyP})`);
+    g.addColorStop(1,`rgba(160,107,48,${.25*skyP})`);
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+    if(effectP>0){
+      ctx.globalAlpha=effectP;ctx.strokeStyle='rgba(244,205,130,.48)';ctx.lineWidth=2;
+      const sandCount=Math.round(125*effectP);
+      for(let i=0;i<sandCount;i++){
+        const y=v287qWeatherRand(s.seed,i+90)*h,
+              x=((v287qWeatherRand(s.seed,i+450)*w+t*135+i*33)%(w+120))-60,
+              len=20+v287qWeatherRand(s.seed,i+800)*52;
+        ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+len,y+2);ctx.stroke()
+      }
+      ctx.globalAlpha=1
+    }
+  }else{
+    ctx.fillStyle=`rgba(25,23,34,${.30*skyP})`;ctx.fillRect(0,0,w,h);
+    const spinP=phase.stormSpin;
+    if(spinP>0){
+      ctx.globalAlpha=.35+.65*effectP;
+      for(let i=0;i<28;i++){
+        const y=(i/28)*h+Math.sin(t*(.10+.16*spinP)+i*.8)*9,
+              speed=5+spinP*(10+(i%5)*3.2),
+              x=((t*speed+i*91)%(w+360))-180;
+        ctx.strokeStyle=`rgba(163,157,196,${.045+(i%4)*.016})`;
+        ctx.lineWidth=14+(i%6)*4;
+        ctx.beginPath();ctx.moveTo(x-220,y);ctx.lineTo(x+270,y+Math.sin(i)*11);ctx.stroke()
+      }
+      ctx.globalAlpha=1
+    }
+    if(phase.lightning>0){
+      const cadence=Math.max(12,Math.round(26-9*phase.lightning)),
+            flash=Math.floor(t*3+(s.seed%19))%cadence===0;
+      if(flash){
+        ctx.fillStyle=`rgba(228,227,245,${.075+.055*phase.lightning})`;ctx.fillRect(0,0,w,h);
+        const lx=w*(.15+.7*v287qWeatherRand(s.seed,901));
+        ctx.strokeStyle='rgba(246,245,255,.94)';ctx.shadowColor='rgba(190,185,235,.85)';ctx.shadowBlur=13;ctx.lineWidth=2.4;
+        ctx.beginPath();ctx.moveTo(lx,h*.02);ctx.lineTo(lx-20,h*.18);ctx.lineTo(lx+8,h*.29);ctx.lineTo(lx-17,h*.44);ctx.lineTo(lx+3,h*.60);ctx.stroke()
+      }
+    }
+  }
+  ctx.restore()
+}
+let v287qWeatherRAF=0;
+function v287qStartWeatherAnimation(){
+  if(v287qWeatherRAF)return;
+  const tick=()=>{v287qWeatherRAF=0;if(surfaceView.active&&['surface','place'].includes(mapDisplayLevel())&&v287qWeatherSeedsForCurrentView().length){requestPlanetDraw();v287qWeatherRAF=requestAnimationFrame(tick)}};
+  v287qWeatherRAF=requestAnimationFrame(tick)
+}
+function ensureSurfacePanel(){return $('planetViewPanel')}
+function enterSurfaceView(lat,lon){
+  const sampled=surfaceFromPlanetPoint(lat,lon);
+  surfaceView={...surfaceView,...sampled,active:true,cameraX:0,cameraZ:0,zoom:1,yaw:0,pitch:.30,focusPlaceId:null};
+  if(mapDisplayLevel()==='planet'){
+    scaleNav.path.push({level:'planet',item:{name:simState.planetOverride?.name||simState.planet?.name||'Planet',sourceId:activeSurfacePlanetNode()?.id||null,surfaceLat:lat,surfaceLon:lon}});
+  }
+  scaleNav.level='surface';
+  scaleNav.lastTransitionAt=performance.now();
+  refreshWorldMapMode();renderGalacticCoordinates();ensureSurfaceToolBar();v287qStartWeatherAnimation();requestPlanetDraw()
+}
+function enterPlaceFromSurface(place){
+  if(!place)return;
+  surfaceView.focusPlaceId=place.id;
+  // Once inside a Place, stop using the parent Surface's latitude/longitude offset.
+  // Place landscapes are local scenes: terrain, camera, and Structure population all share (0,0).
+  surfaceView.cameraX=0;surfaceView.cameraZ=0;surfaceView.zoom=Math.max(1.65,surfaceView.zoom);surfaceView.yaw=0;surfaceView.pitch=.26;
+  scaleNav.path.push({level:'surface',item:{name:surfaceView.biome.replaceAll('-',' '),sourceId:activeSurfacePlanetNode()?.id||null,surfaceLat:surfaceView.lat,surfaceLon:surfaceView.lon}});
+  scaleNav.level='place';scaleNav.selected={sourceId:place.id,name:place.name};scaleNav.lastTransitionAt=performance.now();
+  selected=place;graph.selected=place;showSelection();refreshWorldMapMode();renderGalacticCoordinates();ensureSurfaceToolBar();v287qStartWeatherAnimation();requestPlanetDraw()
+}
+function exitSurfaceView(){
+  if(mapDisplayLevel()==='place'){backScaleLevel();return}
+  if(mapDisplayLevel()==='surface'){backScaleLevel();return}
+  surfaceView.active=false
+}
+function surfaceProject(x,z,w,h){const scale=40*surfaceView.zoom,depth=Math.max(.2,1+(z-surfaceView.cameraZ)*.06);return{x:w/2+(x-surfaceView.cameraX)*scale/depth,y:h*.38+(z-surfaceView.cameraZ)*scale*.55/depth,depth,scale:scale/depth}}
+function placeSurfaceRelative(place){return{x:((place.surfaceLon??surfaceView.lon)-surfaceView.lon)*28*Math.cos(surfaceView.lat),z:-((place.surfaceLat??surfaceView.lat)-surfaceView.lat)*28}}
+
+function v28ResolvedSceneModel(node){
+  if(!node||node.type!=='structure')return normalizeScene3DModel(null);
+
+  // Structures have existed through several save layouts. Resolve all of them
+  // before deciding that the Structure has no drawable geometry.
+  const candidates=[
+    node.structureModel,
+    node.structureModel?.model,
+    node.model,
+    Array.isArray(node.structureParts)?{parts:node.structureParts,repetition:node.structureRepetition}:null,
+    Array.isArray(node.parts)?{parts:node.parts,repetition:node.repetition}:null
+  ].filter(Boolean);
+
+  for(const raw of candidates){
+    try{
+      const model=normalizeScene3DModel(raw);
+      if(model.variants?.some(v=>Array.isArray(v.parts)&&v.parts.some(part=>part&&!part.hidden)))return model
+    }catch(err){
+      console.warn('Structure model candidate could not be normalized',node.name||node.id,err)
+    }
+  }
+
+  const base=node.variantOfStructureId?byId(node.variantOfStructureId):null;
+  if(base?.type==='structure'&&base.id!==node.id){
+    const inherited=v28ResolvedSceneModel(base);
+    if(inherited.variants?.some(v=>Array.isArray(v.parts)&&v.parts.some(part=>part&&!part.hidden)))return inherited
+  }
+
+  return normalizeScene3DModel(null)
+}
+function v287hDrawableStructureModel(node){
+  const model=v28ResolvedSceneModel(node);
+  return model?.variants?.some(v=>Array.isArray(v.parts)&&v.parts.some(part=>part&&!part.hidden))?model:null
+}
+
+function v28SurfaceDrawPart(ctx,part,P,scale,yOffset=0){
+  const sx=Math.max(.4,part.sx||2.8)*scale*.52,sy=Math.max(.4,part.sy||3)*scale,sz=Math.max(.4,part.sz||2.8)*scale*.24,c=part.color||'#9aa6b2';
+  ctx.save();ctx.translate(P.x,P.y-(Number(yOffset)||0)*scale);ctx.fillStyle=c;
+  if(part.kind==='Sphere'||part.kind==='Dome'){ctx.beginPath();ctx.ellipse(0,-sy*.38,sx*.55,Math.max(2,sy*(part.kind==='Dome'?.26:.48)),0,0,Math.PI*2);ctx.fill()}
+  else if(part.kind==='Cylinder'||part.kind==='Tower'){ctx.fillRect(-sx*.45,-sy,sx*.9,sy);ctx.beginPath();ctx.ellipse(0,-sy,sx*.45,sz,0,0,Math.PI*2);ctx.fill()}
+  else if(part.kind==='Cone'||part.kind==='Tree'){if(part.kind==='Tree'){ctx.fillStyle='#6e5035';ctx.fillRect(-sx*.09,-sy*.55,sx*.18,sy*.55);ctx.fillStyle=c}ctx.beginPath();ctx.moveTo(0,-sy);ctx.lineTo(-sx*.55,0);ctx.lineTo(sx*.55,0);ctx.closePath();ctx.fill()}
+  else if(part.kind==='Pyramid'||part.kind==='Rock'){ctx.beginPath();ctx.moveTo(0,-sy);ctx.lineTo(-sx*.55,0);ctx.lineTo(sx*.55,0);ctx.closePath();ctx.fill()}
+  else{ctx.fillRect(-sx/2,-sy,sx,sy);ctx.fillStyle='rgba(255,255,255,.16)';ctx.beginPath();ctx.moveTo(-sx/2,-sy);ctx.lineTo(0,-sy-sz);ctx.lineTo(sx/2,-sy);ctx.closePath();ctx.fill()}
+  ctx.restore()
+}
+function v28DrawSceneModelOnSurface(ctx,model,rel,w,h,scaleMul=1,yAlter=0){
+  model=normalizeScene3DModel(model);
+  const fit=v287jLandscapeModelTransform(model),localScale=Math.max(.035,fit.scale*.43);
+  for(const inst of scene3DRepeatInstances(model)){
+    for(const part of inst.variant?.parts||[]){
+      if(part.hidden)continue;
+      const x=rel.x+((Number(inst.ox)||0)+(Number(part.x)||0)-fit.cx)*localScale,
+            z=rel.z+((Number(inst.oz)||0)+(Number(part.z)||0)-fit.cz)*localScale,
+            P=surfaceProject(x,z,w,h);
+      v28SurfaceDrawPart(ctx,part,P,Math.max(5,P.scale*.12*scaleMul*fit.scale/.42),yAlter-fit.minY)
+    }
+  }
+}
+function v283Hash(seed){
+  let h=2166136261>>>0;for(const ch of String(seed)){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return(h>>>0)/4294967295
+}
+function v283IsCityPlace(place){
+  return /\bcity\b/i.test(String(place?.placeIconText||''))||/\bcity\b/i.test(String(place?.placeType||''))
+}
+function v283PlaceStructurePool(place){
+  if(!place||place.placePopulationMode==='none')return[];
+  const all=nodes.filter(n=>n.type==='structure'&&!n.isMegastructure),
+        ids=new Set(place.placeStructureIds||[]),
+        explicit=all.filter(n=>ids.has(n.id));
+
+  // Explicit Place population is authoritative. Do not silently delete a selected
+  // Structure here because of model-format/resolution problems; rendering handles it.
+  if(explicit.length)return explicit;
+  if(place.placePopulationMode==='custom')return[];
+
+  // Automatic city population still prefers Structures that actually have geometry.
+  const drawable=all.filter(n=>!!v287hDrawableStructureModel(n));
+  return placeHasPlanetIcon(place)&&v283IsCityPlace(place)?drawable:[]
+}
+function v287pSurfacePixelIndex(lat,lon){
+  const rows=32,cols=64,
+        r=Math.max(0,Math.min(rows-1,Math.floor(((lat+Math.PI/2)/Math.PI)*rows))),
+        twopi=Math.PI*2,
+        L=((lon+Math.PI)%twopi+twopi)%twopi-Math.PI,
+        c=Math.max(0,Math.min(cols-1,Math.floor(((L+Math.PI)/twopi)*cols)));
+  return`${r}:${c}`
+}
+function v287pPlaceIconOnCurrentSurfacePixel(place){
+  return !!place&&placeHasPlanetIcon(place)&&
+    v287pSurfacePixelIndex(place.surfaceLat??0,place.surfaceLon??0)===
+    v287pSurfacePixelIndex(surfaceView.lat??0,surfaceView.lon??0)
+}
+
+function v287nSurfacePopulationSources(){
+  const level=mapDisplayLevel();
+
+  if(level==='place'){
+    const focused=byId(surfaceView.focusPlaceId||scaleNav.selected?.sourceId);
+    return focused&&placeHasPlanetIcon(focused)?[focused]:[]
+  }
+
+  if(level!=='surface')return[];
+
+  const planet=activeSurfacePlanetNode();
+  if(!planet)return[];
+
+  // Surface-level Structure population belongs primarily to the authored Places
+  // on this planet (city, skycity, fortress, etc.). The old v28.7i path incorrectly
+  // looked only at the Planet node itself, which is why a perfectly configured
+  // SkyCity Place produced "No planet population source".
+  const candidates=[
+    ...surfacePlaces(),
+    ...surfacePlacesForPlanet(planet)
+  ];
+
+  const seen=new Set(),sources=[];
+  for(const place of candidates){
+    if(!place||place.id===planet.id||seen.has(place.id))continue;
+    seen.add(place.id);
+
+    // v28.7p hard terrain rule: an authored Place only populates the exact
+    // planet-surface pixel carrying its icon. Empty/iconless terrain stays barren.
+    if(!v287pPlaceIconOnCurrentSurfacePixel(place))continue;
+    if(place.placePopulationMode==='none')continue;
+
+    const explicit=Array.isArray(place.placeStructureIds)&&place.placeStructureIds.length>0;
+    const automatic=place.placePopulationMode!=='custom'&&v283PlaceStructurePool(place).length>0;
+    if(explicit||automatic)sources.push(place)
+  }
+
+  // v28.7x: Planet-scale Places may explicitly allow a selected Structure set
+  // to generate on every surface patch. This is opt-in and never overrides the
+  // authored icon-local population rules above.
+  if(planet.planetStructuresEverywhere&&planet.placePopulationMode!=='none'&&v283PlaceStructurePool(planet).length){
+    const tileKey=v287pSurfacePixelIndex(surfaceView.lat??0,surfaceView.lon??0),rule=planet.planetStructureTiles?.[tileKey];
+    // __none__ is a hard exclusion; __countryside__ intentionally remains empty wilderness.
+    if(rule!=='__none__'&&rule!=='__countryside__')sources.push(planet)
+  }
+
+  return sources
+}
+
+// Compatibility helper: callers that still expect one source get the first real source.
+function v287iLandscapePopulationSource(){
+  return v287nSurfacePopulationSources()[0]||null
+}
+
+function v287ySurfaceStructurePool(source){
+  const base=v283PlaceStructurePool(source);if(source?.id!==activeSurfacePlanetNode()?.id)return base;
+  const key=v287pSurfacePixelIndex(surfaceView.lat??0,surfaceView.lon??0),rule=source.planetStructureTiles?.[key];
+  if(rule&&rule!=='__auto__'){const exact=base.find(n=>n.id===rule);return exact?[exact]:[]}
+  return base
+}
+function v28SurfaceStructureEntities(){
+  const result=[];
+  const level=mapDisplayLevel(),
+        sources=v287nSurfacePopulationSources();
+
+  if(!sources.length)return result;
+
+  for(const source of sources){
+    const pool=v287ySurfaceStructurePool(source);
+    if(!pool.length)continue;
+
+    const planetSurfaceMode=level==='surface',
+          isPlanetWide=planetSurfaceMode&&source.id===activeSurfacePlanetNode()?.id,
+          // Entered Place = local scene at 0,0.
+          // Surface authored Place = its actual marker location on this surface patch.
+          // Planet-wide wilderness = current patch origin.
+          center=level==='place'
+            ?{x:0,z:0}
+            :isPlanetWide
+              ?{x:0,z:0}
+              :placeSurfaceRelative(source),
+          // v28.7ar: Place population can be intentionally regular or organic.
+          // Legacy Places default to Scatter so old saves no longer appear as rigid city grids.
+          random=(source.placeStructurePlacement||'scatter')==='scatter',
+          density=Math.max(1,Math.min(isPlanetWide?18:80,+source.placeStructureDensity||14)),
+          offsets=source.structurePlacementOffsets||{},
+          patchSeed=planetSurfaceMode
+            ?`${source.id}:surface:${(+surfaceView.lat||0).toFixed(3)}:${(+surfaceView.lon||0).toFixed(3)}`
+            :`${source.id}:place`;
+
+    for(let i=0;i<density;i++){
+      const node=pool[i%pool.length],
+            key=`${source.id}:${node.id}:${planetSurfaceMode?'surface':'place'}:${i}`,
+            legacyKey=`${source.id}:${node.id}:${i}`,
+            saved=offsets[key]||offsets[legacyKey];
+
+      let ox=0,oz=0;
+
+      if(saved){
+        ox=+saved.x||0;
+        oz=+saved.z||0
+      }else if(random){
+        if(i===0){
+          ox=0;oz=0
+        }else{
+          // v28.7o: wider Place population scatter + deterministic anti-clumping.
+          // Density 15 now occupies a noticeably broader footprint instead of a tight pile.
+          const spreadFactor=Math.max(.25,Math.min(3,(+source.placeStructureSpread||100)/100)),
+                spread=Math.min(220,(42+Math.sqrt(density)*5.5)*spreadFactor),
+                minGap=Math.max(4,Math.min(30,(spread/(Math.sqrt(density)+2))*.92)),
+                occupied=result.filter(e=>e.place?.id===source.id).map(e=>e.rel);
+          let best=null,bestGap=-1;
+          for(let attempt=0;attempt<18;attempt++){
+            const ang=v283Hash(patchSeed+':angle:'+i+':'+attempt)*Math.PI*2,
+                  rad=10+Math.sqrt(v283Hash(patchSeed+':radius:'+i+':'+attempt))*spread,
+                  cx=Math.cos(ang)*rad,
+                  cz=Math.sin(ang)*rad,
+                  gap=occupied.length
+                    ?Math.min(...occupied.map(q=>Math.hypot((center.x+cx)-q.x,(center.z+cz)-q.z)))
+                    :Infinity;
+            if(gap>bestGap){bestGap=gap;best={x:cx,z:cz}}
+            if(gap>=minGap){best={x:cx,z:cz};break}
+          }
+          ox=best?.x||0;
+          oz=best?.z||0
+        }
+      }else{
+        const cols=Math.ceil(Math.sqrt(density)),
+              rows=Math.ceil(density/cols),
+              row=Math.floor(i/cols),
+              col=i%cols;
+        const spreadFactor=Math.max(.25,Math.min(3,(+source.placeStructureSpread||100)/100)),
+              gridSpacing=9*spreadFactor;
+        ox=(col-(cols-1)/2)*gridSpacing;
+        oz=(row-(rows-1)/2)*gridSpacing
+      }
+
+      const drawableVariants=(v287hDrawableStructureModel(node)?.variants||[]).filter(v=>Array.isArray(v.parts)&&v.parts.some(p=>p&&!p.hidden)),
+            variantMode=['active','cycle','random'].includes(source.placeStructureVariantMode)
+              ?source.placeStructureVariantMode
+              :(source.placeRandomStructureVariants?'random':'active'),
+            randomVariantId=variantMode==='cycle'&&drawableVariants.length
+              ?drawableVariants[i%drawableVariants.length].id
+              :variantMode==='random'&&drawableVariants.length
+                ?drawableVariants[Math.floor(v283Hash(patchSeed+':variant:'+node.id+':'+i)*drawableVariants.length)%drawableVariants.length].id
+                :null;
+
+      result.push({
+        node,
+        key,
+        place:source,
+        generated:true,
+        repeatIndex:i,
+        randomVariantId,
+        planetSurfaceMode,
+        rel:{x:center.x+ox,z:center.z+oz}
+      })
+    }
+  }
+
+  return result
+}
+
+
+/* ============================ V28.1 WEBGL SURFACE / PLACE LANDSCAPE ============================ */
+function ensureSurfaceWebGLCanvases(baseCanvas=$('planetCanvas')){
+  if(!baseCanvas)return null;const stage=baseCanvas.parentElement;if(!stage)return null;
+  let glc=$('surfaceWebGLCanvas'),hud=$('surfaceWebGLHud');
+  if(!glc){glc=document.createElement('canvas');glc.id='surfaceWebGLCanvas';glc.className='surface-webgl-layer';baseCanvas.after(glc)}
+  if(!hud){hud=document.createElement('canvas');hud.id='surfaceWebGLHud';hud.className='surface-webgl-hud';glc.after(hud)}
+  return{glc,hud,stage}
+}
+function hideSurfaceWebGLLayers(){
+  $('surfaceWebGLCanvas')?.classList.add('hidden');$('surfaceWebGLHud')?.classList.add('hidden');v287qHideSurfaceToolBar()
+}
+function surface3DShader(gl,type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s}
+function surface3DInitGL(canvas){
+  const gl=canvas.getContext('webgl',{antialias:true,alpha:false,preserveDrawingBuffer:false});if(!gl)return null;
+  // Place/Surface rendering now carries the modeller's local position and normal
+  // through the shader so saved per-face textures can use the same UV rules.
+  const vs=surface3DShader(gl,gl.VERTEX_SHADER,`attribute vec3 aPosition;attribute vec3 aNormal;uniform mat4 uMVP;uniform mat4 uModel;varying vec3 vN;varying vec3 vW;varying vec3 vLP;varying vec3 vLN;void main(){vec4 w=uModel*vec4(aPosition,1.0);vW=w.xyz;vN=normalize(mat3(uModel)*aNormal);vLP=aPosition;vLN=aNormal;gl_Position=uMVP*vec4(aPosition,1.0);}`);
+  const fs=surface3DShader(gl,gl.FRAGMENT_SHADER,`precision mediump float;uniform vec4 uColor;uniform vec3 uLight;uniform vec3 uEye;uniform vec3 uFog;uniform bool uUseTexture;uniform sampler2D uTexture;uniform int uFace;uniform bool uTileTexture;uniform vec2 uTileRepeat;varying vec3 vN;varying vec3 vW;varying vec3 vLP;varying vec3 vLN;const float PI=3.14159265;void main(){vec4 base=uColor;if(uUseTexture){vec2 uv=vec2(.5);bool ok=false;if(uFace==0){ok=vLN.z>.55;uv=vLP.xy+.5;}else if(uFace==1){ok=vLN.z<-.55;uv=vec2(-vLP.x,vLP.y)+.5;}else if(uFace==2){ok=vLN.x<-.55;uv=vec2(vLP.z,vLP.y)+.5;}else if(uFace==3){ok=vLN.x>.55;uv=vec2(-vLP.z,vLP.y)+.5;}else if(uFace==4){ok=vLN.y>.55;uv=vLP.xz+.5;}else if(uFace==5){ok=vLN.y<-.55;uv=vec2(vLP.x,-vLP.z)+.5;}else{ok=abs(vLN.y)<.72;uv=vec2(atan(vLP.z,vLP.x)/(2.0*PI)+.5,vLP.y+.5);}if(!ok)discard;vec2 sampleUV=uTileTexture?fract(uv*uTileRepeat):clamp(uv,vec2(.001),vec2(.999));base=texture2D(uTexture,sampleUV);}float d=max(0.0,dot(normalize(vN),normalize(uLight)));float shade=.36+d*.64;float fd=distance(vW,uEye);float fog=clamp((fd-48.0)/105.0,0.0,.78);vec3 c=base.rgb*shade;c=mix(c,uFog,fog);gl_FragColor=vec4(c,base.a*uColor.a);}`);
+  const pr=gl.createProgram();gl.attachShader(pr,vs);gl.attachShader(pr,fs);gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(pr));
+  return{gl,program:pr,textureCache:new Map(),loc:{p:gl.getAttribLocation(pr,'aPosition'),n:gl.getAttribLocation(pr,'aNormal'),mvp:gl.getUniformLocation(pr,'uMVP'),model:gl.getUniformLocation(pr,'uModel'),color:gl.getUniformLocation(pr,'uColor'),light:gl.getUniformLocation(pr,'uLight'),eye:gl.getUniformLocation(pr,'uEye'),fog:gl.getUniformLocation(pr,'uFog'),useTexture:gl.getUniformLocation(pr,'uUseTexture'),texture:gl.getUniformLocation(pr,'uTexture'),face:gl.getUniformLocation(pr,'uFace'),tileTexture:gl.getUniformLocation(pr,'uTileTexture'),tileRepeat:gl.getUniformLocation(pr,'uTileRepeat')}}
+}
+function surface3DDrawMesh(renderer,kind,model,vp,color,eye,fog,alpha=1){
+  const {gl,program,loc}=renderer,geo=scene3DGeometry(kind);gl.useProgram(program);
+  if(!geo._buffers)geo._buffers=new WeakMap();let buf=geo._buffers.get(gl);if(!buf){buf={p:gl.createBuffer(),n:gl.createBuffer()};gl.bindBuffer(gl.ARRAY_BUFFER,buf.p);gl.bufferData(gl.ARRAY_BUFFER,geo.positions,gl.STATIC_DRAW);gl.bindBuffer(gl.ARRAY_BUFFER,buf.n);gl.bufferData(gl.ARRAY_BUFFER,geo.normals,gl.STATIC_DRAW);geo._buffers.set(gl,buf)}
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf.p);gl.enableVertexAttribArray(loc.p);gl.vertexAttribPointer(loc.p,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf.n);gl.enableVertexAttribArray(loc.n);gl.vertexAttribPointer(loc.n,3,gl.FLOAT,false,0,0);
+  gl.uniformMatrix4fv(loc.model,false,new Float32Array(model));gl.uniformMatrix4fv(loc.mvp,false,new Float32Array(m4Mul(vp,model)));
+  const rgba=scene3DHexRgb(color);rgba[3]=Math.max(0,Math.min(1,alpha));
+  gl.uniform4fv(loc.color,new Float32Array(rgba));gl.uniform3fv(loc.light,new Float32Array([.45,.88,.34]));gl.uniform3fv(loc.eye,new Float32Array(eye));gl.uniform3fv(loc.fog,new Float32Array(fog));gl.uniform1i(loc.useTexture,0);gl.drawArrays(gl.TRIANGLES,0,geo.positions.length/3)
+}
+function surface3DGLTexture(renderer,data){
+  if(!data)return null;
+  if(!renderer.textureCache)renderer.textureCache=new Map();
+  if(renderer.textureCache.has(data))return renderer.textureCache.get(data);
+  const {gl}=renderer,rec={texture:gl.createTexture(),ready:false,failed:false};
+  renderer.textureCache.set(data,rec);
+  gl.bindTexture(gl.TEXTURE_2D,rec.texture);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([180,180,180,255]));
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  const img=new Image();
+  img.onload=()=>{try{gl.bindTexture(gl.TEXTURE_2D,rec.texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);rec.ready=true;requestPlanetDraw()}catch(err){rec.failed=true;console.warn('Place texture upload failed',err)}};
+  img.onerror=()=>{rec.failed=true;console.warn('Place texture image could not be decoded')};
+  img.src=data;
+  return rec
+}
+function surface3DDrawTexturedFace(renderer,sourcePart,kind,model,vp,eye,fog,t,face){
+  const rec=surface3DGLTexture(renderer,t?.data);if(!rec||rec.failed)return;
+  const {gl,program,loc}=renderer,geo=scene3DGeometry(kind);gl.useProgram(program);const buf=geo._buffers?.get(gl);if(!buf)return;
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf.p);gl.enableVertexAttribArray(loc.p);gl.vertexAttribPointer(loc.p,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf.n);gl.enableVertexAttribArray(loc.n);gl.vertexAttribPointer(loc.n,3,gl.FLOAT,false,0,0);
+  gl.uniformMatrix4fv(loc.model,false,new Float32Array(model));gl.uniformMatrix4fv(loc.mvp,false,new Float32Array(m4Mul(vp,model)));
+  gl.uniform4fv(loc.color,new Float32Array([1,1,1,1]));gl.uniform3fv(loc.light,new Float32Array([.45,.88,.34]));gl.uniform3fv(loc.eye,new Float32Array(eye));gl.uniform3fv(loc.fog,new Float32Array(fog));
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,rec.texture);gl.uniform1i(loc.texture,0);
+  gl.uniform1i(loc.face,{front:0,back:1,left:2,right:3,top:4,bottom:5,wrap:6}[face]??0);
+  const tiled=t?.mode==='tile',repeat=scene3DTextureRepeatForFace(sourcePart,face,t);
+  gl.uniform1i(loc.tileTexture,tiled?1:0);gl.uniform2fv(loc.tileRepeat,new Float32Array(repeat));gl.uniform1i(loc.useTexture,1);
+  gl.depthFunc(gl.LEQUAL);gl.depthMask(false);gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-2,-2);
+  gl.drawArrays(gl.TRIANGLES,0,geo.positions.length/3);
+  gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);gl.depthFunc(gl.LESS);gl.uniform1i(loc.useTexture,0)
+}
+function surface3DRenderFaceTextures(renderer,sourcePart,kind,model,vp,eye,fog){
+  for(const [face,t] of Object.entries(sourcePart.faceTextures||{}))if(t?.data)surface3DDrawTexturedFace(renderer,sourcePart,kind,model,vp,eye,fog,t,face)
+}
+function surface3DCameraMatrices(canvas){
+  const z=Math.max(.45,surfaceView.zoom||1),target=[surfaceView.cameraX||0,1.8,surfaceView.cameraZ||0],distance=34/z+10,yaw=surfaceView.yaw||0,pitch=Math.max(.08,Math.min(1.12,surfaceView.pitch??.30)),cp=Math.cos(pitch);
+  const eye=[target[0]+Math.sin(yaw)*cp*distance,target[1]+Math.sin(pitch)*distance,target[2]-Math.cos(yaw)*cp*distance],view=m4LookAt(eye,target,[0,1,0]),proj=m4Perspective(Math.PI/3,Math.max(.2,canvas.width/canvas.height),.1,620);return{eye,target,view,proj,vp:m4Mul(proj,view)}
+}
+function surface3DProject(world,canvas,vp){
+  const q=m4TransformPoint(vp,[...world,1]);if(!q[3]||q[3]<=0)return null;const x=q[0]/q[3],y=q[1]/q[3];return{x:(x*.5+.5)*canvas.width,y:(1-(y*.5+.5))*canvas.height,w:q[3]}
+}
+function surface3DSeed(i,salt=0){
+  const n=Math.sin((surfaceView.lat||0)*971.3+(surfaceView.lon||0)*613.7+i*91.731+salt*37.11)*43758.5453;return n-Math.floor(n)
+}
+function surface3DColorMix(a,b,t){return v271HexMix(a,b,Math.max(0,Math.min(1,t)))}
+function surface3DDrawLandscape(renderer,vp,eye,fog){
+  const biome=surfaceView.biome,base=v287rWeatherGround(surfaceView.ground||'#5f8a49'),cx=0,cz=0;
+  const surfacePlanet=activeSurfacePlanetNode(),accent2=(surfacePlanet?.planetLandColor3||simState.planet?.landColor3||'#8d8655');
+  surface3DDrawMesh(renderer,'Cube',scene3DModelMatrix({x:cx,y:-.32,z:cz,rx:0,ry:0,rz:0,sx:360,sy:.55,sz:360}),vp,base,eye,fog);
+  // v28.7ac sampled-color landscape model. The rule belongs to a terrain color, not one map tile.
+  const planet=activeSurfacePlanetNode(),tileKey=v287pSurfacePixelIndex(surfaceView.lat??0,surfaceView.lon??0),landRule=v287zLandscapeRuleForSurface(planet,surfaceView.sampledColor||surfaceView.ground||base);
+  if(landRule?.model){
+    const landModel=normalizeScene3DModel(landRule.model),seedKey=landRule.seedMode==='per-tile'?`${landRule.color}:${tileKey}`:landRule.color,instances=scene3DRepeatInstances(landModel,seedKey).slice(0,240);
+    // Exact modeller-to-loader mapping: authored X/Z and sizes are world-space 1:1.
+    for(const inst of instances){for(const p of inst.variant?.parts||[]){if(p.hidden)continue;const is=Number(inst.scale)||1;surface3DRenderPart(renderer,{...p,x:(p.x||0)*is,y:(p.y||0)*is,z:(p.z||0)*is,sx:(p.sx||1)*is,sy:(p.sy||1)*is,sz:(p.sz||1)*is},vp,eye,fog,inst.ox,inst.oz,1)}}
+    if(landRule.replaceScenery)return
+  }
+
+  if(biome==='lava-landscape'){surface3DDrawMesh(renderer,'Cube',scene3DModelMatrix({x:cx,y:.02,z:cz,sx:365,sy:.12,sz:365}),vp,base,eye,fog);return}
+  if(surfaceView.gas||biome==='gas-atmosphere'){
+    // Translucent gas-cloud banks. Disable depth writes while drawing them so clouds
+    // tint Structures instead of acting like opaque walls that permanently occlude them.
+    const {gl}=renderer;
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    for(let i=0;i<82;i++){
+      const activeWeather=v287rActiveWeather(),
+            stormWeather=activeWeather?.type==='storm',
+            stormPhase=stormWeather?v287tWeatherPhase(activeWeather):null,
+            spin=stormPhase?.stormSpin||0,
+            drift=stormWeather?performance.now()*(.0000018+spin*.000009)*(8+(i%6)*1.8):0,
+            ang=surface3DSeed(i,1)*Math.PI*2+drift,
+            rad=10+Math.sqrt(surface3DSeed(i,2))*150,
+            x=cx+Math.cos(ang)*rad,z=cz+Math.sin(ang)*rad;
+      if(surface3DSeed(i,3)<(stormWeather?.22:.34))continue;
+      const s=5+surface3DSeed(i,4)*18,y=-.4+surface3DSeed(i,5)*8,
+            col=surface3DColorMix(base,v287rWeatherSky(surfaceView.sky||'#d8c2dc'),.18+surface3DSeed(i,6)*.62),
+            alpha=.20+surface3DSeed(i,7)*.16;
+      for(let puff=0;puff<3;puff++){
+        const pa=surface3DSeed(i,puff+11)*Math.PI*2,pr=surface3DSeed(i,puff+15)*s*.55;
+        surface3DDrawMesh(renderer,'Sphere',scene3DModelMatrix({x:x+Math.cos(pa)*pr,y:y+surface3DSeed(i,puff+19)*2,z:z+Math.sin(pa)*pr,sx:s*(1.5+surface3DSeed(i,puff+23)),sy:s*(.24+surface3DSeed(i,puff+27)*.22),sz:s*(.8+surface3DSeed(i,puff+31)*.7),rx:0,ry:pa,rz:0}),vp,col,eye,fog,alpha)
+      }
+    }
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+    return
+  }
+  if(biome==='ocean-water'){
+    const water=surface3DColorMix(base,'#9bd7ec',.08);surface3DDrawMesh(renderer,'Cube',scene3DModelMatrix({x:cx,y:.02,z:cz,sx:365,sy:.12,sz:365}),vp,water,eye,fog);
+    for(let i=0;i<34;i++){const ang=surface3DSeed(i,6)*Math.PI*2,rad=10+surface3DSeed(i,7)*145,x=cx+Math.cos(ang)*rad,z=cz+Math.sin(ang)*rad,s=3+surface3DSeed(i,8)*10;surface3DDrawMesh(renderer,'Dome',scene3DModelMatrix({x,y:-.15,z,sx:s*1.8,sy:.35+surface3DSeed(i,9)*.4,sz:s}),vp,surface3DColorMix(water,'#d8f3ff',.18),eye,fog)}
+    return
+  }
+  const desert=biome==='desert';
+  for(let i=0;i<58;i++){
+    const ang=surface3DSeed(i,10)*Math.PI*2,rad=8+Math.sqrt(surface3DSeed(i,11))*135,x=cx+Math.cos(ang)*rad,z=cz+Math.sin(ang)*rad,s=5+surface3DSeed(i,12)*16,sy=(desert?.25:.42)+surface3DSeed(i,13)*(desert?.35:.72),col=surface3DColorMix(base,desert?'#e7c47c':accent2,.12+surface3DSeed(i,14)*.28);
+    surface3DDrawMesh(renderer,'Dome',scene3DModelMatrix({x,y:-.16,z,sx:s*1.95,sy:s*sy*.42,sz:s*1.25,rx:0,ry:ang,rz:0}),vp,col,eye,fog)
+  }
+  // Wide, lower mountain ring: bigger bases and gentler silhouettes.
+  for(let i=0;i<34;i++){
+    const ang=i/34*Math.PI*2+(surface3DSeed(i,20)-.5)*.13,rad=118+surface3DSeed(i,21)*48,x=cx+Math.cos(ang)*rad,z=cz+Math.sin(ang)*rad,w=24+surface3DSeed(i,22)*32,h=18+surface3DSeed(i,23)*26,mountainBase=desert?'#8d6845':'#52634e',col=surface3DColorMix(mountainBase,surfaceView.sky||'#8fc8ee',.08+surface3DSeed(i,24)*.18);
+    surface3DDrawMesh(renderer,'Cone',scene3DModelMatrix({x,y:h*.48-1,z,sx:w*1.55,sy:h,sz:w*1.35,rx:0,ry:ang,rz:0}),vp,col,eye,fog);
+    surface3DDrawMesh(renderer,'Dome',scene3DModelMatrix({x,y:-.2,z,sx:w*2.1,sy:h*.22,sz:w*1.8,rx:0,ry:ang,rz:0}),vp,surface3DColorMix(col,base,.35),eye,fog)
+  }
+  if(!desert)for(let i=0;i<64;i++){
+    if(surface3DSeed(i,40)<.35)continue;const ang=surface3DSeed(i,41)*Math.PI*2,rad=10+surface3DSeed(i,42)*112,x=cx+Math.cos(ang)*rad,z=cz+Math.sin(ang)*rad,s=.6+surface3DSeed(i,43)*1.4;
+    surface3DDrawMesh(renderer,'Cylinder',scene3DModelMatrix({x,y:s*1.3,z,sx:s*.28,sy:s*2.6,sz:s*.28,rx:0,ry:0,rz:0}),vp,'#654a31',eye,fog);surface3DDrawMesh(renderer,'Sphere',scene3DModelMatrix({x,y:s*3,z,sx:s*1.8,sy:s*1.9,sz:s*1.8,rx:0,ry:0,rz:0}),vp,surface3DColorMix(base,accent2,.55),eye,fog)
+  }
+}
+function v287oPlaceVariantModel(model,ent){
+  if(!model||!ent?.randomVariantId)return model;
+  const picked=model.variants?.find(v=>v.id===ent.randomVariantId);
+  if(!picked?.parts?.some(p=>p&&!p.hidden))return model;
+  const out=deepCloneState(model);
+  out.activeVariantId=picked.id;
+  out.parts=out.variants.find(v=>v.id===picked.id)?.parts||[];
+  // The Place-level option means this landscape placement owns the random choice.
+  // Keep the Structure's repetition geometry, but use the selected variant consistently within it.
+  out.repetition={...(out.repetition||{}),variantMode:'active'};
+  return out
+}
+
+function v287jLandscapeModelMetrics(model){
+  const repeat=scene3DRepeatInstances(model),pts=[];
+  for(const inst of repeat){
+    for(const p of inst.variant?.parts||[]){
+      if(!p||p.hidden)continue;
+      const is=Number(inst.scale)||1,sx=Math.abs(Number(p.sx)||1)*is,sy=Math.abs(Number(p.sy)||1)*is,sz=Math.abs(Number(p.sz)||1)*is,
+            x=(Number(p.x)||0)*is+(Number(inst.ox)||0),
+            y=(Number(p.y)||0)*is,
+            z=(Number(p.z)||0)*is+(Number(inst.oz)||0);
+      pts.push({x0:x-sx/2,x1:x+sx/2,y0:y-sy/2,y1:y+sy/2,z0:z-sz/2,z1:z+sz/2})
+    }
+  }
+  if(!pts.length)return{cx:0,cz:0,minY:0,maxY:1,span:1};
+  const minX=Math.min(...pts.map(p=>p.x0)),maxX=Math.max(...pts.map(p=>p.x1)),
+        minY=Math.min(...pts.map(p=>p.y0)),maxY=Math.max(...pts.map(p=>p.y1)),
+        minZ=Math.min(...pts.map(p=>p.z0)),maxZ=Math.max(...pts.map(p=>p.z1));
+  return{cx:(minX+maxX)/2,cz:(minZ+maxZ)/2,minY,maxY,span:Math.max(1,maxX-minX,maxZ-minZ,maxY-minY)}
+}
+function v287jLandscapeModelTransform(model){
+  const m=v287jLandscapeModelMetrics(model);
+  // Preserve normal authored size. Only shrink truly enormous modeller coordinates enough
+  // to keep the Structure visible in the Place landscape.
+  const scale=Math.min(.62,Math.max(.035,28/m.span));
+  return{...m,scale}
+}
+
+function surface3DRenderPart(renderer,p,vp,eye,fog,ox=0,oz=0,scale=.58){
+  const q={...p,x:ox+(p.x||0)*scale,y:(p.y||0)*scale,z:oz+(p.z||0)*scale,sx:(p.sx||1)*scale,sy:(p.sy||1)*scale,sz:(p.sz||1)*scale};
+  if(p.kind==='Tree'){
+    const trunk={...q,kind:'Cylinder',color:'#6e5035',sx:q.sx*.26,sy:q.sy*.55,sz:q.sz*.26,y:q.y-q.sy*.20};
+    const crown={...q,kind:'Sphere',sx:q.sx,sy:q.sy*.65,sz:q.sz,y:q.y+q.sy*.18};
+    surface3DDrawMesh(renderer,'Cylinder',scene3DModelMatrix(trunk),vp,trunk.color,eye,fog);surface3DDrawMesh(renderer,'Sphere',scene3DModelMatrix(crown),vp,p.color,eye,fog);return
+  }
+  const kind=p.kind==='Tower'?'Cylinder':p.kind,model=scene3DModelMatrix(q);
+  surface3DDrawMesh(renderer,kind,model,vp,p.color||'#9aa6b2',eye,fog);
+  surface3DRenderFaceTextures(renderer,p,kind,model,vp,eye,fog)
+}
+function surface3DRenderModel(renderer,model,rel,vp,eye,fog,scale=.58){
+  model=normalizeScene3DModel(model);
+  for(const inst of scene3DRepeatInstances(model))for(const p of inst.variant?.parts||[]){if(p.hidden)continue;surface3DRenderPart(renderer,{...p,x:(p.x||0)*(inst.scale||1),y:(p.y||0)*(inst.scale||1),z:(p.z||0)*(inst.scale||1),sx:(p.sx||1)*(inst.scale||1),sy:(p.sy||1)*(inst.scale||1),sz:(p.sz||1)*(inst.scale||1)},vp,eye,fog,rel.x+inst.ox*scale,rel.z+inst.oz*scale,scale)}
+}
+function v287lDrawStructureMarker(ctx,x,y,index,label='',bad=false){
+  if(!Number.isFinite(x)||!Number.isFinite(y))return;
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.lineWidth=2;
+  ctx.strokeStyle=bad?'#ff4d5e':'#61e6ff';
+  ctx.fillStyle=bad?'rgba(255,55,75,.18)':'rgba(40,220,255,.18)';
+  ctx.beginPath();ctx.arc(0,0,8,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-13,0);ctx.lineTo(13,0);ctx.moveTo(0,-13);ctx.lineTo(0,13);ctx.stroke();
+  ctx.fillStyle=bad?'#ff7180':'#bff7ff';ctx.font='800 9px ui-monospace,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(String(index+1),0,-19);
+  ctx.fillStyle=bad?'#ff7180':'#dffcff';ctx.font='800 12px system-ui';ctx.fillText('◆',0,0);
+  if(label){ctx.font='700 9px system-ui';ctx.fillStyle='#e8fbff';ctx.fillText(label,0,24)}
+  ctx.restore()
+}
+function v287mStructureDebugState(){
+  const level=mapDisplayLevel(),
+        focusedId=surfaceView.focusPlaceId||scaleNav.selected?.sourceId||null,
+        focused=focusedId?byId(focusedId):null,
+        activePlanet=activeSurfacePlanetNode(),
+        sources=v287nSurfacePopulationSources(),
+        entities=v28SurfaceStructureEntities();
+
+  let selectedIds=[],configured=0,poolCount=0;
+  for(const source of sources){
+    const ids=Array.isArray(source.placeStructureIds)?source.placeStructureIds:[];
+    selectedIds.push(...ids);
+    if(ids.length||source.placePopulationMode!=='custom')
+      configured+=Math.max(1,Math.min(80,+source.placeStructureDensity||14));
+    poolCount+=v283PlaceStructurePool(source).length
+  }
+
+  let problem='';
+  if(!sources.length){
+    if(level==='place')problem=`No Place population source · focus=${focusedId||'none'}`;
+    else if(level==='surface'){
+      const authored=activePlanet?surfacePlaces().length:0;
+      problem=`No authored Place population source · active=${activePlanet?.name||'none'} · places=${authored}`
+    }else problem=`Renderer level=${level}`;
+  }else if(!entities.length){
+    problem=`${sources.length} source${sources.length===1?'':'s'} · generated 0`
+  }
+
+  return{
+    level,focusedId,focused,activePlanet,
+    source:sources[0]||null,
+    sources,
+    entities,
+    selectedIds,
+    density:configured,
+    expectedConfigured:configured,
+    pool:{length:poolCount},
+    problem
+  }
+}
+function v287lDrawMissingBadge(ctx,w,missing,expected,rendered,state=null){
+  const s=state||v287mStructureDebugState(),
+        configured=s.expectedConfigured||0,
+        generated=s.entities?.length||0,
+        isBad=!!s.problem||missing>0,
+        title=s.problem?`DEBUG: ${s.problem}`:
+              missing>0?`Missing ${missing} instance${missing===1?'':'s'}`:
+              `Structures: ${rendered}/${expected}`,
+        line2=`level=${s.level} · configured=${configured} · generated=${generated} · pool=${s.pool?.length||0}`,
+        line3=`sources=${s.sources?.length||0} · first=${s.source?.name||s.source?.id||'NONE'} · selected=${s.selectedIds?.length||0}`,
+        bw=Math.min(470,Math.max(310,w-28)),bh=58,x=Math.max(8,w-bw-14),y=14;
+
+  ctx.save();
+  ctx.fillStyle=isBad?'rgba(100,5,15,.94)':'rgba(5,55,65,.92)';
+  ctx.strokeStyle=isBad?'#ff5364':'#55eaff';ctx.lineWidth=1.5;
+  ctx.fillRect(x,y,bw,bh);ctx.strokeRect(x,y,bw,bh);
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.font='800 11px system-ui';ctx.fillStyle=isBad?'#ff8793':'#aef8ff';
+  ctx.fillText((isBad?'⚠ ':'◆ ')+title,x+10,y+14);
+  ctx.font='700 9px ui-monospace,monospace';ctx.fillStyle='#e8f8ff';
+  ctx.fillText(line2,x+10,y+32);ctx.fillText(line3,x+10,y+47);
+  ctx.restore()
+}
+function v287lStructureDebugExpected(){
+  const s=v287mStructureDebugState();
+  return{entities:s.entities,expected:s.entities.length,state:s}
+}
+
+function renderSurfaceWebGL(baseCanvas=$('planetCanvas')){
+  const layers=ensureSurfaceWebGLCanvases(baseCanvas);if(!layers)return false;const {glc,hud}=layers,rect=baseCanvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,1.65);
+  const W=Math.max(2,Math.round(rect.width*d)),H=Math.max(2,Math.round(rect.height*d));if(glc.width!==W||glc.height!==H){glc.width=W;glc.height=H;hud.width=W;hud.height=H}
+  glc.classList.remove('hidden');hud.classList.remove('hidden');
+  let renderer=glc._surfaceRenderer;if(renderer===undefined){try{renderer=surface3DInitGL(glc)}catch(err){console.warn('Surface WebGL init failed',err);renderer=null}glc._surfaceRenderer=renderer||false}
+  if(!renderer){glc.classList.add('hidden');hud.classList.add('hidden');return false}
+  const {gl}=renderer,weatherSky=v287rWeatherSky(surfaceView.sky||'#8fc8ee'),sky=scene3DHexRgb(weatherSky),fog=[sky[0],sky[1],sky[2]];gl.viewport(0,0,W,H);gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(sky[0],sky[1],sky[2],1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const {eye,vp}=surface3DCameraMatrices(glc);surface3DDrawLandscape(renderer,vp,eye,fog);
+
+  const placeMode=mapDisplayLevel()==='place',focused=placeMode?byId(surfaceView.focusPlaceId||scaleNav.selected?.sourceId):null,focusedHasStructures=!!focused&&focused.placePopulationMode!=='none'&&Array.isArray(focused.placeStructureIds)&&focused.placeStructureIds.length>0,barren=placeMode&&focused&&!placeHasPlanetIcon(focused)&&!focusedHasStructures&&!activeSurfacePlanetNode()?.allowWildernessStructures;
+  const visible=[];
+  for(const place of surfacePlaces()){
+    if(placeMode&&place.id!==focused?.id)continue;
+    const rel=placeSurfaceRelative(place);
+    // Icon-bearing Places are markers on Surface; their model exists only inside that exact Place.
+    // Places no longer render legacy Place models; their scoped Structures render below.
+    const P=surface3DProject([rel.x,1.3,rel.z],glc,vp);if(P&&!barren&&!placeMode&&placeHasPlanetIcon(place)){visible.push({place,x:P.x/d,y:P.y/d,r:Math.max(24,44/Math.max(.6,P.w*.04)),rel,clip:P})}
+  }
+  const visibleStructures=[],debugStructures=[],debugInfo=v287lStructureDebugExpected();
+  let renderedStructureInstances=0;
+  if(!barren)for(let entIndex=0;entIndex<debugInfo.entities.length;entIndex++){
+    const ent=debugInfo.entities[entIndex];
+    // Marker is based on intended population coordinates, independent of model rendering.
+    const markerP=surface3DProject([ent.rel.x,1.5,ent.rel.z],glc,vp);
+    if(markerP)debugStructures.push({ent,index:entIndex,x:markerP.x/d,y:markerP.y/d,clip:markerP,bad:false});
+    try{
+      const rawModel=v287hDrawableStructureModel(ent.node),model=v287oPlaceVariantModel(rawModel,ent);
+      if(!model){
+        const dm=debugStructures.find(x=>x.ent===ent);if(dm)dm.bad=true;
+        console.warn('Place landscape Structure has no drawable 3D model',ent.node?.name||ent.node?.id);continue
+      }
+      const repeat=scene3DRepeatInstances(model),
+            fit=v287jLandscapeModelTransform(model),
+            scale=fit.scale,
+            gasLift=activeSurfacePlanetNode()?.gasGiant?8:0,
+            placeY=Math.max(-500,Math.min(500,+ent.place?.placeStructureY||0))+gasLift,
+            groundLift=-fit.minY;
+
+      for(const inst of repeat){
+        const parts=(inst.variant?.parts||[]).filter(part=>part&&!part.hidden);
+        if(!parts.length)continue;
+
+        // Translate authored model coordinates into a local footprint around this generated
+        // landscape placement. This prevents a model authored away from world origin from
+        // silently rendering hundreds of units away from the Place.
+        const ix=(Number(inst.ox)||0)-fit.cx,
+              iz=(Number(inst.oz)||0)-fit.cz;
+
+        for(const part of parts){
+          try{
+            surface3DRenderPart(
+              renderer,
+              {...part,x:(Number(part.x)||0),y:(Number(part.y)||0)+groundLift+placeY,z:(Number(part.z)||0)},
+              vp,eye,fog,
+              ent.rel.x+ix*scale,
+              ent.rel.z+iz*scale,
+              scale
+            )
+          }catch(partErr){
+            console.warn('Skipped malformed Structure part in Place landscape',ent.node?.name||ent.node?.id,partErr)
+          }
+        }
+
+        renderedStructureInstances++;
+        const P=surface3DProject([ent.rel.x+ix*scale,Math.max(.9,placeY*scale+.9),ent.rel.z+iz*scale],glc,vp);
+        if(P)visibleStructures.push({...ent,repeatKey:inst.key,x:P.x/d,y:P.y/d,r:22,clip:P})
+      }
+    }catch(err){
+      const dm=debugStructures.find(x=>x.ent===ent);if(dm)dm.bad=true;
+      console.error('Place landscape Structure render failed',ent.node?.name||ent.node?.id,err)
+    }
+  }
+  baseCanvas._surfacePlaces=visible;baseCanvas._surfaceStructures=visibleStructures;baseCanvas._surfaceStructureDebug=debugStructures;
+
+  const ctx=hud.getContext('2d');ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,rect.width,rect.height);ctx.textAlign='center';
+  // DEBUG: intended Structure positions are visible even when geometry is missing.
+  for(const m of debugStructures){
+    if(m.clip?.w<=0)continue;
+    v287lDrawStructureMarker(ctx,m.x,m.y,m.index,m.ent.node?.name||'Structure',m.bad)
+  }
+  const expectedRendered=debugInfo.entities.reduce((sum,e)=>{
+    const model=v287hDrawableStructureModel(e.node);return sum+(model?Math.max(1,scene3DRepeatInstances(model).length):1)
+  },0);
+  const missingStructures=Math.max(0,expectedRendered-renderedStructureInstances);
+  v287lDrawMissingBadge(ctx,rect.width,missingStructures,expectedRendered,renderedStructureInstances,debugInfo.state);
+  v287qDrawWeather(ctx,rect.width,rect.height,(x,z)=>{const Q=surface3DProject([x,1.5,z],glc,vp);return Q?{x:Q.x/d,y:Q.y/d,scale:Math.max(4,24/Math.max(.35,Q.w||1))}:null});
+  ensureSurfaceToolBar();v287qStartWeatherAnimation();
+  if(surfaceView.captions!==false){
+    for(const v of visibleStructures){if(v.clip.w<=0)continue;ctx.font='600 9px system-ui';ctx.lineWidth=3;ctx.strokeStyle='rgba(2,6,10,.65)';ctx.strokeText(v.node.name,v.x,v.y-10);ctx.fillStyle='#dcecff';ctx.fillText(v.node.name,v.x,v.y-10)}
+  }
+  if(mapDisplayLevel()==='place'){
+    const place=byId(surfaceView.focusPlaceId||scaleNav.selected?.sourceId);
+    if(place){
+      ctx.textAlign='left';ctx.fillStyle='rgba(5,10,17,.72)';ctx.fillRect(14,14,Math.min(390,rect.width-28),48);
+      ctx.font='11px system-ui';ctx.fillStyle='#a9bfd7';
+      ctx.fillText(focusedHasStructures?'PLACE VIEW · Structure population active · drag to rotate · wheel to zoom':placeHasPlanetIcon(place)?'PLACE VIEW · drag to rotate · wheel to zoom':'PLACE VIEW · landscape only',28,40)
+    }
+  }
+  return true
+}
+
+function renderSurfaceView(canvas=$('planetCanvas'),ctx=null,width=null,height=null){
+  if(!canvas||!surfaceView.active)return;
+  // v28.7m diagnostic: render path heartbeat is stored even before WebGL/fallback selection.
+  canvas._structureDebugHeartbeat={time:Date.now(),level:mapDisplayLevel(),focus:surfaceView.focusPlaceId||scaleNav.selected?.sourceId||null};
+  if(!ctx&&renderSurfaceWebGL(canvas))return;
+  hideSurfaceWebGLLayers();
+  const rect=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,1.5),w=width||rect.width,h=height||rect.height;
+  if(!ctx){if(canvas.width!==Math.round(w*d)||canvas.height!==Math.round(h*d)){canvas.width=Math.round(w*d);canvas.height=Math.round(h*d)}ctx=canvas.getContext('2d',{alpha:false});ctx.setTransform(d,0,0,d,0,0)}
+  ctx.clearRect(0,0,w,h);
+  const weatherSky=v287rWeatherSky(surfaceView.sky),weatherGround=v287rWeatherGround(surfaceView.ground),
+        sky=ctx.createLinearGradient(0,0,0,h*.5);
+  sky.addColorStop(0,v271HexMix(weatherSky,'#ffffff',.10));sky.addColorStop(1,weatherSky);ctx.fillStyle=sky;ctx.fillRect(0,0,w,h*.42);
+  ctx.fillStyle=weatherGround;ctx.fillRect(0,h*.38,w,h*.62);
+  if(surfaceView.gas){
+    const activeStorm=v287rActiveWeather(),
+          stormSpin=activeStorm?.type==='storm'?v287tWeatherPhase(activeStorm).stormSpin:0,
+          stormDrift=activeStorm?.type==='storm'?(performance.now()*(.004+stormSpin*.013))%90:0;
+    for(let i=0;i<15;i++){
+      ctx.globalAlpha=.045+(i%3)*.012;ctx.fillStyle=i%2?weatherSky:weatherGround;
+      ctx.fillRect(-90+((i%2)?stormDrift:-stormDrift),h*.39+i*24,w+180,11+((i*7)%13))
+    }
+    ctx.globalAlpha=1
+  }else if(surfaceView.biome==='ocean-water'){
+    for(let i=0;i<34;i++){ctx.strokeStyle='rgba(225,248,255,.14)';ctx.beginPath();ctx.moveTo(0,h*.43+i*14);ctx.quadraticCurveTo(w*.5,h*.43+i*14+Math.sin(i)*8,w,h*.43+i*14);ctx.stroke()}
+  }else{
+    ctx.strokeStyle='rgba(255,255,255,.08)';
+    for(let z=-8;z<26;z+=2){const A=surfaceProject(-24,z,w,h),B=surfaceProject(24,z,w,h);ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke()}
+    if(surfaceView.biome==='green-landscape'){ctx.fillStyle='rgba(22,75,28,.30)';for(let i=0;i<110;i++){const x=((Math.sin(i*72.37)+1)/2)*w,y=h*.42+((Math.sin(i*31.9)+1)/2)*h*.55;ctx.fillRect(x,y,2,10)}}
+  }
+  const fallbackPlaceMode=mapDisplayLevel()==='place',fallbackFocus=fallbackPlaceMode?byId(surfaceView.focusPlaceId||scaleNav.selected?.sourceId):null,fallbackHasStructures=!!fallbackFocus&&fallbackFocus.placePopulationMode!=='none'&&Array.isArray(fallbackFocus.placeStructureIds)&&fallbackFocus.placeStructureIds.length>0,fallbackBarren=fallbackPlaceMode&&fallbackFocus&&!placeHasPlanetIcon(fallbackFocus)&&!fallbackHasStructures&&!activeSurfacePlanetNode()?.allowWildernessStructures;
+  const visible=[];
+  for(const place of surfacePlaces()){
+    if(fallbackPlaceMode&&place.id!==fallbackFocus?.id)continue;const rel=placeSurfaceRelative(place),P=surfaceProject(rel.x,rel.z,w,h);if(P.y<h*.30||P.y>h*1.08)continue;
+    // Legacy Place models are intentionally ignored in fallback Place view.
+    if(!fallbackPlaceMode&&placeHasPlanetIcon(place)){visible.push({place,x:P.x,y:P.y,r:Math.max(32,42/Math.max(.72,P.depth)),rel})}
+  }
+  const visibleStructures=[],fallbackDebug=v287lStructureDebugExpected(),fallbackMarkers=[];
+  let fallbackRendered=0;
+  if(!fallbackBarren)for(let entIndex=0;entIndex<fallbackDebug.entities.length;entIndex++){
+    const ent=fallbackDebug.entities[entIndex];
+    try{
+      const P=surfaceProject(ent.rel.x,ent.rel.z,w,h);
+      fallbackMarkers.push({ent,index:entIndex,x:P.x,y:P.y,bad:false});
+
+      const rawModel=v287hDrawableStructureModel(ent.node),model=v287oPlaceVariantModel(rawModel,ent);
+      if(!model){fallbackMarkers[fallbackMarkers.length-1].bad=true;console.warn('Fallback Place landscape Structure has no drawable 3D model',ent.node?.name||ent.node?.id);continue}
+
+      v28DrawSceneModelOnSurface(ctx,model,ent.rel,w,h,.72,Math.max(-500,Math.min(500,+ent.place?.placeStructureY||0))+(activeSurfacePlanetNode()?.gasGiant?8:0));
+      if(surfaceView.captions!==false){
+        ctx.fillStyle='rgba(235,244,255,.9)';ctx.font='600 10px system-ui';ctx.textAlign='center';ctx.fillText(ent.node.name,P.x,P.y+12)
+      }
+      fallbackRendered+=Math.max(1,scene3DRepeatInstances(model).length);
+      visibleStructures.push({...ent,x:P.x,y:P.y,r:25})
+    }catch(err){
+      const dm=fallbackMarkers.find(x=>x.ent===ent);if(dm)dm.bad=true;
+      console.error('Fallback Place landscape Structure render failed',ent.node?.name||ent.node?.id,err)
+    }
+  }
+  // DEBUG markers are independent from geometry so failed models still leave a visible target.
+  for(const m of fallbackMarkers)v287lDrawStructureMarker(ctx,m.x,m.y,m.index,m.ent.node?.name||'Structure',m.bad);
+  const fallbackExpected=fallbackDebug.entities.reduce((sum,e)=>{const model=v287hDrawableStructureModel(e.node);return sum+(model?Math.max(1,scene3DRepeatInstances(model).length):1)},0);
+  v287lDrawMissingBadge(ctx,w,Math.max(0,fallbackExpected-fallbackRendered),fallbackExpected,fallbackRendered,fallbackDebug.state);
+  v287qDrawWeather(ctx,w,h,(x,z)=>surfaceProject(x,z,w,h));ensureSurfaceToolBar();v287qStartWeatherAnimation();
+  canvas._surfacePlaces=visible;canvas._surfaceStructures=visibleStructures;canvas._surfaceStructureDebug=fallbackMarkers;
+  if(surfaceView.focusPlaceId){
+    const H=visible.find(v=>v.place.id===surfaceView.focusPlaceId);
+    if(H){ctx.strokeStyle='#ffe487';ctx.lineWidth=3;ctx.beginPath();ctx.arc(H.x,H.y,H.r*1.25,0,Math.PI*2);ctx.stroke()}
+  }
+  if(mapDisplayLevel()==='place'){
+    const place=byId(surfaceView.focusPlaceId||scaleNav.selected?.sourceId);
+    if(place){
+      ctx.fillStyle='rgba(5,10,17,.72)';ctx.fillRect(14,14,Math.min(330,w-28),48);
+      ctx.font='11px system-ui';ctx.fillStyle='#a9bfd7';ctx.textAlign='left';
+      ctx.fillText('PLACE VIEW · wheel to zoom · drag to pan · right-click/back to Surface',28,40)
+    }
+  }
+}
+function bindSurfaceCanvas(){/* v28 Surface input is handled by the existing planetCanvas handlers. */}
+
+function hierarchyChildLevel(level){return level==='universe'?'galaxy':level==='galaxy'?'solar':level==='solar'?'planet':level==='planet'?'surface':level==='surface'?'place':null}
 function mapDisplayLevel(){return scaleNav.level||systemScale()}
 function tweenScaleCamera(target,duration=600,onDone=null){
   if(scaleNav.transitioning)return;
@@ -6794,6 +10669,18 @@ function childMapFor(item){
   refreshWorldMapMode();
   requestPlanetDraw()
 }
+function v287yPlanetSeed(node){
+  let h=2166136261>>>0;for(const ch of String(node?.id||node?.sourceId||node?.name||'planet')){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0
+}
+function v287yPlanetOverrideFromNode(planet){return{
+  name:planet?.name||'Planet',seed:planet?.planetModelSeed||v287yPlanetSeed(planet),
+  landColor:planet?.planetLandColor||'#5d8f5a',landColor2:planet?.planetLandColor2||'#78915b',landColor3:planet?.planetLandColor3||'#8d8655',landColor4:planet?.planetLandColor4||null,landColor5:planet?.planetLandColor5||null,landColor6:planet?.planetLandColor6||null,paletteSaved:!!planet?.planetPaletteSaved,
+  oceanColor:planet?.planetOceanColor||'#315f9f',oceanColor2:planet?.planetOceanColor2||'#102f58',skyColor:planet?.planetSkyColor||'#8fc8ee',isMoon:!!planet?.isMoon,orbitingId:planet?.orbitingId||null,
+  gasGiant:!!planet?.gasGiant,gasColor:planet?.planetGasColor||'#d6b783',gasColor2:planet?.planetGasColor2||'#a87a58',gasColor3:planet?.planetGasColor3||'#eee0b5',
+  gasContrast:Number.isFinite(+planet?.planetGasContrast)?+planet.planetGasContrast:55,landCoverage:Number.isFinite(+planet?.planetLandCoverage)?+planet.planetLandCoverage:45,
+  landEnabled:planet?.planetLandEnabled!==false,oceanEnabled:planet?.planetOceanEnabled!==false,cloudsEnabled:planet?.planetCloudsEnabled!==false,
+  cloudColor:planet?.planetCloudColor||'#eef8ff',cloudCoverage:Number.isFinite(+planet?.planetCloudCoverage)?+planet.planetCloudCoverage:45,cloudOpacity:Number.isFinite(+planet?.planetCloudOpacity)?+planet.planetCloudOpacity:38,
+  inhabitants:planet?.inhabitants||'None'} }
 function enterPlanetFromMap(item){
   cacheCurrentScaleMap();
   scaleNav.path.push({level:mapDisplayLevel(),item});scaleNav.level='planet';scaleNav.selected=item;scaleNav.lastTransitionAt=performance.now();
@@ -6802,14 +10689,20 @@ function enterPlanetFromMap(item){
       x.name===item.name &&
       String(x.placeScale||inferPlaceScale(x.placeType))==='planet'
     );
-  const planetNode=p&&String(p.placeScale||inferPlaceScale(p.placeType))==='planet'?p:null;
+  const planetNode=p&&(p.gasGiant||String(p.placeScale||inferPlaceScale(p.placeType))==='planet')?p:null;
   simState.planetOverride={
     name:item.name,
+    seed:planetNode?.planetModelSeed||v287yPlanetSeed(planetNode||item),
     landColor:planetNode?.planetLandColor||'#5d8f5a',
     landColor2:planetNode?.planetLandColor2||'#78915b',
     landColor3:planetNode?.planetLandColor3||'#8d8655',
+    landColor4:planetNode?.planetLandColor4||null,
+    landColor5:planetNode?.planetLandColor5||null,
+    landColor6:planetNode?.planetLandColor6||null,
+    paletteSaved:!!planetNode?.planetPaletteSaved,
     oceanColor:planetNode?.planetOceanColor||'#315f9f',
     oceanColor2:planetNode?.planetOceanColor2||'#102f58',
+    skyColor:planetNode?.planetSkyColor||'#8fc8ee',
     isMoon:!!planetNode?.isMoon,
     orbitingId:planetNode?.orbitingId||null,
     gasGiant:!!planetNode?.gasGiant,
@@ -6829,7 +10722,10 @@ function enterPlanetFromMap(item){
   generatePlanet(true);refreshWorldMapMode();requestPlanetDraw()
 }
 function backScaleLevel(){
-  if(mapDisplayLevel()==='planet')cacheCurrentPlanet();else cacheCurrentScaleMap();
+  const current=mapDisplayLevel();
+  if(current==='place'){scaleNav.path.pop();scaleNav.level='surface';scaleNav.selected=null;surfaceView.focusPlaceId=null;refreshWorldMapMode();renderGalacticCoordinates();requestPlanetDraw();return}
+  if(current==='surface'){scaleNav.path.pop();scaleNav.level='planet';surfaceView.active=false;refreshWorldMapMode();renderGalacticCoordinates();requestPlanetDraw();return}
+  if(current==='planet')cacheCurrentPlanet();else cacheCurrentScaleMap();
   const prev=scaleNav.path.pop();if(!prev)return;
   scaleNav.level=prev.level;scaleNav.camera={x:.5,y:.5,zoom:1};scaleNav.selected=null;scaleNav.transitioning=false;scaleNav.lastTransitionAt=performance.now();simState.planetOverride=null;
   generateScaleMap();refreshWorldMapMode();requestPlanetDraw()
@@ -6913,7 +10809,10 @@ function renderCreatedMegaLiveTextureWithPreview(width=512,height=256){
       a:p.a,b:p.b,
       color:$('eMegaPaintColor').value,
       width:+$('eMegaPaintWidth').value||8,
-      height:+$('eMegaHeight').value||0
+      height:+$('eMegaHeight').value||0,
+      blockiness:megaBlockinessValue(),
+      snapGrid:megaSnapEnabled()?megaSnapGridValue():0,
+      centerMode:megaCircleFromCenter()
     },width,height,false)
   }
   return c
@@ -6928,7 +10827,10 @@ function renderCreatedMegaLiveHeightWithPreview(width=256,height=128){
       a:p.a,b:p.b,
       color:'#ffffff',
       width:+$('eMegaPaintWidth').value||8,
-      height:+$('eMegaHeight').value||0
+      height:+$('eMegaHeight').value||0,
+      blockiness:megaBlockinessValue(),
+      snapGrid:megaSnapEnabled()?megaSnapGridValue():0,
+      centerMode:megaCircleFromCenter()
     },width,height,true)
   }
   return c
@@ -7129,7 +11031,7 @@ function bindCreatedMega3D(){
 
     createdMega3D.draw=true;createdMega3D.drawStart=uv;createdMega3D.lastUV=uv;
     const collection=megaPainterState.mode==='height'?megaPainterState.heightCommands:megaPainterState.commands;
-    const base={color:$('eMegaPaintColor').value,width:+$('eMegaPaintWidth').value||8,height:+$('eMegaHeight').value||0};
+    const base={color:$('eMegaPaintColor').value,width:+$('eMegaPaintWidth').value||8,height:+$('eMegaHeight').value||0,blockiness:megaBlockinessValue(),centerMode:megaCircleFromCenter(),brushShape:+$('eMegaBrushShape')?.value||50};
     if(megaPainterState.tool==='brush')collection.push({type:'brush',points:[uv],...base});
     c.setPointerCapture(e.pointerId)
   });
@@ -7143,14 +11045,15 @@ function bindCreatedMega3D(){
       createdMega3D.lastX=e.clientX;createdMega3D.lastY=e.clientY;renderCreatedMega3D();return
     }
     if(!createdMega3D.draw)return;
-    const uv=createdMega3DToolUV(e);if(!uv)return;
+    let uv=createdMega3DToolUV(e);if(!uv)return;
+    if(e.shiftKey&&(megaPainterState.tool==='brush'||megaPainterState.tool==='line'))uv=constrainMegaAxisPoint(createdMega3D.drawStart,uv);
     createdMega3D.lastUV=uv;
     const collection=megaPainterState.mode==='height'?megaPainterState.heightCommands:megaPainterState.commands;
     if(megaPainterState.tool==='brush'){
       collection.at(-1)?.points?.push(uv);
       saveActiveCreatedMegaFace();renderMegaPainter();renderCreatedMega3D()
     }else if(['line','circle','rect'].includes(megaPainterState.tool)){
-      createdMega3D.preview={type:megaPainterState.tool,a:createdMega3D.drawStart,b:uv}
+      createdMega3D.preview={type:megaPainterState.tool,a:createdMega3D.drawStart,b:uv,blockiness:megaBlockinessValue(),centerMode:megaCircleFromCenter()}
       renderCreatedMega3D()
     }
   });
@@ -7158,7 +11061,8 @@ function bindCreatedMega3D(){
   const finish=e=>{
     if(createdMega3D.drag){createdMega3D.drag=false;c.releasePointerCapture?.(e.pointerId);return}
     if(!createdMega3D.draw)return;
-    const uv=createdMega3DToolUV(e)||createdMega3D.lastUV;
+    let uv=createdMega3DToolUV(e)||createdMega3D.lastUV;
+    if(uv&&e.shiftKey&&(megaPainterState.tool==='brush'||megaPainterState.tool==='line'))uv=constrainMegaAxisPoint(createdMega3D.drawStart,uv);
     const collection=megaPainterState.mode==='height'?megaPainterState.heightCommands:megaPainterState.commands;
     if(uv&&['line','circle','rect'].includes(megaPainterState.tool)){
       const committed=createdMega3D.preview||{type:megaPainterState.tool,a:createdMega3D.drawStart,b:uv};
@@ -7168,13 +11072,15 @@ function bindCreatedMega3D(){
         b:deepCloneState(committed.b),
         color:$('eMegaPaintColor').value,
         width:+$('eMegaPaintWidth').value||8,
-        height:+$('eMegaHeight').value||0
+        height:+$('eMegaHeight').value||0,
+        blockiness:committed.blockiness??megaBlockinessValue(),
+        centerMode:committed.centerMode??megaCircleFromCenter()
       })
     }
     createdMega3D.draw=false;createdMega3D.drawStart=null;createdMega3D.lastUV=null;createdMega3D.preview=null;
     c.releasePointerCapture?.(e.pointerId);saveActiveCreatedMegaFace();renderMegaPainter();renderCreatedMega3D()
   };
-  c.addEventListener('pointerup',finish);c.addEventListener('pointercancel',finish);
+  c.addEventListener('pointerup',finish);c.addEventListener('pointercancel',finish);c.addEventListener('pointerleave',()=>{if(!megaPainterState.drawing){megaPainterState.hover=null;renderMegaPainter()}});
   c.addEventListener('wheel',e=>{e.preventDefault();createdMega3D.zoom=Math.max(.45,Math.min(2.5,createdMega3D.zoom*Math.exp(-e.deltaY*.001)));renderCreatedMega3D()},{passive:false})
 }
 function createdMegaViewerScale(mega){
@@ -8600,21 +12506,23 @@ function syncSimulationMapDockLabel(){
 
 function refreshWorldMapMode(){
   syncSimulationMapDockLabel();
-  const sc=mapDisplayLevel(),planet=sc==='planet',e=document.querySelector('#planetViewPanel .planet-panel-head .eyebrow');
+  const sc=mapDisplayLevel(),planet=sc==='planet',surface=sc==='surface',placeView=sc==='place',e=document.querySelector('#planetViewPanel .planet-panel-head .eyebrow');
   if(e)e.textContent=systemScaleLabel(sc);
-  $('planetName').textContent=planet?(simState.planet?.name||'Procedural World'):systemScaleLabel(sc)+' Map';
+  $('planetName').textContent=planet?(simState.planet?.name||'Procedural World'):surface?(surfaceView.biome||'Surface').replaceAll('-',' ').replace(/\b\w/g,m=>m.toUpperCase()):placeView?(byId(surfaceView.focusPlaceId||scaleNav.selected?.sourceId)?.name||'Place'):systemScaleLabel(sc)+' Map';
 
   const contextItem=scaleNav.path.at(-1)?.item||null;
   const contextPlace=contextItem?.sourceId?byId(contextItem.sourceId):activePlanetPlace();
   const contextMegaCount=contextPlace?megastructureCountForPlace(contextPlace):0;
 
-  if(!planet){
+  if(surface||placeView){
+    $('planetMeta').textContent=`${surfaceView.sampledColor||surfaceView.ground} · ${(surfaceView.lat*180/Math.PI).toFixed(2)}° lat · ${(surfaceView.lon*180/Math.PI).toFixed(2)}° lon · ${surfacePlaces().length} authored Place${surfacePlaces().length===1?'':'s'}`
+  }else if(!planet){
     $('planetMeta').textContent=`${placesForMapScale(sc).length} authored child places · ${contextMegaCount} megastructure${contextMegaCount===1?'':'s'} · ${(simState.spaceMap?.routes||[]).filter(r=>r.type==='trade').length} trade routes · ${(simState.spaceMap?.routes||[]).filter(r=>r.type==='war').length} war routes`
   }else if(contextPlace){
     $('planetMeta').textContent=`${contextMegaCount} megastructure${contextMegaCount===1?'':'s'} · ${$('planetMeta').textContent||''}`.replace(/ · 0 megastructures · /,' · ')
   }
 
-  $('regenPlanet').textContent=planet?'↻ Regenerate':'↻ Regenerate Map';
+  $('regenPlanet').textContent=surface||placeView?'Surface is sampled from Planet':planet?'↻ Regenerate':'↻ Regenerate Map';$('regenPlanet').disabled=surface||placeView;
 
   if(!planet&&simState.spaceMap?.dedicatedSolarRenderer){
     const d=simState.spaceMap.debugBodies||{};
@@ -8627,10 +12535,62 @@ function refreshWorldMapMode(){
   renderGalacticCoordinates();
   syncHistoryMapUI();
   const h=document.querySelector('.planet-hint');
-  if(h)h.textContent=planet?'Drag in any direction to rotate · Scroll to zoom · Click icons for info':'Scroll to zoom · Click objects for info · Double-click to enter · Right-click to go back'
+  if(h)h.textContent=surface?'Left-drag to move · Right-drag to rotate · Drag Places to move · Double-click to enter · Scroll to zoom · Double-right-click to Planet':placeView?'Left-drag to move · Right-drag to rotate · Drag Structures to move · Scroll to zoom · Double-right-click to Surface':planet?'Drag in any direction to rotate · Scroll to zoom · Double-click terrain to enter Surface':'Scroll to zoom · Click objects for info · Double-click to enter · Right-click to go back'
 }
 
+
+
+function countryBorderLatLonEndpoint(seg,end=0){
+  const q=parseCountryBorderKey(seg),cols=COUNTRY_BORDER_COLS,rows=COUNTRY_BORDER_ROWS;
+  if(q.kind==='v'){return{lon:-Math.PI+(q.x/cols)*Math.PI*2,lat:Math.PI/2-((q.y+end)/rows)*Math.PI}}
+  return{lon:-Math.PI+((q.x+end)/cols)*Math.PI*2,lat:Math.PI/2-(q.y/rows)*Math.PI}
+}
+function drawProjectedBorderLine(ctx,w,h,a,b){
+  let prev=null;for(let i=0;i<=6;i++){const t=i/6,lat=a.lat+(b.lat-a.lat)*t;let dl=b.lon-a.lon;if(dl>Math.PI)dl-=Math.PI*2;if(dl<-Math.PI)dl+=Math.PI*2;const lon=a.lon+dl*t,P=planetProject(lat,lon,w,h);if(P.front&&prev?.front&&Math.hypot(P.x-prev.x,P.y-prev.y)<Math.min(w,h)*.3){ctx.moveTo(prev.x,prev.y);ctx.lineTo(P.x,P.y)}prev=P}
+}
+function proceduralCountryBorder(country){
+  const lat=Number.isFinite(+country.surfaceLat)?+country.surfaceLat:0,lon=Number.isFinite(+country.surfaceLon)?+country.surfaceLon:0,seed=[...String(country.id)].reduce((a,c)=>a+c.charCodeAt(0),0),pts=[];
+  const rx=.28+(seed%8)*.018,ry=.18+((seed>>2)%7)*.015;for(let i=0;i<28;i++){const a=i/28*Math.PI*2,r=1+.18*Math.sin(a*3+seed)+.09*Math.cos(a*5+seed*.2);pts.push({lat:Math.max(-1.48,Math.min(1.48,lat+Math.sin(a)*ry*r)),lon:lon+Math.cos(a)*rx*r/Math.max(.35,Math.cos(lat))})}return pts
+}
+function drawCountryBorders(ctx,w,h){
+  const planet=activeSurfacePlanetNode();if(!planet)return;
+  const political=!!planetView.political;if(!political)return;
+  const countries=nodes.filter(n=>n.type==='place'&&!n.isHub&&String(n.placeScale||inferPlaceScale(n.placeType))==='country'&&countryPlanetMatches(n,planet));
+  if(!countries.length)return;ctx.save();ctx.strokeStyle='rgba(255,255,255,.96)';ctx.lineWidth=Math.max(1.2,(political?2.3:1.8)*planetView.zoom);ctx.shadowColor='rgba(0,0,0,.8)';ctx.shadowBlur=4;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
+  for(const c of countries){const segs=normalizeCountryBorderSegments(c.countryBorderSegments);if(segs.length){for(const seg of segs)drawProjectedBorderLine(ctx,w,h,countryBorderLatLonEndpoint(seg,0),countryBorderLatLonEndpoint(seg,1))}else if(planet.planetProceduralBorders){const pts=proceduralCountryBorder(c);for(let i=0;i<pts.length;i++)drawProjectedBorderLine(ctx,w,h,pts[i],pts[(i+1)%pts.length])}}
+  ctx.stroke();
+  if(political){
+    ctx.shadowBlur=4;ctx.font=`700 ${Math.max(10,12*planetView.zoom)}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+    for(const c of countries){const P=planetProject(c.surfaceLat??0,c.surfaceLon??0,w,h);if(!P.front)continue;ctx.fillStyle='rgba(255,255,255,.97)';ctx.fillText(c.name,P.x,P.y)}
+  }
+  ctx.restore()
+}
+
+const v282PlanetIconImages=new Map();
+function v282PlanetIconImage(symbolId){
+  const sym=symbolById(symbolId);if(!sym?.data)return null;
+  if(v282PlanetIconImages.has(symbolId))return v282PlanetIconImages.get(symbolId);
+  const img=new Image();img.onload=()=>requestPlanetDraw();img.src=sym.data;v282PlanetIconImages.set(symbolId,img);return img
+}
+function drawPlanetPlaceIcons(ctx,w,h){
+  const planet=activeSurfacePlanetNode();if(!planet)return;
+  const canvas=$('planetCanvas');if(canvas)canvas._planetPlaceIcons=[];
+  const items=nodes.filter(n=>n.type==='place'&&!n.isHub&&n.surfacePlanetId===planet.id&&placeHasPlanetIcon(n));ctx.save();
+  for(const place of items){
+    const P=planetProject(place.surfaceLat??0,place.surfaceLon??0,w,h);if(!P.front)continue;
+    const size=Math.max(18,Math.min(34,22*planetView.zoom)),img=place.placeIconSymbolId?v282PlanetIconImage(place.placeIconSymbolId):null;
+    ctx.shadowColor='rgba(0,0,0,.8)';ctx.shadowBlur=6;ctx.fillStyle='rgba(7,14,22,.82)';ctx.strokeStyle='rgba(225,242,255,.88)';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(P.x,P.y,size*.64,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+    if(img?.complete&&img.naturalWidth){ctx.drawImage(img,P.x-size*.46,P.y-size*.46,size*.92,size*.92)}
+    else{ctx.fillStyle='#f4fbff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`700 ${Math.max(10,size*.46)}px system-ui`;ctx.fillText(String(place.placeIconText||'◆').slice(0,5),P.x,P.y)}
+    // Planet-level labels remain. Only the Surface-level floating Place label was removed.
+    ctx.fillStyle='rgba(238,247,255,.92)';ctx.font='600 9px system-ui';ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(place.name,P.x,P.y+size*.72);
+    if(canvas)canvas._planetPlaceIcons.push({place,x:P.x,y:P.y,r:size*.82})
+  }
+  ctx.restore()
+}
 function drawPlanet(){
+  if(mapDisplayLevel()!=='surface'&&mapDisplayLevel()!=='place')hideSurfaceWebGLLayers();
+  if(mapDisplayLevel()==='surface'||mapDisplayLevel()==='place'){const canvas=$('planetCanvas'),modal=$('simulationModal');if(!canvas||!modal||modal.classList.contains('hidden'))return;renderSurfaceView(canvas);return}
   if(mapDisplayLevel()!=='planet'){drawScaleMap();return}
   const canvas=$('planetCanvas'),modal=$('simulationModal');
   if(!canvas||!modal||modal.classList.contains('hidden'))return;
@@ -8682,6 +12642,8 @@ function drawPlanet(){
   ctx.restore();
   ctx.globalAlpha=1;ctx.strokeStyle='rgba(135,202,235,.38)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
 
+  drawCountryBorders(ctx,r.width,r.height);
+
   const cloudPlanet=activePlanetPlace();
   const cloudMegas=megastructuresLinkedToNode(cloudPlanet).filter(s=>s.megastructureScale==='planetary');
   const cloudsBelow=cloudMegas.length>0&&cloudMegas.every(s=>s.megaCloudLayer==='below');
@@ -8702,6 +12664,9 @@ function drawPlanet(){
   drawPlanetaryMegastructures(ctx,r.width,r.height);
 
   if(!cloudsBelow)drawPlanetClouds(ctx,r.width,r.height,'above');
+
+  // Authored Place icons live directly on the Planet level.
+  drawPlanetPlaceIcons(ctx,r.width,r.height);
 
   // V19.9AA temporary diagnostic overlay.
   drawMegaDominantColorDebug(ctx,r.width,r.height);
@@ -8858,13 +12823,43 @@ function planetMinZoom(){
 
 function bindPlanetControls(){
   bindHistoryMapControls();
+  const captionBtn=$('togglePlaceCaptions');if(captionBtn&&!captionBtn.dataset.bound){captionBtn.dataset.bound='1';captionBtn.onclick=()=>{surfaceView.captions=surfaceView.captions===false;captionBtn.classList.toggle('active',surfaceView.captions!==false);captionBtn.textContent=surfaceView.captions===false?'Aa̶':'Aa';requestPlanetDraw()};captionBtn.classList.toggle('active',surfaceView.captions!==false)}
+  const politicalBtn=$('togglePoliticalMap');if(politicalBtn&&!politicalBtn.dataset.bound){politicalBtn.dataset.bound='1';politicalBtn.onclick=()=>{planetView.political=!planetView.political;politicalBtn.classList.toggle('active',planetView.political);politicalBtn.textContent=planetView.political?'⚑ Political':'⚐ Political';requestPlanetDraw()};politicalBtn.classList.toggle('active',!!planetView.political)}
   const c=$('planetCanvas');if(!c||c._v16Bound)return;c._v16Bound=true;
 
   c.addEventListener('contextmenu',e=>e.preventDefault());
 
   c.addEventListener('pointerdown',e=>{
+    if(mapDisplayLevel()==='surface'||mapDisplayLevel()==='place'){
+      const r=c.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+      const hit=[...(c._surfacePlaces||[])].reverse().find(v=>Math.hypot(mx-v.x,my-v.y)<v.r);
+      const tool=v287qSurfaceTool(),hitScale=tool==='drag'?2.45:1,
+            structureHit=[...(c._surfaceStructures||[])].reverse().find(v=>Math.hypot(mx-v.x,my-v.y)<Math.max(v.r*hitScale,tool==='drag'?48:v.r));
+      const right=e.button===2;
+      if(right){
+        const now=performance.now();if(now-(surfaceView.lastRightDown||0)<360){surfaceView.lastRightDown=0;backScaleLevel();return}surfaceView.lastRightDown=now
+      }
+      if(!right&&tool==='weather'){const point=v287qGroundPointFromClient(c,e.clientX,e.clientY);if(point)v287qSeedWeatherAt(point.x,point.z);e.preventDefault();return}
+      c.__surfacePointer={x:e.clientX,y:e.clientY,startClientX:e.clientX,startClientY:e.clientY,hitId:hit?.place?.id||null,structureKey:structureHit?.key||null,button:e.button,moved:false,tool};c.__surfacePointer.worldBasis=surface3DGroundScreenBasis(c,{x:surfaceView.cameraX||0,z:surfaceView.cameraZ||0});if(hit?.place)c.__surfacePointer.placeStart={lat:hit.place.surfaceLat??surfaceView.lat,lon:hit.place.surfaceLon??surfaceView.lon,rel:placeSurfaceRelative(hit.place)};
+      if(!right&&tool==='drag'&&structureHit){
+        surfaceView.dragStructureKey=structureHit.key;
+        const owner=structureHit.place,center=mapDisplayLevel()==='place'?{x:0,z:0}:placeSurfaceRelative(owner),cur=owner?.structurePlacementOffsets?.[structureHit.key]||{x:structureHit.rel.x-center.x,z:structureHit.rel.z-center.z};
+        c.__surfacePointer.structureOwnerId=owner?.id||null;c.__surfacePointer.structureStart={x:+cur.x||0,z:+cur.z||0};c.__surfacePointer.structureBasis=surface3DGroundScreenBasis(c,structureHit.rel)
+      }else if(!right&&tool==='drag'&&hit&&mapDisplayLevel()==='surface')surfaceView.dragPlaceId=hit.place.id;
+      c.setPointerCapture?.(e.pointerId);e.preventDefault();return
+    }
     const r=c.getBoundingClientRect();
     const mx=e.clientX-r.left,my=e.clientY-r.top;
+
+    if(mapDisplayLevel()==='planet'&&e.button===0){
+      const iconHit=[...(c._planetPlaceIcons||[])].reverse().find(v=>Math.hypot(mx-v.x,my-v.y)<=v.r);
+      if(iconHit){
+        c.__planetIconDrag={place:iconHit.place,pointerId:e.pointerId,moved:false,startX:e.clientX,startY:e.clientY};
+        c.setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+        return
+      }
+    }
 
     // Strategic-map Separate Megastructures are draggable world objects.
     if(mapDisplayLevel()!=='planet'&&e.button===0){
@@ -8894,6 +12889,28 @@ function bindPlanetControls(){
   });
 
   c.addEventListener('pointermove',e=>{
+    if((mapDisplayLevel()==='surface'||mapDisplayLevel()==='place')&&c.__surfacePointer){
+      const st=c.__surfacePointer,dx=e.clientX-st.x,dy=e.clientY-st.y;st.x=e.clientX;st.y=e.clientY;if(Math.abs(dx)+Math.abs(dy)>1)st.moved=true;
+      if(st.button===2){surfaceView.yaw+=dx*.009;surfaceView.pitch=Math.max(.08,Math.min(1.08,(surfaceView.pitch??.3)+dy*.006))}
+      else if(surfaceView.dragStructureKey){
+        const owner=byId(st.structureOwnerId),ent=(c._surfaceStructures||[]).find(v=>v.key===surfaceView.dragStructureKey);
+        if(owner&&ent){owner.structurePlacementOffsets=owner.structurePlacementOffsets||{};const B=st.structureBasis,S=st.structureStart,D=B?v285SolveScreenBasis(e.clientX-st.startClientX,e.clientY-st.startClientY,B.ax,B.ay,B.bx,B.by):null;if(D&&S)owner.structurePlacementOffsets[ent.key]={x:S.x+D.x,z:S.z+D.z}}
+      }
+      else if(surfaceView.dragPlaceId&&mapDisplayLevel()==='surface'){const p=byId(surfaceView.dragPlaceId),B=st.worldBasis,S=st.placeStart,D=B?v285SolveScreenBasis(e.clientX-st.startClientX,e.clientY-st.startClientY,B.ax,B.ay,B.bx,B.by):null;if(p&&S&&D){p.surfaceLon=S.lon+D.x/(28*Math.cos(surfaceView.lat)||28);p.surfaceLat=S.lat-D.z/28}}
+      else if(st.tool==='move'){const B=st.worldBasis,D=B?v285SolveScreenBasis(e.clientX-st.startClientX,e.clientY-st.startClientY,B.ax,B.ay,B.bx,B.by):null;if(D){surfaceView.cameraX=(st.cameraStartX??(st.cameraStartX=surfaceView.cameraX||0))-D.x;surfaceView.cameraZ=(st.cameraStartZ??(st.cameraStartZ=surfaceView.cameraZ||0))-D.z}}
+      requestPlanetDraw();e.preventDefault();return
+    }
+    if(c.__planetIconDrag&&c.__planetIconDrag.pointerId===e.pointerId){
+      const drag=c.__planetIconDrag,point=inversePlanetScreenPoint(c,e.clientX,e.clientY);
+      if(point){
+        drag.place.surfaceLat=point.lat;
+        drag.place.surfaceLon=point.lon;
+        drag.moved ||= Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)>2;
+        requestPlanetDraw()
+      }
+      e.preventDefault();
+      return
+    }
     if(strategicMegaDrag&&strategicMegaDrag.pointerId===e.pointerId){
       const r=c.getBoundingClientRect();
       const p=worldPointFromScaleScreen(c,e.clientX-r.left,e.clientY-r.top);
@@ -8925,6 +12942,17 @@ function bindPlanetControls(){
   });
 
   c.addEventListener('pointerup',e=>{
+    if((mapDisplayLevel()==='surface'||mapDisplayLevel()==='place')&&c.__surfacePointer){
+      const movedId=surfaceView.dragPlaceId,movedStructure=surfaceView.dragStructureKey;surfaceView.dragPlaceId=null;surfaceView.dragStructureKey=null;c.__surfacePointer=null;c.releasePointerCapture?.(e.pointerId);if(movedId||movedStructure)save();requestPlanetDraw();return
+    }
+    if(c.__planetIconDrag&&c.__planetIconDrag.pointerId===e.pointerId){
+      const moved=c.__planetIconDrag.moved;
+      c.__planetIconDrag=null;
+      c.releasePointerCapture?.(e.pointerId);
+      if(moved)save();
+      requestPlanetDraw();
+      return
+    }
     if(strategicMegaDrag&&strategicMegaDrag.pointerId===e.pointerId){
       strategicMegaDrag=null;
       c.releasePointerCapture?.(e.pointerId);
@@ -8935,12 +12963,15 @@ function bindPlanetControls(){
     c.releasePointerCapture?.(e.pointerId);
   });
   c.addEventListener('pointercancel',e=>{
+    if(c.__planetIconDrag&&c.__planetIconDrag.pointerId===e.pointerId)c.__planetIconDrag=null;
     if(strategicMegaDrag&&strategicMegaDrag.pointerId===e.pointerId)strategicMegaDrag=null;
     planetView.drag=false
   });
 
   c.addEventListener('dblclick',e=>{
-    if(mapDisplayLevel()==='planet')return;
+    if(mapDisplayLevel()==='planet'){const point=inversePlanetScreenPoint(c,e.clientX,e.clientY);if(point)enterSurfaceView(point.lat,point.lon);return}
+    if(mapDisplayLevel()==='surface'){const r0=c.getBoundingClientRect(),mx0=e.clientX-r0.left,my0=e.clientY-r0.top;const H=[...(c._surfacePlaces||[])].reverse().find(v=>Math.hypot(mx0-v.x,my0-v.y)<v.r);if(H)enterPlaceFromSurface(H.place);return}
+    if(mapDisplayLevel()==='place')return;
     const r=c.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
     // Double-click is reserved for physical hierarchy navigation.
     // Event markers can overlap planets, but they must never hijack zoom.
@@ -8957,9 +12988,15 @@ function bindPlanetControls(){
       }
     )
   });
-  c.addEventListener('contextmenu',e=>{if(mapDisplayLevel()!=='planet'&&scaleNav.path.length){e.preventDefault();backScaleLevel()}});
+  c.addEventListener('contextmenu',e=>{e.preventDefault();if(mapDisplayLevel()!=='surface'&&mapDisplayLevel()!=='place'&&mapDisplayLevel()!=='planet'&&scaleNav.path.length)backScaleLevel()});
   c.addEventListener('wheel',e=>{
     e.preventDefault();
+    if(mapDisplayLevel()==='surface'||mapDisplayLevel()==='place'){
+      const current=mapDisplayLevel(),old=surfaceView.zoom,requested=old*Math.exp(-e.deltaY*.001);
+      if(e.deltaY>0&&old<=.451&&requested<.45){backScaleLevel();return}
+      // v28.2: scrolling NEVER enters a Place. Entry is double-click only.
+      surfaceView.zoom=Math.max(.45,Math.min(6,requested));requestPlanetDraw();return
+    }
     if(mapDisplayLevel()!=='planet'){
       const r=c.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
       const level=mapDisplayLevel();
@@ -9017,6 +13054,10 @@ function bindPlanetControls(){
     const minZoom=planetMinZoom();
     const oldZoom=planetView.zoom;
     const requested=oldZoom*Math.exp(-e.deltaY*.001);
+    if(e.deltaY<0&&oldZoom>=3.79&&requested>3.8){
+      const point=inversePlanetScreenPoint(c,e.clientX,e.clientY);
+      if(point){enterSurfaceView(point.lat,point.lon);return}
+    }
     planetView.zoom=Math.max(minZoom,Math.min(3.8,requested));
 
     // Same rule for Planet -> Solar System:
@@ -9863,15 +13904,23 @@ function travelToEvent(eventOrIndex){
   refreshWorldMapMode();renderGalacticCoordinates();requestPlanetDraw()
 }
 function coordinateEntries(){
-  const entries=[],items=(scaleNav.path||[]).map(p=>p.item).filter(Boolean);
+  const entries=[],path=scaleNav.path||[],items=path.map(p=>p.item).filter(Boolean);
   const hasGalaxy=items.some(item=>String((item.sourceId?byId(item.sourceId):null)?.placeScale||'')==='galaxy');
-  if(simState.civ&&!hasGalaxy)entries.push({name:simState.civ,depth:-1});
-  items.forEach((item,i)=>entries.push({name:item.name||'Unknown',depth:i}));
-  if(mapDisplayLevel()==='planet'){
+  if(simState.civ&&!hasGalaxy)entries.push({name:simState.civ,depth:-1,level:systemScale()});
+  path.forEach((step,i)=>entries.push({name:step.item?.name||'Unknown',depth:i,level:step.level}));
+  const current=mapDisplayLevel();
+  if(current==='planet'){
+    const n=simState.planetOverride?.name||simState.planet?.name;if(n&&entries.at(-1)?.name!==n)entries.push({name:n,depth:path.length,level:'planet'})
+  }else if(current==='surface'){
+    const n=simState.planetOverride?.name||simState.planet?.name;if(n&&entries.at(-1)?.name!==n)entries.push({name:n,depth:path.length,level:'planet'});
+    entries.push({name:(surfaceView.biome||'Surface').replaceAll('-',' '),depth:path.length+1,level:'surface'})
+  }else if(current==='place'){
     const n=simState.planetOverride?.name||simState.planet?.name;
-    if(n&&entries.at(-1)?.name!==n)entries.push({name:n,depth:items.length})
+    if(n&&!entries.some(e=>e.level==='planet'&&e.name===n))entries.push({name:n,depth:path.length,level:'planet'});
+    if(!entries.some(e=>e.level==='surface'))entries.push({name:(surfaceView.biome||'Surface').replaceAll('-',' '),depth:path.length+1,level:'surface'});
+    const p=byId(surfaceView.focusPlaceId||scaleNav.selected?.sourceId);if(p)entries.push({name:p.name,depth:path.length+2,level:'place'})
   }
-  if(!entries.length)entries.push({name:systemScaleLabel(),depth:-1});
+  if(!entries.length)entries.push({name:systemScaleLabel(),depth:-1,level:systemScale()});
   return entries
 }
 function travelToBreadcrumbDepth(depth){
@@ -9881,11 +13930,25 @@ function travelToBreadcrumbDepth(depth){
   for(const item of items){const next=hierarchyChildLevel(mapDisplayLevel());if(!next)break;if(next==='planet'){enterPlanetFromMap(item);break}childMapFor(item)}
   refreshWorldMapMode();renderGalacticCoordinates();requestPlanetDraw()
 }
+function travelToCoordinateEntry(entry){
+  if(!entry)return;
+  const current=mapDisplayLevel();
+  if(entry.level==='place')return;
+  if(entry.level==='surface'){
+    if(current==='place'){backScaleLevel();return}
+    if(current==='surface')return
+  }
+  if(entry.level==='planet'&&(current==='surface'||current==='place')){
+    while(mapDisplayLevel()==='place'||mapDisplayLevel()==='surface')backScaleLevel();
+    return
+  }
+  travelToBreadcrumbDepth(entry.depth)
+}
 function renderGalacticCoordinates(){
   const el=$('galacticCoordinates');if(!el)return;
   const entries=coordinateEntries();
-  el.innerHTML=entries.map((e,i)=>`<button class="galactic-crumb" data-coordinate-depth="${e.depth}">${E.esc(e.name)}</button>${i<entries.length-1?'<span>›</span>':''}`).join('');
-  el.querySelectorAll('[data-coordinate-depth]').forEach(b=>b.onclick=()=>travelToBreadcrumbDepth(+b.dataset.coordinateDepth))
+  el.innerHTML=entries.map((e,i)=>`<button class="galactic-crumb" data-coordinate-index="${i}">${E.esc(e.name)}</button>${i<entries.length-1?'<span>›</span>':''}`).join('');
+  el.querySelectorAll('[data-coordinate-index]').forEach(b=>b.onclick=()=>travelToCoordinateEntry(entries[+b.dataset.coordinateIndex]))
 }
 function eventAnchorForScale(ev,map){
   const loc=ev?.location;if(!loc||!map)return null;
@@ -10077,7 +14140,7 @@ function relationshipEvent(rel,ctx){
 }
 
 function makeCivilizationEvent(ctx){
-  const pool=[],s=pick(ctx.spells),s2=pick(ctx.spells.filter(x=>x!==s)),m=pick(ctx.materials),t=pick(ctx.tools),tech=pick(ctx.techniques),p=pick(ctx.principles),r=pick(ctx.rules),cls=pick(ctx.classes),region=pick(simState.regions);
+  const pool=[],positiveSpells=ctx.spells.filter(x=>(x.morality??0)>=-15),s=pick(positiveSpells),s2=pick(positiveSpells.filter(x=>x!==s)),anySpell=pick(ctx.spells),m=pick(ctx.materials),t=pick(ctx.tools),tech=pick(ctx.techniques),p=pick(ctx.principles),r=pick(ctx.rules),cls=pick(ctx.classes),region=pick(simState.regions);
   const mainSpecies=pick(ctx.mainLife||[]);
   const otherSentient=pick(ctx.secondarySentients||[]);
   const place=pick(ctx.places||[]);
@@ -10185,11 +14248,11 @@ function makeCivilizationEvent(ctx){
   if(p)pool.push(()=>event('Theory',`${p.name} reshapes magical theory`,`Scholars increasingly use ${p.name} as a foundational explanation.${p.property?` Debate centers on ${p.property}.`:''}`,['Principle',p.name],{knowledge:6},'breakthrough',[`Principle exists in the magic graph`]));
   if(r)pool.push(()=>{const affected=ctx.spells.filter(x=>ruleApplies(r,x));return event('Law',`${r.name} becomes a central magical law`,`Experiments repeatedly confirm ${r.name}, affecting ${affected.length} known spell${affected.length===1?'':'s'}.${r.exceptions?` Its exception — ${r.exceptions} — attracts major research.`:''}`,[r.name,r.strength||'Rule'],{knowledge:3,stability:2},'normal',[`${affected.length} graph spells are governed by this rule`])});
   if(r&&r.exceptions&&chance(.45))pool.push(()=>event('Exploit',`Researchers exploit an exception to ${r.name}`,`A research group deliberately builds around the exception “${r.exceptions}”. The discovery opens an unexpected branch of magical engineering.`,['Rule Exception','Exploit'],{knowledge:8,economy:3,danger:5,stability:-2,technology:3},'major',[`Rule has a defined exception`,`Researchers are actively testing boundaries`]));
-  if(cls)pool.push(()=>event('Institution',`The ${cls} Academy is founded`,`Practitioners establish a permanent academy for ${cls} magic. The discipline now has formal teachers, exams, archives, and professional standards.`,['Institution',cls],{knowledge:4,stability:3,economy:1},'major',[`Spell Class ${cls} exists`]));
+  if(cls&&nodes.some(s=>s.type==='spell'&&!s.isHub&&(s.spellClass||'Unclassified')===cls&&(s.morality??0)>=-15))pool.push(()=>event('Institution',`The ${cls} Academy is founded`,`Practitioners establish a permanent academy for ${cls} magic. The discipline now has formal teachers, exams, archives, and professional standards.`,['Institution',cls],{knowledge:4,stability:3,economy:1},'major',[`Spell Class ${cls} exists`]));
   if(m&&t)pool.push(()=>event('Industry','Arcane manufacturing expands',`Workshops combine ${m.name} with ${t.name}. Standardized magical components create an increasingly specialized industrial sector.`,['Industry',m.name,t.name],{economy:7,technology:4,danger:1},'major',[`A Tool and Material coexist in the system`]));
   if(t&&chance(.22))pool.push(()=>event('Accident',`${t.name} accident triggers regulation`,`A serious failure involving ${t.name} exposes weaknesses in magical safety standards. Certification and inspection become political issues.`,['Accident',t.name],{stability:-4,danger:6,economy:-2},'crisis',[`Widespread tool use`,`Arcane risk exists`]));
   if(s&&chance(.22))pool.push(()=>event('Infrastructure',`${s.name} enters public infrastructure`,`Engineers make ${s.name} reliable enough for civic use. Services begin depending on a spell once treated as specialist magic.`,['Infrastructure',s.name],{economy:6,stability:4,technology:3},'major',[`Spell has reached mass adoption`]));
-  if(s&&chance(.14))pool.push(()=>event('Disaster',`A ${s.spellClass||'magical'} cascade`,`A large-scale magical failure involving ${s.name} spreads farther than expected. The event becomes a defining safety case study.`,['Disaster',s.name],{population:-.012,stability:-8,economy:-5,danger:9,knowledge:4},'crisis',[`High-impact spell use`,`Safety systems failed`]));
+  if(anySpell&&chance(.14))pool.push(()=>event('Disaster',`A ${anySpell.spellClass||'magical'} cascade`,`A large-scale magical failure involving ${anySpell.name} spreads farther than expected. The event becomes a defining safety case study.`,['Disaster',anySpell.name],{population:-.012,stability:-8,economy:-5,danger:9,knowledge:4},'crisis',[`High-impact spell use`,`Safety systems failed`]));
   if(region&&cls&&chance(.28))pool.push(()=>event('Regional Change',`${region.name} embraces ${cls} magic`,`${region.name} becomes a center for ${cls} practice. Local education, employment, and infrastructure adapt around the discipline.`,[region.name,cls],{economy:2,knowledge:2},'normal',[`Region has magical specialization`,`Spell Class exists`]));
   if(ctx.classes.length>1&&chance(.25)){const a=pick(ctx.classes),b=pick(ctx.classes.filter(x=>x!==a));pool.push(()=>event('Debate',`${a} and ${b} schools clash`,`Practitioners of ${a} and ${b} disagree over education, funding, and theory. Competing institutions begin forming.`,['Academic Rivalry',a,b],{knowledge:3,stability:-2},'normal',[`Multiple Spell Classes exist`]))}
   if(simState.knowledge>35&&s)pool.push(()=>event('Breakthrough',`Advanced theory transforms ${s.name}`,`Accumulated knowledge allows researchers to derive ${s.name} from first principles rather than rote practice.`,['Breakthrough',s.name],{knowledge:7,economy:4,danger:-1,technology:3},'breakthrough',[`Arcane Knowledge exceeded 35%`]));
@@ -10203,6 +14266,7 @@ function makeCivilizationEvent(ctx){
   if(ctx.structures.length){const st=pick(ctx.structures);pool.push(()=>event('Institution',`${st.name} gains influence`,`The ${st.category||'magical organization'} becomes an important part of magical society, shaping education, regulation, research, or public life.`,['Structure',st.name],{stability:2,knowledge:3},'major',[`A Structure exists in the graph`]))}
   const ecologyLife=ctx.life.filter(l=>!l.main);
   if(ecologyLife.length){const lf=pick(ecologyLife);pool.push(()=>event('Ecology',`${lf.name} changes magical ecology`,`Researchers document how ${lf.name} interacts with the wider magical system. Conservation, harvesting, study, or public safety practices begin to form around it.`,['Life',lf.name],{knowledge:4,economy:1,danger:1},'normal',[`${lf.name} is a non-Main Life node in the graph`]))}
+  addCreatorTimelineEvents(pool);
   if(!pool.length)return event('Founding','Mana becomes a field of study','Civilization begins systematic study of Mana, but there are not yet enough defined magical concepts for specialized institutions to emerge.',['Mana'],{knowledge:2},'normal',['Only Mana is currently defined']);
   return pick(pool)()
 }
@@ -10210,7 +14274,7 @@ function postEventEmergence(ev){
   const ctx=simContext();
   if(ev.kind==='Institution'){
     const cls=ev.tags.find(t=>ctx.classes.includes(t))||pick(ctx.classes)||'Magic';
-    createInstitution(`${cls} Academy`,'Academy',cls,pick(simState.regions)?.name)
+    if(nodes.some(s=>s.type==='spell'&&!s.isHub&&(s.spellClass||'Unclassified')===cls&&(s.morality??0)>=-15))createInstitution(`${cls} Academy`,'Academy',cls,pick(simState.regions)?.name)
   }
   if(ev.kind==='Industry'){
     addUnique(simState.industries,ev.title);addCivNode(ev.title,'industry',ev.tags[1]||'Magic');addCivEdge(simState.civ,ev.title,'develops')
@@ -10585,7 +14649,7 @@ function maybeCivilizationUtilityEvent(){
   // Currency price/index movement is intentionally RAPID-ONLY.
   // tickRapidCivilizationUtils() owns these updates so they never pollute
   // the historical Timeline.
-  if(util.utilityType==='disease'&&linked.length){
+  if(util.utilityType==='disease'&&linked.length&&(util.diseaseKind||'Disease')!=='Symptom'){
     const species=pick(linked);
     const mortality=Math.max(0,Math.min(100,+util.diseaseMortality||10));
     const severe=util.diseaseSeverity==='Severe'||mortality>=35;
@@ -11424,7 +15488,7 @@ graph.onNodeDragEnd=(node,moved)=>{
   graph.setData(nodes.filter(n=>!n.hiddenTechnology),edges.filter(e=>!e.blocked&&byId(e.a)&&byId(e.b)&&!byId(e.a)?.hiddenTechnology&&!byId(e.b)?.hiddenTechnology));
   save();
 };
-graph.onSelect=selectNode;
+graph.onSelect=n=>{const canonical=n?.id?byId(n.id):null;selectNode(canonical||n)};
 graph.onLinkDrop=(a,b)=>openLinkModal(a,b);
 graph.onEdgeClick=edge=>{if(edge?.techAdvancement)openAdvancementEditor(edge)};
 graph.onEdgeSnip=edge=>{snipEdge(edge)};
@@ -11553,13 +15617,597 @@ function inspireEditor(){
   if(b){b.classList.add('sparked');setTimeout(()=>b.classList.remove('sparked'),450)}
 }
 
+// ===================== V23 READABLE SAVE CONVERTER =====================
+
+function readableScalar(value){
+  if(value==null)return'';
+  if(Array.isArray(value))return value.map(readableScalar).filter(Boolean).join('; ');
+  if(typeof value==='object')return'';
+  return civilizationSymbolPlainText
+    ?civilizationSymbolPlainText(String(value))
+    :String(value)
+}
+
+function readableLine(label,value,indent='- '){
+  const text=readableScalar(value).trim();
+  return text?`${indent}${label} - ${text}`:''
+}
+
+function readableNodeTypeLabel(type){
+  return({
+    spell:'Spells',
+    rule:'Rules',
+    material:'Materials',
+    magicalObject:'Magical Objects',
+    technique:'Techniques',
+    principle:'Principles',
+    structure:'Structures',
+    organization:'Organizations',
+    life:'Life',
+    place:'Places',
+    civilizationUtil:'Civilization Utils'
+  })[type]||String(type||'Other')
+}
+
+function readableUtilityDetails(n){
+  const out=[];
+  const subtype=n.utilityType||'utility';
+
+  out.push(readableLine('Type',utilitySubtypeLabel?.(subtype)||subtype));
+
+  if(subtype==='language'){
+    out.push(readableLine('Direction',n.languageDirection));
+    const groups=n.languageMappingGroups||{};
+    const labels={
+      symbolSymbol:'Symbol → Symbol',
+      symbolSound:'Symbol → Sound',
+      wordWord:'Word → Word',
+      phrasePhrase:'Phrase → Phrase'
+    };
+    for(const [key,label] of Object.entries(labels)){
+      const rows=groups[key]||[];
+      if(rows.length){
+        out.push(`- ${label}`);
+        for(const row of rows){
+          out.push(`  - ${readableScalar(row.from)} → ${readableScalar(row.to)}`)
+        }
+      }
+    }
+  }
+
+  if(subtype==='currency'){
+    out.push(
+      readableLine('Symbol',n.currencySymbol),
+      readableLine('USD Equivalent',n.usdEquivalent),
+      readableLine('Subdivision',n.currencySubdivision),
+      readableLine('Form',n.currencyForm),
+      readableLine('Stability',n.currencyStability),
+      readableLine('Backing',n.currencyBacking)
+    )
+  }
+
+  if(subtype==='disease'){
+    out.push(
+      readableLine('Spread',n.diseaseSpread),
+      readableLine('Severity',n.diseaseSeverity),
+      readableLine('Duration',n.diseaseDuration),
+      readableLine('Mortality',n.diseaseMortality!=null?`${n.diseaseMortality}%`:''),
+      readableLine('Cure',n.diseaseCure),
+      readableLine('Origin',n.diseaseOrigin),
+      readableLine('Genetic String',n.diseaseGenome)
+    )
+  }
+
+  if(subtype==='calendar'){
+    out.push(
+      readableLine('Days',n.calendarDays),
+      readableLine('Months',n.calendarMonths),
+      readableLine('Era',n.calendarEra),
+      readableLine('Holidays',n.calendarHolidays)
+    )
+  }
+
+  if(subtype==='measurement'){
+    out.push(
+      readableLine('Distance',n.measurementDistance),
+      readableLine('Mass',n.measurementMass),
+      readableLine('Temperature',n.measurementTemperature)
+    )
+  }
+
+  if(subtype==='legalCode'){
+    out.push(
+      readableLine('Laws',n.legalLaws),
+      readableLine('Rights',n.legalRights),
+      readableLine('Enforcement',n.legalEnforcement)
+    )
+  }
+
+  if(subtype==='rankSystem'){
+    out.push(
+      readableLine('Ranks',n.rankEntries),
+      readableLine('Promotion',n.rankPromotion)
+    )
+  }
+
+  if(subtype==='communication'){
+    out.push(
+      readableLine('Medium',n.communicationMedium),
+      readableLine('Range',n.communicationRange),
+      readableLine('Latency',n.communicationLatency)
+    )
+  }
+
+  if(subtype==='naming'){
+    out.push(
+      readableLine('Given Names',n.namingGiven),
+      readableLine('Family Names',n.namingFamily),
+      readableLine('Examples',n.namingExamples)
+    )
+  }
+
+  out.push(readableLine('Description',n.description));
+  return out.filter(Boolean)
+}
+
+function readableCraftingRecipeLines(n,project){
+  const g=n?.craftingRecipe?.graph;
+  if(!g||!Array.isArray(g.nodes)||!Array.isArray(g.links)||!g.nodes.length)return[];
+  const all=(project?.nodes||[]).filter(Boolean),by=id=>all.find(x=>x.id===id),map=new Map(g.nodes.map(x=>[x.id,x]));
+  const name=x=>{if(!x)return'Unknown';if(x.kind==='product')return n.name||x.label||'Result';if(x.kind==='ingredient')return by(x.refId)?.name||x.label||'Material';return x.label||'Other'};
+  const qty=x=>Math.max(1,Number(x?.qty)||1),qname=x=>`${readableScalar(qty(x))} ${readableScalar(name(x))}`;
+  const processed=new Map(),tags=x=>processed.get(x.id)||[],state=x=>`${qname(x)}${tags(x).length?' '+tags(x).map(t=>`[${t}]`).join(' '):''}`;
+  // The recipe notation intentionally uses the process name + ed (or + d after e).
+  const past=p=>{p=String(p||'Process').trim();if(!p)return'Processed';return /e$/i.test(p)?p+'d':p+'ed'};
+  const addTag=(x,label)=>{if(!x||x.kind!=='ingredient')return;const arr=[...tags(x)],tag=past(label);if(!arr.includes(tag))arr.push(tag);processed.set(x.id,arr)};
+  const nonDirectIn=id=>g.links.filter(l=>l.b===id&&!l.direct).map(l=>map.get(l.a)).filter(Boolean);
+  const nonDirectOut=id=>g.links.filter(l=>l.a===id&&!l.direct).map(l=>map.get(l.b)).filter(Boolean);
+  const directAround=id=>g.links.filter(l=>l.direct&&(l.a===id||l.b===id)).map(l=>({l,other:map.get(l.a===id?l.b:l.a),out:l.a===id})).filter(x=>x.other);
+  const lines=[],ingredients=g.nodes.filter(x=>x.kind==='ingredient'),temps=g.nodes.filter(x=>x.kind==='temporary'),processes=g.nodes.filter(x=>x.kind==='process');
+  for(const x of ingredients)lines.push(`- Acquire ${qname(x)}`);
+  for(const x of temps)lines.push(`- Grab ${readableScalar(name(x))}`);
+  if(ingredients.length||temps.length)lines.push('');
+
+  // Render process nodes first. Temporary helpers can be attached by ordinary process links
+  // OR by a direct process↔helper link, which is common in older saved graphs.
+  const processSources=new Map();
+  for(const proc of processes){
+    const linked=nonDirectIn(proc.id),direct=directAround(proc.id);
+    const permanents=linked.filter(x=>x.kind==='ingredient');
+    const helpers=[...linked.filter(x=>x.kind==='temporary'),...direct.map(x=>x.other).filter(x=>x.kind==='temporary')].filter((x,i,a)=>a.findIndex(y=>y.id===x.id)===i);
+    processSources.set(proc.id,permanents);
+    const action=readableScalar(proc.label||'Process');
+    if(helpers.length&&permanents.length){
+      // A helper/tool applies the process to each selected material independently.
+      for(const src of permanents){
+        const helper=helpers[0];
+        lines.push(`* Get ${state(src)} and ${action} with the ${readableScalar(name(helper))}`);
+        addTag(src,action)
+      }
+    }else if(permanents.length>1){
+      // Multiple materials and no tool/helper = one combined process step.
+      const [first,...rest]=permanents;
+      lines.push(`* Get ${state(first)} and ${action} with ${rest.map(state).join(' and ')}`);
+      permanents.forEach(x=>addTag(x,action))
+    }else if(permanents.length===1){
+      lines.push(`* Get ${state(permanents[0])} and ${action}`);
+      addTag(permanents[0],action)
+    }else{
+      const meaningful=linked.filter(x=>x.kind!=='product'&&x.kind!=='process');
+      for(const src of meaningful)lines.push(`* Get ${src.kind==='ingredient'?state(src):readableScalar(name(src))} and ${action}`)
+    }
+    // Carry process state into an authored ingredient node when the graph explicitly does so.
+    const combined=[];for(const src of permanents)for(const t of tags(src))if(!combined.includes(t))combined.push(t);
+    for(const dst of nonDirectOut(proc.id))if(dst.kind==='ingredient'&&combined.length)processed.set(dst.id,[...combined])
+  }
+
+  // Direct links are recipe operations. Several old graphs use process→tool→product as
+  // routing; translate that to an operation on the processed material and suppress the
+  // final bookkeeping link into the product.
+  const consumedDirect=new Set();
+  for(const proc of processes){
+    const srcs=processSources.get(proc.id)||[];
+    const primary=srcs[0];
+    for(const {l,other,out} of directAround(proc.id)){
+      if(other.kind!=='temporary'||!primary)continue;
+      consumedDirect.add(l.id);
+      const action=readableScalar(l.label||'Use');
+      const helper=readableScalar(name(other));
+      const phrase=/\b(into|onto|through|to|in|on)$/i.test(action)?`${action} the ${helper}`:`${action} with the ${helper}`;
+      lines.push(`- Get ${state(primary)} and ${phrase}`);
+      addTag(primary,action)
+    }
+  }
+
+  for(const l of g.links.filter(l=>l.direct)){
+    if(consumedDirect.has(l.id))continue;
+    const a=map.get(l.a),b=map.get(l.b);if(!a||!b)continue;
+    // Product links are terminal routing. A material→product direct action is still useful;
+    // process/helper→product links are redundant because Results in already states the output.
+    if(b.kind==='product'||a.kind==='product'){
+      const other=b.kind==='product'?a:b,product=b.kind==='product'?b:a;
+      if(other.kind==='process'||other.kind==='temporary')continue;
+      const action=readableScalar(l.label||'Combine');
+      const left=other.kind==='ingredient'?state(other):readableScalar(name(other));
+      if(/\b(into|onto|to)$/i.test(action))lines.push(`- Get ${left} and ${action} ${readableScalar(name(product))}`);
+      else lines.push(`- Get ${left} and ${action}`);
+      if(other.kind==='ingredient')addTag(other,action);
+      continue
+    }
+    if(a.kind==='process'||b.kind==='process')continue;
+    const action=readableScalar(l.label||'Combine');
+    const left=a.kind==='ingredient'?state(a):readableScalar(name(a));
+    const right=b.kind==='ingredient'?state(b):readableScalar(name(b));
+    lines.push(`- Get ${left} and ${action} with ${right}`);
+    if(a.kind==='ingredient')addTag(a,action)
+  }
+  if(processes.length||g.links.some(l=>l.direct))lines.push('');
+  lines.push(`- Results in ${readableScalar(n.name||'Result')}`);
+  return lines
+}
+
+function readableNodeDetails(n,project){
+  const out=[];
+
+  switch(n.type){
+    case'spell':
+      out.push(
+        readableLine('Intent',n.intent),
+        readableLine('Structure',n.structure),
+        readableLine('Target',n.target),
+        readableLine('Output',n.output),
+        readableLine('Duration',n.duration),
+        readableLine('Range',n.range),
+        readableLine('Source',n.source),
+        readableLine('Extra attributes',n.extra)
+      );
+      break;
+
+    case'rule':
+      out.push(
+        readableLine('Strength',n.strength),
+        readableLine('Spell Class',n.spellClass),
+        readableLine('Scope',n.scope),
+        readableLine('Rule',n.text),
+        readableLine('Description',n.description)
+      );
+      break;
+
+    case'material':
+      out.push(
+        readableLine('Category',n.category),
+        readableLine('Composition',n.composition),
+        readableLine('Properties',n.property),
+        readableLine('Requirements',n.requirements),
+        readableLine('Uses',n.uses),
+        readableLine('Interaction',n.interaction),
+        readableLine('Description',n.description)
+      );
+      break;
+
+    case'magicalObject':
+      out.push(
+        readableLine('Category',n.category),
+        readableLine('Composition',n.composition),
+        readableLine('Properties',n.property),
+        readableLine('Requirements',n.requirements),
+        readableLine('Uses',n.uses),
+        readableLine('Interaction',n.interaction),
+        readableLine('Description',n.description)
+      );
+      {const recipeLines=readableCraftingRecipeLines(n,project);if(recipeLines.length){out.push('- Recipe',...recipeLines)}}
+      break;
+
+    case'technique':
+      out.push(
+        readableLine('Category',n.category),
+        readableLine('Requirements',n.requirements),
+        readableLine('Uses',n.uses),
+        readableLine('Interaction',n.interaction),
+        readableLine('Description',n.description)
+      );
+      break;
+
+    case'principle':
+      out.push(
+        readableLine('Category',n.category),
+        readableLine('Property',n.property),
+        readableLine('Interaction',n.interaction),
+        readableLine('Description',n.description)
+      );
+      break;
+
+    case'structure':{
+      const model=n.isMegastructure?null:normalizeScene3DModel(n.structureModel),
+            active=model?.variants?.find(v=>v.id===model.activeVariantId),
+            variantSummary=model?.variants?.map((v,i)=>{
+              const visible=(v.parts||[]).filter(p=>p&&!p.hidden),
+                    kinds=[...new Set(visible.map(p=>p.kind||'Cube'))];
+              return `${i+1}. ${v.name||`Variant ${i+1}`} — ${visible.length} object${visible.length===1?'':'s'}${kinds.length?` [${kinds.join(', ')}]`:''}${v.id===model.activeVariantId?' (active)':''}`
+            })||[],
+            rep=model?.repetition||{},
+            repSummary=model
+              ?rep.enabled
+                ?`${rep.mode||'grid'} · ${scene3DRepeatInstances(model).length} instance${scene3DRepeatInstances(model).length===1?'':'s'} · variant mode ${rep.variantMode||'active'}`
+                :'Off · 1 instance'
+              :'';
+
+      out.push(
+        readableLine('Category',n.category),
+        readableLine('Composition',n.composition),
+        readableLine('Purpose / Property',n.property),
+        readableLine('Requirements',n.requirements),
+        readableLine('Interaction',n.interaction),
+        readableLine('3D Model Environment',model?.environment),
+        readableLine('3D Active Variant',active?.name),
+        readableLine('3D Variant Count',model?.variants?.length),
+        readableLine('3D Variants',variantSummary),
+        readableLine('3D Repetition',repSummary),
+        readableLine('Variant of Structure',n.variantOfStructureId),
+        readableLine('Description',n.description)
+      );
+      break;
+    }
+
+    case'organization':
+      out.push(
+        readableLine('Type',n.organizationType||n.category),
+        readableLine('Purpose',n.organizationPurpose||n.property),
+        readableLine('Members',n.organizationMembers),
+        readableLine('Inhabitants',n.organizationInhabitants),
+        readableLine('Capital',n.organizationCapital),
+        readableLine('Resources',n.organizationResources),
+        readableLine('Description',n.description)
+      );
+      break;
+
+    case'life':
+      out.push(
+        readableLine('Category',n.category),
+        readableLine('Role',[
+          n.main?'Main':null,
+          n.sentient?'Sentient':null,
+          n.individual?'Individual':null
+        ].filter(Boolean)),
+        readableLine('Composition',n.composition),
+        readableLine('Properties',n.property),
+        readableLine('Requirements',n.requirements),
+        readableLine('Uses',n.uses),
+        readableLine('Interaction',n.interaction),
+        readableLine('Description',n.description)
+      );
+      break;
+
+    case'place':
+      out.push(
+        readableLine('Type',n.placeType),
+        readableLine('Scale',n.placeScale),
+        readableLine('Inhabitants',n.inhabitants),
+        readableLine('Government',n.government),
+        readableLine('Access',n.access),
+        readableLine('Associations',n.associations),
+        readableLine('Interaction',n.interaction),
+        readableLine('Description',n.description)
+      );
+      break;
+
+    case'civilizationUtil':
+      return readableUtilityDetails(n);
+  }
+
+  return out.filter(Boolean)
+}
+
+function readableNodeHeading(n){
+  const name=readableScalar(n.name)||'Unnamed';
+
+  if(n.isSemiHub)return`- ${name} -`;
+
+  if(n.type==='spell'){
+    return`- ${name}${n.spellClass?` - [${readableScalar(n.spellClass)}]`:''}`
+  }
+
+  if(n.type==='organization'){
+    return`- ${name}${n.organizationType?` - [${readableScalar(n.organizationType)}]`:''}`
+  }
+
+  if(n.type==='place'){
+    return`- ${name}${n.placeType?` - [${readableScalar(n.placeType)}]`:''}`
+  }
+
+  if(n.type==='civilizationUtil'){
+    return`- ${name}${n.utilityType?` - [${readableScalar(utilitySubtypeLabel?.(n.utilityType)||n.utilityType)}]`:''}`
+  }
+
+  return`- ${name}`
+}
+
+function readableConnectionsForNode(n,project){
+  const allNodes=(project?.nodes||[]).filter(Boolean);
+  const allEdges=(project?.edges||[]).filter(e=>e&&!e.blocked);
+  const nodeById=id=>allNodes.find(x=>x.id===id);
+
+  const rows=[];
+  const seen=new Set();
+
+  for(const e of allEdges){
+    if(e.a!==n.id&&e.b!==n.id)continue;
+    const outgoing=e.a===n.id;
+    const other=nodeById(outgoing?e.b:e.a);
+    if(!other||other.virtual)continue;
+
+    const label=readableScalar(e.label||e.type||'related to').trim()||'related to';
+    const otherName=readableScalar(other.name||'Unnamed');
+    let arrow='↔';
+    if(e.direction==='forward')arrow=outgoing?'→':'←';
+    else if(e.direction==='backward')arrow=outgoing?'←':'→';
+
+    const key=`${label}|${arrow}|${other.id}`;
+    if(seen.has(key))continue;
+    seen.add(key);
+    rows.push(`  - ${label} ${arrow} ${otherName}`)
+  }
+
+  return rows
+}
+
+function readableNodeBlock(n,project){
+  const lines=[readableNodeHeading(n)];
+  const details=readableNodeDetails(n,project);
+  lines.push(...details);
+
+  const connections=readableConnectionsForNode(n,project);
+  if(connections.length){
+    lines.push('- Connections');
+    lines.push(...connections)
+  }
+
+  return lines.join('\n')
+}
+
+function readableHubMembersFromData(hub,allNodes){
+  const h=String(hub?.name||'').trim().toLowerCase();
+  if(!h)return[];
+
+  const parts=v=>String(v||'')
+    .toLowerCase()
+    .split(/[;,|]/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+
+  return allNodes.filter(n=>{
+    if(!n||n.virtual||n.isHub||n.type==='mana'||n.id===hub.id)return false;
+    if(parts(n.category).includes(h)||String(n.category||'').trim().toLowerCase()===h)return true;
+
+    const fields=[
+      n.uses,n.compatibility,n.requirements,n.composition,n.interaction,
+      n.description,n.property,n.extra,n.scope,n.spellClass,n.text
+    ];
+
+    return fields.some(v=>
+      parts(v).includes(h)||String(v||'').trim().toLowerCase()===h
+    )
+  })
+}
+
+function buildReadableProjectText(project){
+  const allNodes=(project?.nodes||[])
+    .filter(n=>n&&!n.virtual);
+
+  const mana=allNodes.find(n=>n.type==='mana'||n.id==='mana');
+  const title=readableScalar(mana?.name||'MANA');
+
+  const lines=[
+    `-- ${title} --`,
+    ''
+  ];
+
+  const hubs=allNodes.filter(n=>n.isHub&&n.type!=='mana');
+  const claimed=new Set();
+
+  // Full Hubs become independent mini-sections.
+  for(const hub of hubs){
+    lines.push(`-- ${readableScalar(hub.name)} --`);
+    lines.push('');
+
+    const members=readableHubMembersFromData(hub,allNodes);
+    if(!members.length){
+      lines.push('(No members)');
+    }else{
+      for(const member of members){
+        claimed.add(member.id);
+        lines.push(readableNodeBlock(member,project));
+        lines.push('')
+      }
+    }
+    claimed.add(hub.id);
+    lines.push('')
+  }
+
+  const typeOrder=[
+    'spell','rule','material','magicalObject','technique',
+    'principle','structure','organization','life','place','civilizationUtil'
+  ];
+
+  for(const type of typeOrder){
+    const list=allNodes.filter(n=>
+      n.type===type &&
+      !n.isHub &&
+      !claimed.has(n.id)
+    );
+
+    if(!list.length)continue;
+
+    lines.push(`-- ${readableNodeTypeLabel(type)} --`);
+    lines.push('');
+
+    for(const n of list){
+      lines.push(readableNodeBlock(n,project));
+      lines.push('')
+    }
+
+    lines.push('')
+  }
+
+  // Any future/unknown node types still survive readable export.
+  const known=new Set(['mana',...typeOrder]);
+  const other=allNodes.filter(n=>!known.has(n.type)&&!n.isHub&&!claimed.has(n.id));
+  if(other.length){
+    lines.push('-- Other --');
+    lines.push('');
+    for(const n of other){
+      lines.push(readableNodeBlock(n,project));
+      lines.push('')
+    }
+  }
+
+  return lines
+    .join('\n')
+    .replace(/\n{4,}/g,'\n\n\n')
+    .trim()+'\n'
+}
+
+function downloadReadableProject(project,filename='magic-system-readable.txt'){
+  const text=buildReadableProjectText(project);
+  const blob=new Blob([text],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),700)
+}
+
+function currentReadableProject(){
+  return{
+    format:'MagicSystemSandbox',
+    version:'28.7bl',
+    schemaVersion:28950,
+    nodes:v287pProjectNodesForSave(),
+    edges
+  }
+}
+
+async function convertSaveFileToReadable(file){
+  const data=JSON.parse(await file.text());
+  if(!Array.isArray(data.nodes)){
+    throw new Error('This file does not contain a Magic System Sandbox node list.')
+  }
+
+  const base=String(file.name||'magic-system')
+    .replace(/\.(magicgraph|json)$/i,'')
+    .replace(/[^\w\- ]+/g,'')
+    .trim()||'magic-system';
+
+  downloadReadableProject(data,`${base}-readable.txt`)
+}
+
 function exportProject(){
   const payload={
     format:'MagicSystemSandbox',
-    version:'22.8',
-    schemaVersion:22800,
+    version:'28.7bl',
+    schemaVersion:28950,
     savedAt:new Date().toISOString(),
-    nodes,edges,physicsSettings,autoConnections,technologySettings,
+    nodes:v287pProjectNodesForSave(),edges,physicsSettings,autoConnections,technologySettings,creatorSettings,
     civilizationSymbols,
     worldStateCache,
     simState:typeof simState==='undefined'?null:simState,
@@ -11569,7 +16217,7 @@ function exportProject(){
   };
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='magic-system-v22.8.magicgraph';
+  a.download=(creatorSettings.name||'creator').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'-v28.7bl.magicgraph';
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),500)
 }
@@ -11775,7 +16423,7 @@ $('regenPlanet').onclick=()=>{
   else generateScaleMap('',true);
   refreshWorldMapMode();requestPlanetDraw();save()
 };
-$('planetHome').onclick=()=>{planetView.yaw=0;planetView.pitch=-.12;planetView.zoom=1;planetView.panX=0;planetView.panY=0;requestPlanetDraw()};
+$('planetHome').onclick=()=>{if(mapDisplayLevel()==='surface'||mapDisplayLevel()==='place'){surfaceView.cameraX=0;surfaceView.cameraZ=0;surfaceView.zoom=1;surfaceView.focusPlaceId=null;if(mapDisplayLevel()==='place')scaleNav.level='surface';refreshWorldMapMode();renderGalacticCoordinates();requestPlanetDraw();return}planetView.yaw=0;planetView.pitch=-.12;planetView.zoom=1;planetView.panX=0;planetView.panY=0;requestPlanetDraw()};
 window.__pendingCivilizationUtilType=null;
 $('createCivilizationUtil')?.addEventListener('click',()=>{
   $('createMenu')?.classList.add('hidden');
@@ -11814,7 +16462,7 @@ let symbolTool='brush';
 let symbolStart=null;
 let symbolSnapshot=null;
 let symbolUndoStack=[];
-let symbolRedoStack=[];
+let symbolRedoStack=[];let symbolSelection=null,symbolHover=null,symbolLasso=[];
 
 function symbolCanvasState(){
   return symbolCtx?.getImageData(0,0,symbolCanvas.width,symbolCanvas.height)
@@ -11834,17 +16482,14 @@ function clearSymbolCanvas(record=false){
   symbolCtx.clearRect(0,0,symbolCanvas.width,symbolCanvas.height)
 }
 function symbolPoint(ev){
-  const r=symbolCanvas.getBoundingClientRect();
-  return{
-    x:(ev.clientX-r.left)*symbolCanvas.width/r.width,
-    y:(ev.clientY-r.top)*symbolCanvas.height/r.height
-  }
+  const r=symbolCanvas.getBoundingClientRect();let x=(ev.clientX-r.left)*symbolCanvas.width/r.width,y=(ev.clientY-r.top)*symbolCanvas.height/r.height;
+  const px=Math.max(1,+$('symbolPixelSize')?.value||8);if($('symbolPixelate')?.checked||$('symbolSnap')?.checked){x=Math.round(x/px)*px;y=Math.round(y/px)*px}
+  return{x,y}
 }
-function symbolPaintStyle(){
-  symbolCtx.lineWidth=+$('symbolWidth')?.value||10;
-  symbolCtx.lineCap='round';symbolCtx.lineJoin='round';
-  symbolCtx.strokeStyle=value('symbolColor')||'#f1f5ff';
-  symbolCtx.fillStyle=value('symbolColor')||'#f1f5ff'
+function constrainedSymbolPoint(a,b){if(!a||!b)return b;const dx=b.x-a.x,dy=b.y-a.y;return Math.abs(dx)>=Math.abs(dy)?{x:b.x,y:a.y}:{x:a.x,y:b.y}}
+
+function symbolPaintStyle(ctx=symbolCtx){
+  ctx.lineWidth=+$('symbolWidth')?.value||10;const shape=+$('symbolBrushShape')?.value||50,sharp=$('symbolPixelate')?.checked||shape>=60;ctx.lineCap=sharp?'butt':'round';ctx.lineJoin=sharp?'miter':'round';ctx.strokeStyle=value('symbolColor')||'#f1f5ff';ctx.fillStyle=value('symbolColor')||'#f1f5ff'
 }
 function symbolFloodFill(x,y,color){
   const img=symbolCtx.getImageData(0,0,symbolCanvas.width,symbolCanvas.height);
@@ -11865,52 +16510,33 @@ function symbolFloodFill(x,y,color){
   }
   symbolCtx.putImageData(img,0,0)
 }
-function renderSymbolPreviewShape(pt){
-  if(!symbolSnapshot)return;
-  restoreSymbolState(symbolSnapshot);symbolPaintStyle();
-  const a=symbolStart,b=pt;if(!a||!b)return;
-  symbolCtx.beginPath();
-  if(symbolTool==='line'){symbolCtx.moveTo(a.x,a.y);symbolCtx.lineTo(b.x,b.y);symbolCtx.stroke()}
-  else if(symbolTool==='rect'){
-    symbolCtx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y)
-  }else if(symbolTool==='circle'){
-    const rx=Math.abs(b.x-a.x),ry=Math.abs(b.y-a.y);
-    symbolCtx.ellipse(a.x,a.y,rx,ry,0,0,Math.PI*2);symbolCtx.stroke()
-  }
+function symbolOverlay(){return $('symbolOverlayCanvas')?.getContext('2d')}
+function clearSymbolOverlay(){const o=$('symbolOverlayCanvas'),x=o?.getContext('2d');if(x)x.clearRect(0,0,o.width,o.height)}
+function drawSymbolSelectionOverlay(){const o=$('symbolOverlayCanvas'),x=symbolOverlay();if(!o||!x)return;clearSymbolOverlay();if(symbolSelection){x.save();x.fillStyle='rgba(93,201,255,.18)';x.strokeStyle='rgba(130,225,255,.95)';x.lineWidth=2;x.setLineDash([5,4]);x.beginPath();if(symbolSelection.mode==='rect'){const a=symbolSelection.a,b=symbolSelection.b;x.rect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y))}else{const pts=symbolSelection.points||[];if(pts.length){x.moveTo(pts[0].x,pts[0].y);for(const p of pts.slice(1))x.lineTo(p.x,p.y);x.closePath()}}x.fill();x.stroke();x.restore()}else if(symbolHover&&['brush','eraser'].includes(symbolTool)){const w=+$('symbolWidth')?.value||10,shape=+$('symbolBrushShape')?.value||50;x.save();x.globalAlpha=.42;x.fillStyle=symbolTool==='eraser'?'#ff8f8f':(value('symbolColor')||'#f1f5ff');x.beginPath();if(shape<50)x.arc(symbolHover.x,symbolHover.y,w/2,0,Math.PI*2);else x.rect(symbolHover.x-w/2,symbolHover.y-w/2,w,w);x.fill();x.restore()}}
+function renderSymbolPreviewShape(pt,commit=false){const x=commit?symbolCtx:symbolOverlay();if(!x)return;if(!commit)clearSymbolOverlay();symbolPaintStyle(x);const a=symbolStart,b=window.__symbolShift?constrainedSymbolPoint(a,pt):pt;if(!a||!b)return;x.save();if(!commit)x.globalAlpha=.42;x.beginPath();if(symbolTool==='line'){x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke()}else if(symbolTool==='rect')x.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);else if(symbolTool==='circle'){if($('symbolCircleCenter')?.checked){const rx=Math.abs(b.x-a.x),ry=Math.abs(b.y-a.y);x.ellipse(a.x,a.y,rx,ry,0,0,Math.PI*2);x.stroke()}else{const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2,rx=Math.abs(b.x-a.x)/2,ry=Math.abs(b.y-a.y)/2;x.ellipse(cx,cy,Math.max(.5,rx),Math.max(.5,ry),0,0,Math.PI*2);x.stroke()}}x.restore()}
+function deleteSymbolSelection(){if(!symbolSelection)return;pushSymbolHistory();symbolCtx.save();symbolCtx.globalCompositeOperation='destination-out';symbolCtx.beginPath();if(symbolSelection.mode==='rect'){const a=symbolSelection.a,b=symbolSelection.b;symbolCtx.rect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y))}else{const pts=symbolSelection.points||[];if(pts.length){symbolCtx.moveTo(pts[0].x,pts[0].y);for(const p of pts.slice(1))symbolCtx.lineTo(p.x,p.y);symbolCtx.closePath()}}symbolCtx.fillStyle='#000';symbolCtx.fill();symbolCtx.restore();symbolSelection=null;clearSymbolOverlay()}
+
+function updateSymbolPainterToolUI(){
+  document.querySelectorAll('[data-symbol-tools]').forEach(el=>{const tools=el.dataset.symbolTools.split(',');el.classList.toggle('tool-option-hidden',!tools.includes(symbolTool))});
+  if($('symbolWidthOut'))$('symbolWidthOut').textContent=`${+$('symbolWidth')?.value||10} px`;if($('symbolBrushShapeOut'))$('symbolBrushShapeOut').textContent=`${+$('symbolBrushShape')?.value||50}%`;
 }
 document.querySelectorAll('.symbol-tool').forEach(btn=>btn.addEventListener('click',()=>{
   symbolTool=btn.dataset.symbolTool;
-  document.querySelectorAll('.symbol-tool').forEach(x=>x.classList.toggle('active',x===btn))
+  document.querySelectorAll('.symbol-tool').forEach(x=>x.classList.toggle('active',x===btn));updateSymbolPainterToolUI()
 }));
+$('symbolWidth')?.addEventListener('input',()=>{updateSymbolPainterToolUI();drawSymbolSelectionOverlay()});$('symbolBrushShape')?.addEventListener('input',()=>{updateSymbolPainterToolUI();drawSymbolSelectionOverlay()});$('symbolDeleteSelection')?.addEventListener('click',deleteSymbolSelection);updateSymbolPainterToolUI();
 symbolCanvas?.addEventListener('pointerdown',ev=>{
-  ev.preventDefault();pushSymbolHistory();
-  symbolDrawing=true;symbolStart=symbolPoint(ev);symbolSnapshot=symbolCanvasState();
-  symbolCanvas.setPointerCapture(ev.pointerId);
-  symbolPaintStyle();
-  if(symbolTool==='fill'){
-    symbolFloodFill(symbolStart.x,symbolStart.y,value('symbolColor')||'#f1f5ff');
-    symbolDrawing=false
-  }else if(symbolTool==='eraser'){
-    symbolCtx.save();symbolCtx.globalCompositeOperation='destination-out';
-    symbolCtx.beginPath();symbolCtx.arc(symbolStart.x,symbolStart.y,(+$('symbolWidth')?.value||10)/2,0,Math.PI*2);symbolCtx.fill();symbolCtx.restore()
-  }else if(symbolTool==='brush'){
-    symbolCtx.beginPath();symbolCtx.moveTo(symbolStart.x,symbolStart.y)
-  }
+  ev.preventDefault();symbolDrawing=true;window.__symbolShift=!!ev.shiftKey;symbolStart=symbolPoint(ev);symbolCanvas.setPointerCapture(ev.pointerId);symbolHover=symbolStart;
+  if(symbolTool==='select'){symbolSelection={mode:$('symbolSelectMode')?.value||'rect',a:symbolStart,b:symbolStart,points:[symbolStart]};symbolLasso=[symbolStart];drawSymbolSelectionOverlay();return}
+  pushSymbolHistory();symbolPaintStyle();if(symbolTool==='fill'){symbolFloodFill(symbolStart.x,symbolStart.y,value('symbolColor')||'#f1f5ff');symbolDrawing=false}else if(symbolTool==='eraser'){symbolCtx.save();symbolCtx.globalCompositeOperation='destination-out';const w=+$('symbolWidth')?.value||10,shape=+$('symbolBrushShape')?.value||50;symbolCtx.beginPath();if(shape<50)symbolCtx.arc(symbolStart.x,symbolStart.y,w/2,0,Math.PI*2);else symbolCtx.rect(symbolStart.x-w/2,symbolStart.y-w/2,w,w);symbolCtx.fill();symbolCtx.restore()}else if(symbolTool==='brush'){symbolCtx.beginPath();symbolCtx.moveTo(symbolStart.x,symbolStart.y);window.__symbolBrushAnchor=symbolStart}
 });
 symbolCanvas?.addEventListener('pointermove',ev=>{
-  if(!symbolDrawing)return;
-  const p=symbolPoint(ev);symbolPaintStyle();
-  if(symbolTool==='brush'){symbolCtx.lineTo(p.x,p.y);symbolCtx.stroke()}
-  else if(symbolTool==='eraser'){
-    symbolCtx.save();symbolCtx.globalCompositeOperation='destination-out';
-    symbolCtx.beginPath();symbolCtx.arc(p.x,p.y,(+$('symbolWidth')?.value||10)/2,0,Math.PI*2);symbolCtx.fill();symbolCtx.restore()
-  }else renderSymbolPreviewShape(p)
+  const p0=symbolPoint(ev);symbolHover=p0;if(!symbolDrawing){drawSymbolSelectionOverlay();return}let p=p0;window.__symbolShift=!!ev.shiftKey;
+  if(symbolTool==='select'){if(symbolSelection.mode==='lasso'){symbolLasso.push(p);symbolSelection.points=[...symbolLasso]}else symbolSelection.b=p;drawSymbolSelectionOverlay();return}
+  symbolPaintStyle();if(symbolTool==='brush'){if(ev.shiftKey){const aa=window.__symbolBrushAnchor||symbolStart||p,p2=constrainedSymbolPoint(aa,p);symbolCtx.lineTo(p2.x,p2.y);symbolCtx.stroke();window.__symbolBrushAnchor=p2;symbolCtx.beginPath();symbolCtx.moveTo(p2.x,p2.y)}else{symbolCtx.lineTo(p.x,p.y);symbolCtx.stroke();window.__symbolBrushAnchor=p}}else if(symbolTool==='eraser'){symbolCtx.save();symbolCtx.globalCompositeOperation='destination-out';const w=+$('symbolWidth')?.value||10,shape=+$('symbolBrushShape')?.value||50;symbolCtx.beginPath();if(shape<50)symbolCtx.arc(p.x,p.y,w/2,0,Math.PI*2);else symbolCtx.rect(p.x-w/2,p.y-w/2,w,w);symbolCtx.fill();symbolCtx.restore()}else renderSymbolPreviewShape(p,false)
 });
-symbolCanvas?.addEventListener('pointerup',ev=>{
-  if(!symbolDrawing)return;
-  if(['line','rect','circle'].includes(symbolTool))renderSymbolPreviewShape(symbolPoint(ev));
-  symbolDrawing=false;symbolStart=null;symbolSnapshot=null
-});
+symbolCanvas?.addEventListener('pointerup',ev=>{if(!symbolDrawing)return;if(symbolTool==='select'){if(symbolSelection?.mode==='rect')symbolSelection.b=symbolPoint(ev);symbolDrawing=false;drawSymbolSelectionOverlay();return}if(['line','rect','circle'].includes(symbolTool)){clearSymbolOverlay();renderSymbolPreviewShape(symbolPoint(ev),true)}symbolDrawing=false;symbolStart=null;window.__symbolBrushAnchor=null;window.__symbolShift=false;drawSymbolSelectionOverlay()});
+symbolCanvas?.addEventListener('pointerleave',()=>{if(!symbolDrawing){symbolHover=null;drawSymbolSelectionOverlay()}});
 $('symbolUndo')?.addEventListener('click',()=>{
   if(!symbolUndoStack.length)return;
   const current=symbolCanvasState();if(current)symbolRedoStack.push(current);
@@ -11928,10 +16554,10 @@ $('symbolImport')?.addEventListener('change',ev=>{
   const reader=new FileReader();
   reader.onload=()=>{
     const img=new Image();img.onload=()=>{
-      pushSymbolHistory();symbolCtx.clearRect(0,0,256,256);
-      const scale=Math.min(256/img.width,256/img.height);
+      pushSymbolHistory();symbolCtx.clearRect(0,0,symbolCanvas.width,symbolCanvas.height);symbolCtx.imageSmoothingEnabled=!$('symbolPixelate')?.checked;
+      const scale=Math.min(symbolCanvas.width/img.width,symbolCanvas.height/img.height);
       const w=img.width*scale,h=img.height*scale;
-      symbolCtx.drawImage(img,(256-w)/2,(256-h)/2,w,h)
+      symbolCtx.drawImage(img,(symbolCanvas.width-w)/2,(symbolCanvas.height-h)/2,w,h)
     };img.src=reader.result
   };reader.readAsDataURL(file);ev.target.value=''
 });
@@ -11983,6 +16609,29 @@ function syncSettingsUI(){
 }
 $('settingsBtn').onclick=()=>{syncSettingsUI();syncAutoConnectionUI();$('settingsModal').classList.remove('hidden')};
 $('saveProjectBtn').onclick=exportProject;
+$('readableExportBtn')?.addEventListener('click',()=>{
+  downloadReadableProject(currentReadableProject(),'magic-system-v28.7bl-readable.txt')
+});
+
+$('convertSaveBtn')?.addEventListener('click',()=>{
+  $('convertSaveInput')?.click()
+});
+
+$('convertSaveInput')?.addEventListener('change',async ev=>{
+  const file=ev.target.files?.[0];
+  if(!file)return;
+
+  try{
+    await convertSaveFileToReadable(file)
+  }catch(err){
+    console.error('Readable save conversion failed:',err);
+    alert(`Could not convert this save: ${err.message||err}`)
+  }finally{
+    ev.target.value=''
+  }
+});
+
+
 $('loadProjectBtn').onclick=()=>$('loadProjectInput').click();
 $('loadProjectInput').onchange=e=>{const f=e.target.files?.[0];if(f)importProject(f);e.target.value=''};
 $('technologyToggle').onclick=()=>{
@@ -12043,6 +16692,20 @@ $('linkBtn').onclick=()=>{
   graph.setLinkMode(!graph.linkMode);
   $('linkBtn').classList.toggle('active',graph.linkMode);
 };
+$('addonsBtn')?.addEventListener('click',()=>{syncSettingsUI();applyCreatorBranding();$('addonsModal').classList.remove('hidden')});
+$('closeAddons')?.addEventListener('click',()=>$('addonsModal').classList.add('hidden'));
+$('openCreatorEditor')?.addEventListener('click',openCreatorEditorModal);
+$('closeCreatorEditor')?.addEventListener('click',()=>$('creatorEditorModal').classList.add('hidden'));
+$('cancelCreatorChanges')?.addEventListener('click',()=>$('creatorEditorModal').classList.add('hidden'));
+$('creatorResetPreset')?.addEventListener('click',()=>{creatorDraft=freshMagicCreator();renderCreatorEditor()});
+$('duplicateCreatorPreset')?.addEventListener('click',()=>{harvestCreatorVisual();creatorDraft.preset='custom';creatorDraft.name=creatorDraft.name==='Magic System'?'Custom Creator':creatorDraft.name;creatorDraft.title=creatorDraft.title==='Magic System Sandbox'?`${creatorDraft.name} Sandbox`:creatorDraft.title;renderCreatorEditor()});
+document.querySelectorAll('[data-creator-tab]').forEach(btn=>btn.addEventListener('click',()=>{const wasAdvanced=!$('creatorTabAdvanced').classList.contains('hidden');if(wasAdvanced){try{creatorDraft=normalizeCreatorSettings(JSON.parse($('creatorDefinitionJson').value))}catch(err){$('creatorJsonStatus').textContent='Invalid JSON: '+err.message;$('creatorJsonStatus').classList.add('error');return}}else harvestCreatorVisual();renderCreatorEditor();document.querySelectorAll('[data-creator-tab]').forEach(x=>x.classList.toggle('active',x===btn));document.querySelectorAll('.creator-tab-panel').forEach(x=>x.classList.add('hidden'));$('creatorTab'+btn.dataset.creatorTab[0].toUpperCase()+btn.dataset.creatorTab.slice(1))?.classList.remove('hidden')}));
+$('addCreatorType')?.addEventListener('click',()=>{harvestCreatorVisual();let i=1,id='customType';while(creatorDraft.nodeTypes.some(t=>t.id===id+i))i++;creatorDraft.nodeTypes.push({id:id+i,label:'New Type',icon:'◆',description:'Custom creator node.',enabled:true,builtin:false,useGeneratedEditor:true,category:creatorDraft.categories?.[0]?.id||'',fields:[{key:'category',label:'Category',kind:'input',placeholder:''},{key:'function',label:'Function',kind:'textarea',placeholder:''}]});creatorDraft.preset='custom';renderCreatorEditor()});
+$('addCreatorCategory')?.addEventListener('click',()=>{harvestCreatorVisual();let i=1,id='category';while(creatorDraft.categories.some(c=>c.id===id+i))i++;creatorDraft.categories.push({id:id+i,label:'New Category',color:'#8aa4ff',parentId:''});creatorDraft.preset='custom';renderCreatorEditor()});
+$('addCreatorLink')?.addEventListener('click',()=>{harvestCreatorVisual();let i=1,id='customLink';while(creatorDraft.linkTypes.some(t=>t.id===id+i))i++;creatorDraft.linkTypes.push({id:id+i,label:'Custom Link',enabled:true,auto:false,fromType:'',toType:'',sourceField:'',direction:'forward',category:creatorDraft.categories?.[0]?.id||'',style:'solid',thickness:1.6,color:'#cfd7ff',matchMode:'contains'});creatorDraft.preset='custom';renderCreatorEditor()});
+$('addCreatorTimelineRule')?.addEventListener('click',()=>{harvestCreatorVisual();creatorDraft.timelineRules.push({id:uid(),name:'New Event Rule',enabled:true,nodeType:creatorDraft.nodeTypes[0]?.id||'',kind:'Event',title:'{node} changes history',text:'{node} causes a major change in {civilization} during year {year}.',cause:'{node} exists and satisfies this Creator timeline rule.',tone:'normal',impact:{knowledge:1,economy:0,technology:0,stability:0,danger:0}});creatorDraft.preset='custom';renderCreatorEditor()});
+$('formatCreatorJson')?.addEventListener('click',()=>{try{const parsed=normalizeCreatorSettings(JSON.parse($('creatorDefinitionJson').value));creatorDraft=parsed;$('creatorDefinitionJson').value=JSON.stringify(parsed,null,2);$('creatorJsonStatus').textContent='Valid creator definition.';$('creatorJsonStatus').classList.remove('error')}catch(err){$('creatorJsonStatus').textContent='Invalid JSON: '+err.message;$('creatorJsonStatus').classList.add('error')}});
+$('saveCreatorDefinition')?.addEventListener('click',()=>{try{const advancedVisible=!$('creatorTabAdvanced').classList.contains('hidden');if(advancedVisible)creatorDraft=normalizeCreatorSettings(JSON.parse($('creatorDefinitionJson').value));else harvestCreatorVisual();creatorSettings=normalizeCreatorSettings(creatorDraft);applyCreatorBranding();renderLibraries();save();$('creatorEditorModal').classList.add('hidden');$('creatorJsonStatus').textContent='Valid creator definition.'}catch(err){$('creatorJsonStatus').textContent='Cannot save: '+err.message;$('creatorJsonStatus').classList.add('error')}});
 $('closeEditor').onclick=closeEditor;$('cancelEditor').onclick=closeEditor;$('saveEditor').onclick=saveEditor;
 // Civilization Utils have their own save route, independent of the generic editor.
 document.addEventListener('click',ev=>{
@@ -12066,6 +16729,37 @@ document.addEventListener('click',ev=>{
 },true);
 
 
+// v28.7af: editor controls are frequently re-parented into draggable side panels.
+// Delegate these launch buttons from document so they cannot lose handlers when moved.
+document.addEventListener('click',ev=>{
+  const btn=ev.target.closest?.('#openCountryBorderPainter,#openPlanetTileEditor,#openLandscapeEditor,#openPlanetPalette,#savePlanetPalette');
+  if(!btn)return;
+  ev.preventDefault();ev.stopPropagation();
+  if(btn.id==='openCountryBorderPainter'){openCountryBorderPainter();return}
+  if(btn.id==='openPlanetTileEditor'){v287yOpenPlanetTileEditor();return}
+  if(btn.id==='openLandscapeEditor'){v287yOpenLandscapeEditor();return}
+  if(btn.id==='openPlanetPalette'){
+    const palette=$('planetPalettePanel');if(!palette)return;
+    const editing=editingId?byId(editingId):null;if(editing?.type==='place')v287adPaletteTargetPlanetId=editing.id;
+    palette.classList.remove('hidden');prepareDetachedEditorPanel(palette,palette.querySelector('.auto-panel-head'));requestAnimationFrame(()=>keepDetachedPanelOnscreen(palette));return
+  }
+  if(btn.id==='savePlanetPalette'){
+    try{
+      const owner=v287adPaletteOwner();
+      if(!v287adCommitPlanetPalette())return;
+      if(owner?.id)v287zLandscapePlanetId=owner.id;
+      if(v287adPendingLandscapeAfterPalette){
+        v287adPendingLandscapeAfterPalette=false;
+        $('planetPalettePanel')?.classList.add('hidden');
+        requestAnimationFrame(()=>v287yOpenLandscapeEditor());
+      }
+    }catch(err){
+      console.error('Planet palette save / Landscape continuation failed:',err);
+      const status=$('planetPaletteSaveStatus');if(status)status.textContent='Could not save palette — see console';
+    }
+  }
+},true);
+
 $('previewAutoConnections').onclick=openAutoConnections;
 $('closeAutoConnections').onclick=()=>$('autoConnectionsPanel').classList.add('hidden');
 $('closePlanetPalette').onclick=()=>$('planetPalettePanel').classList.add('hidden');
@@ -12079,7 +16773,7 @@ $('closeLink').onclick=()=>{$('linkModal').classList.add('hidden');resetLinkModa
 $('saveAdvancement').onclick=saveAdvancement;
 $('cancelAdvancement').onclick=()=>{$('advancementModal').classList.add('hidden')};
 $('closeAdvancement').onclick=()=>{$('advancementModal').classList.add('hidden')};
-$('linkType').addEventListener('change',refreshRelationshipLinkUI);
+$('linkType').addEventListener('change',()=>{refreshRelationshipLinkUI();const def=creatorLinkDef(value('linkType'));if(def&&!$('linkModal').dataset.editEdgeId&&$('linkModal').dataset.mode!=='plan'){$('linkStrength').value=def.style||'solid';$('linkThickness').value=String(def.thickness||1.6);$('linkDirection').value=def.direction||'forward';if(!$('linkLabel').value.trim())$('linkLabel').value=def.label||def.id}});
 $('linkRelationship')?.addEventListener('input',refreshRelationshipLinkUI);
 $('linkRelationshipKind')?.addEventListener('change',refreshRelationshipLinkUI);
 $('closeConnections').onclick=()=>$('connectionsModal').classList.add('hidden');document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{activeSystemTab=t.dataset.tab;renderLibraries()});
@@ -12374,8 +17068,21 @@ $('resetSystemBtn').onclick=()=>{
   save();renderLibraries();showSelection();updateStats();graph.fit();
 };
 
+const minimizedEditors=[];
+function captureEditorFields(){const out={};$('editorBody')?.querySelectorAll('input[id],textarea[id],select[id]').forEach(el=>{out[el.id]={value:el.value,checked:el.checked,type:el.type}});return out}
+function restoreEditorFields(fields){for(const [id,s] of Object.entries(fields||{})){const el=$(id);if(!el)continue;if(s.type==='checkbox'||s.type==='radio')el.checked=!!s.checked;else el.value=s.value;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}))}}
+function renderMinimizedEditors(){const tray=$('minimizedEditorsTray');if(!tray)return;tray.innerHTML=minimizedEditors.map(s=>`<button type="button" class="minimized-editor-chip" data-minimized-editor="${s.key}"><b>${E.esc(s.title)}</b><small>${E.esc(s.subtitle)}</small></button>`).join('');tray.querySelectorAll('[data-minimized-editor]').forEach(b=>b.onclick=()=>restoreMinimizedEditor(b.dataset.minimizedEditor))}
+function minimizeCurrentEditor(){if($('editorModal')?.classList.contains('hidden')||!editingType)return;const key=uid(),node=editingId?byId(editingId):null,s={key,type:editingType,editingId,creatingHub,title:$('editorTitle')?.textContent||'Editor',subtitle:node?.name||$('eName')?.value||'Unsaved',fields:captureEditorFields(),material:materialTextureDraft?cloneMaterialTexture(materialTextureDraft):null,crafting:craftingGraphDraft?JSON.parse(JSON.stringify(craftingGraphDraft)):null,mega:editingType==='structure'?megaPainterData():null};minimizedEditors.push(s);$('editorModal').classList.add('hidden');$('craftingGraphPanel')?.classList.add('hidden');$('materialTexturePanel')?.classList.add('hidden');editingId=null;editingType=null;creatingHub=false;renderMinimizedEditors()}
+function restoreMinimizedEditor(key){const i=minimizedEditors.findIndex(s=>s.key===key);if(i<0)return;const s=minimizedEditors.splice(i,1)[0];creatingHub=s.creatingHub;const node=s.editingId?byId(s.editingId):null;openEditor(s.type,node);requestAnimationFrame(()=>{restoreEditorFields(s.fields);if(s.material){materialTextureDraft=cloneMaterialTexture(s.material);refreshMaterialTextureInlinePreview()}if(s.crafting){craftingGraphDraft=JSON.parse(JSON.stringify(s.crafting))}if(s.mega&&s.type==='structure')setMegaPainterData(s.mega);renderMinimizedEditors()})}
+$('minimizeEditor')?.addEventListener('click',minimizeCurrentEditor);
+renderMinimizedEditors();
+
 historyRestoring=true;
 load();graph.setPhysicsSettings(physicsSettings);rebuildEdges();normalizeMoonEdgesVisualOnly();ensureMoonOrbitConnections();if(technologySettings.enabled)ensureTechnologyConnections();fitApplicationUI();
 renderLibraries();renderTechnologyTree();organize();graph.setData(nodes.filter(n=>!n.hiddenTechnology),edges.filter(e=>!e.blocked&&byId(e.a)&&byId(e.b)&&!byId(e.a)?.hiddenTechnology&&!byId(e.b)?.hiddenTechnology));graph.fit();graph.draw();
 historyRestoring=false;undoStack=[];redoStack=[];updateHistoryButtons();
+
+creatorSettings=normalizeCreatorSettings(creatorSettings);
+applyCreatorBranding();
 })();
+

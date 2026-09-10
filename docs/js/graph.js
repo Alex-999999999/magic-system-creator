@@ -7,6 +7,7 @@ window.MagicGraph=class MagicGraph{
     this.bind();
   }
   setData(nodes,edges){this.nodes=nodes;this.edges=edges}
+  isInteractionLocked(n){return !!(n&&(n.type==='classPoint'||n.type==='technologyRoot'||n.techSpine||n.virtual))}
   byId(id){return this.nodes.find(n=>n.id===id)}
   worldToScreen(x,y){const r=this.canvas.getBoundingClientRect();return{x:r.width/2+(x+this.pan.x)*this.zoom,y:r.height/2+(y+this.pan.y)*this.zoom}}
   screenToWorld(x,y){const r=this.canvas.getBoundingClientRect();return{x:(x-r.width/2)/this.zoom-this.pan.x,y:(y-r.height/2)/this.zoom-this.pan.y}}
@@ -81,10 +82,33 @@ window.MagicGraph=class MagicGraph{
       const a=this.nodes[i],b=this.nodes[j],dx=b.x-a.x,dy=b.y-a.y,d=Math.max(1,Math.hypot(dx,dy)),min=this.effectiveRadius(a)+this.effectiveRadius(b)+24;
       if(d<min){const f=(min-d)*.004*this.collisionStrength;if(!a.fixed){a.vx-=dx/d*f;a.vy-=dy/d*f}if(!b.fixed){b.vx+=dx/d*f;b.vy+=dy/d*f}}
     }
+    // v27.1 category containment:
+    // Nodes in a subcategory stay clustered around that subcategory's centroid.
+    // The subcategory centroid itself is pulled inside its parent category centroid.
+    const authored=this.nodes.filter(n=>!n.virtual&&!n.isHub&&n.type!=='classPoint'&&n.type!=='technologySpinePoint');
+    const catOf=n=>String(n.graphCategory||n.category||'').trim(),parentOf=n=>String(n.graphParentCategory||n.parentCategory||'').trim();
+    const parentNames=[...new Set(authored.map(parentOf).filter(Boolean))];
+    for(const parent of parentNames){
+      const subs=[...new Set(authored.filter(n=>parentOf(n)===parent).map(catOf).filter(Boolean))];
+      const parentDirect=authored.filter(n=>catOf(n)===parent&&!parentOf(n));
+      const allParent=[...parentDirect,...authored.filter(n=>parentOf(n)===parent)];
+      if(!allParent.length)continue;
+      let pcx=allParent.reduce((s,n)=>s+n.x,0)/allParent.length,pcy=allParent.reduce((s,n)=>s+n.y,0)/allParent.length;
+      for(const sub of subs){
+        const members=authored.filter(n=>parentOf(n)===parent&&catOf(n)===sub);if(!members.length)continue;
+        let scx=members.reduce((s,n)=>s+n.x,0)/members.length,scy=members.reduce((s,n)=>s+n.y,0)/members.length;
+        // Pull members inward so the subcategory remains a coherent inner circle.
+        for(const n of members){if(n.fixed||this.drag?.node===n)continue;const dx=scx-n.x,dy=scy-n.y,d=Math.max(1,Math.hypot(dx,dy));if(d>115){const f=(d-115)*.0035;n.vx+=dx/d*f;n.vy+=dy/d*f}}
+        // Pull the entire subcategory centroid toward the parent interior.
+        const dx=pcx-scx,dy=pcy-scy,d=Math.max(1,Math.hypot(dx,dy)),maxCenter=220;
+        if(d>maxCenter){const f=(d-maxCenter)*.0028;for(const n of members){if(n.fixed||this.drag?.node===n)continue;n.vx+=dx/d*f;n.vy+=dy/d*f}}
+      }
+    }
     for(const n of this.nodes)if(!n.fixed&&!n.isHub&&this.drag?.node!==n){n.vx*=.91;n.vy*=.91;n.x+=n.vx;n.y+=n.vy}
   }
   edgeStyle(e){
     const C=window.MAGIC_DATA;
+    if(e.creatorAuto||e.color){return{color:e.color||'#cfd7ff',width:e.thickness||1.6,dash:e.strength==='dashed'?[7,5]:e.strength==='dotted'?[2,5]:[]}}
     if(e.type==='organizationRelationship'){
       const v=Number.isFinite(e.relationship)?e.relationship:0;
       const color=v<=-75?'#ff334f':v<=-40?'#f05252':v<0?'#d8785f':v>=75?'#26e86f':v>=40?'#42d77c':v>0?'#72c98f':'#8792a3';
@@ -109,12 +133,10 @@ window.MagicGraph=class MagicGraph{
   }
   roundRect(ctx,x,y,w,h,r){if(ctx.roundRect){ctx.roundRect(x,y,w,h,r);return}ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r)}
   drawEdgeLabel(e,A,B,style){
-    const ctx=this.ctx,label=e.label||'related to';const mx=(A.x+B.x)/2,my=(A.y+B.y)/2;
-    ctx.save();ctx.font='10px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
-    const tw=ctx.measureText(label).width+14;
-    ctx.beginPath();this.roundRect(ctx,mx-tw/2,my-10,tw,20,7);
-    ctx.fillStyle='rgba(7,11,18,.94)';ctx.strokeStyle=style.color;ctx.globalAlpha=.92;ctx.fill();ctx.globalAlpha=.55;ctx.stroke();ctx.globalAlpha=1;
-    ctx.fillStyle='#c8d1df';ctx.fillText(label,mx,my);ctx.restore();
+    const ctx=this.ctx;
+    const chip=(label,x,y)=>{if(!label)return;ctx.save();ctx.font='10px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';const tw=ctx.measureText(label).width+14;ctx.beginPath();this.roundRect(ctx,x-tw/2,y-10,tw,20,7);ctx.fillStyle='rgba(7,11,18,.94)';ctx.strokeStyle=style.color;ctx.globalAlpha=.92;ctx.fill();ctx.globalAlpha=.55;ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle='#c8d1df';ctx.fillText(label,x,y);ctx.restore()};
+    if(e.predecessorMessage||e.successorMessage){const dx=B.x-A.x,dy=B.y-A.y;chip(e.predecessorMessage||e.label||'related to',A.x+dx*.34,A.y+dy*.34);chip(e.successorMessage||e.label||'related to',A.x+dx*.66,A.y+dy*.66);return}
+    chip(e.label||'related to',(A.x+B.x)/2,(A.y+B.y)/2);
   }
   drawArrow(fromNode,toNode,color){
     const ctx=this.ctx;
@@ -209,6 +231,34 @@ window.MagicGraph=class MagicGraph{
     const t=performance.now(),pulsing=t<this.pulseUntil;
 
 
+
+    // v28 universal nested category territories — diagram-accurate containment.
+    // graphCategory/graphParentCategory are available for EVERY node type.
+    // Parent circle encloses direct nodes AND complete subcategory circles.
+    // Each subcategory circle encloses all of its own nodes.
+    const authored=this.nodes.filter(n=>!n.virtual&&!n.isHub&&n.type!=='classPoint'&&n.type!=='technologySpinePoint');
+    const catOf=n=>String(n.graphCategory||n.category||'').trim(),parentOf=n=>String(n.graphParentCategory||n.parentCategory||'').trim();
+    const parentNames=[...new Set(authored.map(parentOf).filter(Boolean))];
+    const nodeScreenCircle=(members,pad=30)=>{
+      if(!members.length)return null;const pts=members.map(n=>{const p=this.worldToScreen(n.x,n.y);return{p,r:this.effectiveRadius(n)*this.zoom}});
+      const cx=pts.reduce((s,q)=>s+q.p.x,0)/pts.length,cy=pts.reduce((s,q)=>s+q.p.y,0)/pts.length;let rad=44;
+      for(const q of pts)rad=Math.max(rad,Math.hypot(q.p.x-cx,q.p.y-cy)+q.r+pad);return{cx,cy,rad}
+    };
+    for(const parent of parentNames){
+      const direct=authored.filter(n=>catOf(n)===parent&&!parentOf(n));
+      const subNames=[...new Set(authored.filter(n=>parentOf(n)===parent).map(catOf).filter(Boolean))];
+      const subCircles=subNames.map(name=>{const members=authored.filter(n=>parentOf(n)===parent&&catOf(n)===name);return{name,members,circle:nodeScreenCircle(members,26)}}).filter(s=>s.circle);
+      const directCircle=nodeScreenCircle(direct,24);
+      const centers=[...(directCircle?[directCircle]:[]),...subCircles.map(s=>s.circle)];if(!centers.length)continue;
+      const cx=centers.reduce((s,q)=>s+q.cx,0)/centers.length,cy=centers.reduce((s,q)=>s+q.cy,0)/centers.length;let rad=72;
+      // Crucial: outer radius includes the entire inner circle radius, not just inner nodes.
+      for(const q of centers)rad=Math.max(rad,Math.hypot(q.cx-cx,q.cy-cy)+q.rad+36);
+      const sample=(direct[0]||subCircles[0]?.members[0]);if(!sample)continue;const color=this.nodeColor(sample);
+      ctx.save();ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fillStyle=color+'07';ctx.fill();ctx.strokeStyle=color+'2c';ctx.lineWidth=1.3;ctx.setLineDash([7,8]);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=color+'d2';ctx.font='700 11px system-ui';ctx.textAlign='center';ctx.fillText(parent.toUpperCase(),cx,cy-rad+17);
+      for(const sub of subCircles){const q=sub.circle;ctx.beginPath();ctx.arc(q.cx,q.cy,q.rad,0,Math.PI*2);ctx.fillStyle=color+'0d';ctx.fill();ctx.strokeStyle=color+'5a';ctx.setLineDash([4,5]);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=color+'e3';ctx.font='700 9px system-ui';ctx.fillText(sub.name.toUpperCase(),q.cx,q.cy-q.rad+14);ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(q.cx,q.cy);ctx.strokeStyle=color+'22';ctx.lineWidth=1;ctx.stroke()}
+      ctx.restore()
+    }
+
     // Editable user-created Hub territories.
     // The Hub is the category center. The outermost member receives ~25px
     // of space between its rendered edge and the category border.
@@ -249,20 +299,7 @@ window.MagicGraph=class MagicGraph{
       ctx.restore();
     }
 
-    // Spell Class auras: purely visual grouping, not extra nodes or edges.
-    const spellNodes=this.nodes.filter(n=>n.type==='spell');
-    const classes=[...new Set(spellNodes.map(n=>n.spellClass||'Unclassified'))];
-    classes.forEach(cls=>{
-      const group=spellNodes.filter(n=>(n.spellClass||'Unclassified')===cls);
-      if(group.length<2)return;
-      const pts=group.map(n=>this.worldToScreen(n.x,n.y));
-      const cx=pts.reduce((s,p)=>s+p.x,0)/pts.length,cy=pts.reduce((s,p)=>s+p.y,0)/pts.length;
-      const rad=Math.max(55,...pts.map(p=>Math.hypot(p.x-cx,p.y-cy)+32));
-      const color=this.nodeColor(group[0]);
-      ctx.save();ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);
-      ctx.fillStyle=color+'08';ctx.fill();ctx.setLineDash([5,7]);ctx.strokeStyle=color+'22';ctx.lineWidth=1;ctx.stroke();ctx.setLineDash([]);
-      ctx.fillStyle=color+'aa';ctx.font='600 10px system-ui';ctx.textAlign='center';ctx.fillText(String(cls).toUpperCase(),cx,cy-rad+15);ctx.restore();
-    });
+    // Spell subcategories now use the same generic category hierarchy containment as every other category.
 
     // V18.3a: predetermined vertical Technology advancement spine.
     // Rendering belongs here in draw(), never in physics().
@@ -402,7 +439,7 @@ window.MagicGraph=class MagicGraph{
         }
         return;
       }
-      if(n){this.selected=n;if(this.onSelect)this.onSelect(n);if(!n.fixed)if(this.onNodeDragStart)this.onNodeDragStart(n);this.drag={node:n,startX:n.x,startY:n.y}}
+      if(n){this.selected=n;if(this.onSelect)this.onSelect(n);if(!this.isInteractionLocked(n)){if(this.onNodeDragStart)this.onNodeDragStart(n);this.drag={node:n,startX:n.x,startY:n.y}}else this.drag=null}
       else this.drag={pan:true,x:e.clientX,y:e.clientY,px:this.pan.x,py:this.pan.y};
     });
     window.addEventListener('mousemove',e=>{

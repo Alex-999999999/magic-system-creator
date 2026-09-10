@@ -300,6 +300,26 @@
   line-height:1.45;
 }
 .auto-connection-sentence strong{color:#edf3ff;font-size:10px}
+
+/* V24 — readable auto-connection reasoning */
+.auto-connection-reason{
+  margin-top:7px;
+  padding:7px 8px;
+  border:1px solid rgba(98,151,192,.22);
+  border-radius:7px;
+  background:rgba(41,78,108,.12);
+  color:#91a9bd;
+  font-size:8px;
+  line-height:1.45;
+}
+.auto-connection-reason>span{
+  display:inline-block;
+  margin-right:6px;
+  color:#72d9ff;
+  font-size:7px;
+  font-weight:800;
+  letter-spacing:.12em;
+}
 .auto-connection-actions{
   display:flex;
   justify-content:flex-end;
@@ -1766,9 +1786,9 @@ body.mega-painter-open::after{
 .civ-util-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:8px}
 .civ-util-grid button{min-height:105px;text-align:left;padding:14px;border:1px solid #3d4961;border-radius:12px;background:#0c1420;color:#e7efff}
 .civ-util-grid button b{display:block;font-size:24px;color:#caa8ff}.civ-util-grid button span{display:block;font-weight:800;margin:5px 0}.civ-util-grid button small{color:#8292aa}
-.symbol-library-card{width:min(760px,94vw)}
-.symbol-workbench{display:grid;grid-template-columns:280px 1fr;gap:18px;padding:10px}
-#symbolCanvas{width:256px;height:256px;background:#070b12;border:1px solid #53617a;border-radius:12px;touch-action:none}
+.symbol-library-card{width:min(1040px,96vw)}
+.symbol-workbench{display:grid;grid-template-columns:minmax(430px,520px) minmax(260px,1fr);gap:20px;padding:12px}
+#symbolCanvas{width:min(100%,480px);height:auto;aspect-ratio:1;background:#070b12;border:1px solid #53617a;border-radius:12px;touch-action:none;image-rendering:pixelated}
 .symbol-actions{display:flex;gap:8px;margin-top:8px}
 .symbol-meta label{display:flex;flex-direction:column;gap:5px;font-size:9px}.symbol-meta input{padding:8px;background:#09111b;border:1px solid #39475d;color:#eef5ff;border-radius:7px}
 .symbol-library-list{display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:250px;overflow:auto}
@@ -1798,9 +1818,9 @@ body.mega-painter-open::after{
 .symbol-toolbar{display:flex;flex-wrap:wrap;gap:4px}
 .symbol-toolbar button{width:29px;height:27px;padding:0;border:1px solid #394960;border-radius:6px;background:#0a121c;color:#dce8fa}
 .symbol-toolbar button.active{border-color:#caa8ff;background:#261d36;color:#efe6ff}
-.symbol-settings{display:flex;gap:10px;align-items:center;font-size:8px;color:#8da0b9}
+.symbol-settings{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;font-size:8px;color:#8da0b9}.symbol-toggle{padding:5px 7px;border:1px solid #2c3b50;border-radius:7px;background:#09111a}
 .symbol-settings label{display:flex;gap:5px;align-items:center}
-.symbol-settings input[type="range"]{width:100px}
+.symbol-settings input[type="range"]{width:120px}
 
 /* Rapid Events */
 .rapid-events-panel{width:175px;flex:0 0 175px;border:1px solid #29384e;border-radius:10px;background:#070e17;overflow:hidden;transition:.18s}
@@ -5514,3 +5534,1675 @@ body:not(.simulation-workspace-open) .toolbar,
 body:not(.simulation-workspace-open) .toolbar.toolbar-v226{
   visibility:visible;
 }
+
+/* V23 — readable export project controls */
+.top-action.readable-action{
+  border-color:#40546e;
+}
+.top-action.readable-action:hover{
+  border-color:#7188aa;
+  background:#152238;
+}
+
+/* V23.1 — Disease/Symptom relationship editor */
+.disease-symptom-picker{
+  border:1px solid #30445d;
+  border-radius:10px;
+  padding:8px;
+  background:#09121c;
+}
+.disease-symptom-picker.requirement-missing{
+  border-color:#c95d6c !important;
+  box-shadow:0 0 0 2px rgba(201,93,108,.12) !important;
+}
+
+/* ==========================================================
+   V23.2 — truly independent draggable editor entities
+   ========================================================== */
+
+/* The shell is only a stationary center anchor. It never moves when a panel moves. */
+#editorModal .editor-shell{
+  position:absolute !important;
+  left:50% !important;
+  top:50% !important;
+  right:auto !important;
+  bottom:auto !important;
+  width:650px !important;
+  min-width:650px !important;
+  max-width:650px !important;
+  height:auto !important;
+  min-height:0 !important;
+  margin:0 !important;
+  transform:translate(-50%,-50%) !important;
+  transform-origin:center center !important;
+  overflow:visible !important;
+  pointer-events:none !important;
+}
+
+/* Main editor spawns centered and moves independently. */
+#editorModal .editor-main-card{
+  position:relative !important;
+  left:auto !important;
+  top:auto !important;
+  margin:0 !important;
+  transform:translate(
+    var(--panel-drag-x,0px),
+    var(--panel-drag-y,0px)
+  ) !important;
+  pointer-events:auto !important;
+}
+
+/* Side menus are positioned beside the centered editor, but are independent
+   transform entities. Dragging the main card never changes these coordinates. */
+#editorModal .auto-connections-drawer,
+#editorModal .planet-palette-panel,
+#editorModal .solar-system-editor-panel,
+#editorModal .star-editor-panel,
+#editorModal .megastructure-editor-panel{
+  position:absolute !important;
+  left:calc(100% + 10px) !important;
+  right:auto !important;
+  top:0 !important;
+  bottom:auto !important;
+  margin:0 !important;
+  transform:translate(
+    var(--panel-drag-x,0px),
+    var(--panel-drag-y,0px)
+  ) !important;
+  pointer-events:auto !important;
+  z-index:30 !important;
+}
+
+/* Multiple user-opened side menus may coexist without becoming children of
+   the main card's drag movement. */
+#editorModal .ui-panel-dragging{
+  z-index:5000 !important;
+}
+
+/* V23.2 — standalone Megastructure Painter centered in real viewport */
+body > .mega-painter.expanded,
+.mega-painter.expanded{
+  position:fixed !important;
+  left:50% !important;
+  top:50% !important;
+  right:auto !important;
+  bottom:auto !important;
+  width:94vw !important;
+  height:94dvh !important;
+  max-width:94vw !important;
+  max-height:94dvh !important;
+  margin:0 !important;
+  transform:translate(-50%,-50%) !important;
+}
+
+/* V23.2 — restore visible Node / Semi-Hub / Hub rail */
+#editorModal .hub-role-rail{
+  display:grid !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  z-index:80 !important;
+  pointer-events:auto !important;
+}
+
+
+/* ==========================================================
+   V23.2f — isolated expanded Megastructure Painter
+   The normal inline V23.2 painter remains untouched.
+   ========================================================== */
+
+.mega-expanded-close{display:none}
+.mega-expanded-title-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+#megaPainterBackdrop:not(.hidden){
+  position:fixed !important;
+  inset:0 !important;
+  z-index:2147483400 !important;
+  display:block !important;
+  background:rgba(2,7,12,.76) !important;
+  backdrop-filter:blur(5px) !important;
+}
+
+html body > .mega-painter.expanded{
+  position:fixed !important;
+  left:50% !important;
+  top:50% !important;
+  right:auto !important;
+  bottom:auto !important;
+
+  width:94vw !important;
+  height:94dvh !important;
+  max-width:94vw !important;
+  max-height:94dvh !important;
+  min-width:0 !important;
+  min-height:0 !important;
+
+  margin:0 !important;
+  padding:14px !important;
+  box-sizing:border-box !important;
+  transform:translate(-50%,-50%) !important;
+  z-index:2147483401 !important;
+
+  display:grid !important;
+  grid-template-columns:220px minmax(0,1fr) !important;
+  grid-template-rows:46px 48px minmax(0,1fr) 52px !important;
+  column-gap:12px !important;
+  row-gap:10px !important;
+
+  overflow:hidden !important;
+  border:1px solid #35536b !important;
+  border-radius:16px !important;
+  background:linear-gradient(180deg,#0c1925,#07111a) !important;
+  box-shadow:0 30px 100px rgba(0,0,0,.7) !important;
+}
+
+/* header */
+html body > .mega-painter.expanded > .section-title-row{
+  grid-column:1/-1 !important;
+  grid-row:1 !important;
+  width:100% !important;
+  height:46px !important;
+  min-height:46px !important;
+  margin:0 !important;
+  padding:0 4px 8px !important;
+  box-sizing:border-box !important;
+
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  border-bottom:1px solid #294156 !important;
+}
+
+html body > .mega-painter.expanded > .section-title-row b{
+  font-size:15px !important;
+  color:#eef7fc !important;
+}
+
+html body > .mega-painter.expanded .mega-expanded-close{
+  display:grid !important;
+  place-items:center !important;
+  width:32px !important;
+  height:32px !important;
+  min-width:32px !important;
+  min-height:32px !important;
+  padding:0 !important;
+  border:1px solid #405d73 !important;
+  border-radius:8px !important;
+  background:#0a1722 !important;
+  color:#d6e8f2 !important;
+  font-size:18px !important;
+  cursor:pointer !important;
+}
+
+/* toolbar */
+html body > .mega-painter.expanded > .mega-paint-toolbar{
+  grid-column:1/-1 !important;
+  grid-row:2 !important;
+  justify-self:center !important;
+  align-self:center !important;
+
+  width:max-content !important;
+  max-width:100% !important;
+  height:42px !important;
+  margin:0 !important;
+  padding:4px 6px !important;
+
+  display:flex !important;
+  flex-wrap:nowrap !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:5px !important;
+
+  border:1px solid #29445a !important;
+  border-radius:10px !important;
+  background:#07141f !important;
+}
+
+html body > .mega-painter.expanded > .mega-paint-toolbar button{
+  width:32px !important;
+  height:32px !important;
+  min-width:32px !important;
+  min-height:32px !important;
+  padding:0 !important;
+}
+
+html body > .mega-painter.expanded > .mega-paint-toolbar #eMegaEraserMode{
+  width:auto !important;
+  min-width:58px !important;
+  padding:0 8px !important;
+}
+
+html body > .mega-painter.expanded #eMegaExpandPaint{
+  display:none !important;
+}
+
+/* left settings */
+html body > .mega-painter.expanded > .mega-paint-settings{
+  grid-column:1 !important;
+  grid-row:3 !important;
+  align-self:start !important;
+
+  width:220px !important;
+  min-width:220px !important;
+  max-width:220px !important;
+  height:max-content !important;
+
+  margin:0 !important;
+  padding:12px !important;
+  box-sizing:border-box !important;
+
+  display:flex !important;
+  flex-direction:column !important;
+  gap:14px !important;
+
+  border:1px solid #29445a !important;
+  border-radius:11px !important;
+  background:#081520 !important;
+}
+
+html body > .mega-painter.expanded > .mega-paint-settings label{
+  width:100% !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:6px !important;
+  font-size:9px !important;
+  color:#a8becd !important;
+}
+
+html body > .mega-painter.expanded > .mega-paint-settings input[type="range"]{
+  width:100% !important;
+  max-width:none !important;
+}
+
+html body > .mega-painter.expanded > .mega-paint-settings input[type="color"]{
+  width:54px !important;
+  height:32px !important;
+}
+
+/* height settings share left column when shown */
+html body > .mega-painter.expanded > .mega-height-settings:not(.hidden){
+  grid-column:1 !important;
+  grid-row:3 !important;
+  align-self:end !important;
+  width:220px !important;
+  max-width:220px !important;
+  box-sizing:border-box !important;
+  z-index:3 !important;
+}
+
+/* workspace = actual center canvas + original preview */
+html body > .mega-painter.expanded > .mega-paint-workspace{
+  grid-column:2 !important;
+  grid-row:3 !important;
+
+  width:100% !important;
+  height:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  max-width:none !important;
+  max-height:none !important;
+
+  margin:0 !important;
+  padding:0 !important;
+
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) 190px !important;
+  grid-template-rows:minmax(0,1fr) !important;
+  gap:12px !important;
+
+  align-items:stretch !important;
+  overflow:hidden !important;
+}
+
+/* real stage */
+html body > .mega-painter.expanded .mega-paint-stage{
+  grid-column:1 !important;
+  grid-row:1 !important;
+  position:relative !important;
+
+  justify-self:center !important;
+  align-self:center !important;
+
+  min-width:160px !important;
+  min-height:80px !important;
+  max-width:100% !important;
+  max-height:100% !important;
+
+  margin:0 !important;
+  padding:0 !important;
+  overflow:hidden !important;
+
+  border:1px solid #35566f !important;
+  border-radius:11px !important;
+  background:#05101a !important;
+  box-shadow:inset 0 0 30px rgba(0,0,0,.28) !important;
+}
+
+/* actual painter + one transparent guide */
+html body > .mega-painter.expanded #megaPaintCanvas,
+html body > .mega-painter.expanded #megaPlanetGuide{
+  position:absolute !important;
+  inset:0 !important;
+  display:block !important;
+
+  width:100% !important;
+  height:100% !important;
+  max-width:none !important;
+  max-height:none !important;
+
+  margin:0 !important;
+  padding:0 !important;
+  transform:none !important;
+  object-fit:initial !important;
+}
+
+html body > .mega-painter.expanded #megaPaintCanvas{
+  z-index:1 !important;
+  pointer-events:auto !important;
+  cursor:crosshair !important;
+}
+
+html body > .mega-painter.expanded #megaPlanetGuide{
+  z-index:2 !important;
+  pointer-events:none !important;
+}
+
+/* original V23.2 preview stays intact inline, gets a clean card only when expanded */
+html body > .mega-painter.expanded .mega-icon-preview-wrap{
+  grid-column:2 !important;
+  grid-row:1 !important;
+
+  width:190px !important;
+  min-width:190px !important;
+  max-width:190px !important;
+  height:max-content !important;
+
+  align-self:start !important;
+  margin:0 !important;
+  padding:12px !important;
+  box-sizing:border-box !important;
+
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  gap:9px !important;
+
+  border:1px solid #29445a !important;
+  border-radius:11px !important;
+  background:#081520 !important;
+}
+
+html body > .mega-painter.expanded .mega-icon-preview-wrap b{
+  width:100% !important;
+  text-align:left !important;
+  font-size:9px !important;
+  color:#d6e8f2 !important;
+}
+
+html body > .mega-painter.expanded #megaIconPreview{
+  width:130px !important;
+  height:130px !important;
+  max-width:130px !important;
+  max-height:130px !important;
+}
+
+html body > .mega-painter.expanded .mega-icon-preview-wrap small{
+  font-size:8px !important;
+  line-height:1.35 !important;
+  color:#7f97a8 !important;
+}
+
+/* footer */
+html body > .mega-painter.expanded > .side-note{
+  grid-column:1/-1 !important;
+  grid-row:4 !important;
+
+  width:100% !important;
+  height:52px !important;
+  min-height:52px !important;
+
+  margin:0 !important;
+  padding:10px 13px !important;
+  box-sizing:border-box !important;
+
+  display:flex !important;
+  align-items:center !important;
+
+  border:1px solid #294156 !important;
+  border-radius:10px !important;
+  background:#07131e !important;
+
+  font-size:8px !important;
+  color:#8199aa !important;
+}
+
+@media(max-width:900px){
+  html body > .mega-painter.expanded{
+    grid-template-columns:170px minmax(0,1fr) !important;
+  }
+
+  html body > .mega-painter.expanded > .mega-paint-settings,
+  html body > .mega-painter.expanded > .mega-height-settings:not(.hidden){
+    width:170px !important;
+    min-width:170px !important;
+    max-width:170px !important;
+  }
+
+  html body > .mega-painter.expanded > .mega-paint-workspace{
+    grid-template-columns:minmax(0,1fr) 145px !important;
+  }
+
+  html body > .mega-painter.expanded .mega-icon-preview-wrap{
+    width:145px !important;
+    min-width:145px !important;
+    max-width:145px !important;
+  }
+
+  html body > .mega-painter.expanded #megaIconPreview{
+    width:96px !important;
+    height:96px !important;
+  }
+}
+
+/* ==========================================================
+   V23.2g — painter/guide aspect precision
+   ========================================================== */
+
+/* JS already fits the stage at 2:1. These rules prevent legacy min-content
+   sizing or borders from altering the visible content ratio. */
+html body > .mega-painter.expanded .mega-paint-stage{
+  box-sizing:content-box !important;
+  aspect-ratio:auto !important;
+  flex:none !important;
+}
+
+html body > .mega-painter.expanded #megaPaintCanvas,
+html body > .mega-painter.expanded #megaPlanetGuide{
+  box-sizing:border-box !important;
+  transform:none !important;
+  scale:none !important;
+}
+
+/* Inline mode remains the original V23.2 layout. */
+.mega-painter:not(.expanded) #megaPaintCanvas,
+.mega-painter:not(.expanded) #megaPlanetGuide{
+  aspect-ratio:2 / 1;
+}
+
+
+/* ==========================================================
+   V23.2h — painter geometry/QOL
+   Keep the visible drawing surface locked to the 768×384 backing buffer.
+   ========================================================== */
+.mega-painter .mega-paint-stage{
+  aspect-ratio:2 / 1 !important;
+  height:auto !important;
+  box-sizing:content-box;
+}
+.mega-painter #megaPaintCanvas,
+.mega-painter #megaPlanetGuide{
+  width:100% !important;
+  height:100% !important;
+  aspect-ratio:2 / 1 !important;
+  box-sizing:border-box !important;
+}
+.mega-paint-settings .mega-inline-toggle{
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center !important;
+  gap:6px !important;
+  white-space:nowrap;
+}
+.mega-paint-settings .mega-inline-toggle input[type="checkbox"]{
+  width:auto !important;
+  margin:0 !important;
+}
+.mega-paint-settings output{
+  color:#d5efff;
+  font-variant-numeric:tabular-nums;
+}
+
+/* ==========================================================
+   V23.2i — painter controls + exact expanded geometry
+   ========================================================== */
+.mega-paint-settings label > small{
+  display:block;
+  margin-top:1px;
+  color:#698596;
+  font-size:7.5px;
+  line-height:1.25;
+}
+.mega-paint-settings .mega-snap-toggle,
+.mega-paint-settings .mega-inline-toggle{
+  min-height:28px;
+  padding:6px 8px;
+  border:1px solid #263f52;
+  border-radius:8px;
+  background:#07141e;
+}
+.mega-paint-settings .mega-snap-toggle input,
+.mega-paint-settings .mega-inline-toggle input{
+  accent-color:#7bdcf1;
+}
+.mega-paint-settings .mega-grid-size-control{
+  transition:opacity .15s ease;
+}
+.mega-paint-settings .mega-grid-size-control.is-disabled{
+  opacity:.38;
+}
+.mega-paint-settings .mega-grid-size-control.is-disabled input{
+  pointer-events:none;
+}
+html body > .mega-painter.expanded > .mega-paint-settings{
+  gap:11px !important;
+}
+html body > .mega-painter.expanded > .mega-paint-settings .mega-inline-toggle{
+  flex-direction:row !important;
+  align-items:center !important;
+  gap:8px !important;
+}
+html body > .mega-painter.expanded .mega-paint-stage{
+  /* Width/height are authored by fitCleanExpandedMegaPainter from the actual
+     grid-cell geometry. Never let a legacy max-height override that transform. */
+  max-width:none !important;
+  max-height:none !important;
+}
+
+
+/* V25 Addons + Creator Editor */
+.top-action.addons-action{width:74px;height:34px;margin:-2px 3px;border-color:#536d9a;background:linear-gradient(180deg,#1b2a43,#111a29);display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;box-shadow:0 0 0 1px rgba(119,159,224,.08) inset,0 5px 18px rgba(0,0,0,.28)}
+.top-action.addons-action strong{font-size:10px;letter-spacing:.04em}.top-action.addons-action:hover{border-color:#91b8ff;background:linear-gradient(180deg,#263d62,#16243a)}
+.addons-card{width:min(820px,92vw)}.addons-intro{color:#9aabc3;margin:0 0 18px}.addon-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.addon-tile{display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:12px;padding:15px;border:1px solid #2a3b55;border-radius:13px;background:#0c131e}.addon-icon{width:44px;height:44px;border:1px solid #40597f;border-radius:12px;display:grid;place-items:center;font-size:22px;background:#111d2d}.addon-copy{display:flex;flex-direction:column;gap:4px}.addon-copy b{font-size:14px}.addon-copy small{color:#8293ad;line-height:1.35}.addon-tile .setting-status{grid-column:2/4;margin:0}.addon-open{white-space:nowrap}
+.creator-editor-card{width:min(1180px,95vw);height:min(840px,92vh);display:flex;flex-direction:column;overflow:hidden}.creator-editor-head{flex:0 0 auto}.creator-head-actions{display:flex;gap:8px;align-items:center}.creator-hero{display:grid;grid-template-columns:1.1fr 1.3fr 1fr auto;gap:9px;padding:12px;border:1px solid #26364d;border-radius:11px;background:#0b121c}.creator-hero label,.creator-event-grid label{display:flex;flex-direction:column;gap:5px;font-size:10px;color:#93a4bb}.creator-hero input,.creator-hero select,.creator-item input,.creator-item textarea,.creator-item select,.creator-event-grid input,.creator-event-grid textarea,.creator-event-grid select{border:1px solid #31425c;border-radius:7px;background:#0a1019;color:#dce7f7;padding:8px;min-width:0}.creator-tabs{display:flex;gap:5px;margin:12px 0 8px;border-bottom:1px solid #26364d;padding-bottom:7px}.creator-tabs button{padding:8px 14px;border:1px solid transparent;border-radius:8px;background:transparent;color:#8799b4}.creator-tabs button.active{background:#17243a;border-color:#3a5276;color:#eef5ff}.creator-tab-panel{flex:1;min-height:0;overflow:auto;padding-right:4px}.creator-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:9px}.creator-section-head>div{display:flex;flex-direction:column;gap:3px}.creator-section-head small{color:#7f91a9}.creator-list{display:flex;flex-direction:column;gap:9px}.creator-item{border:1px solid #293a53;border-radius:10px;padding:10px;background:#0b121c}.creator-item-top{display:grid;grid-template-columns:52px 1.2fr 1fr 1fr auto auto auto;gap:7px;align-items:center}.creator-item .ct-description{width:100%;margin-top:7px;resize:vertical}.creator-check{display:flex!important;flex-direction:row!important;align-items:center;gap:6px!important;white-space:nowrap;color:#a8b6ca!important;font-size:10px}.creator-check input{width:auto;padding:0}.creator-danger,.creator-mini-danger{border:1px solid #643848;background:#241118;color:#ef9dac;border-radius:7px;padding:7px 9px}.creator-danger:disabled{opacity:.35}.creator-fields{margin-top:9px;padding-top:9px;border-top:1px solid #223146}.creator-fields-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.creator-field-list{display:flex;flex-direction:column;gap:5px}.creator-field-row{display:grid;grid-template-columns:.85fr 1fr 105px 1fr 1.2fr 34px;gap:5px}.creator-field-row input,.creator-field-row select{padding:6px}.creator-link-item{display:grid;grid-template-columns:1.2fr 1fr auto auto;gap:8px;align-items:center}.creator-event-item .creator-item-top{grid-template-columns:1.5fr 1fr auto auto}.creator-event-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:9px}.creator-event-grid .full{grid-column:1/-1}.creator-json{width:100%;height:calc(100% - 55px);min-height:420px;padding:12px;border:1px solid #31445f;border-radius:9px;background:#070c12;color:#bfd6f6;font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;resize:none}.creator-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid #29384f}.creator-footer>div{display:flex;gap:8px}.setting-status.error{color:#f3a1ae;border-color:#653441;background:#201016}
+@media(max-width:900px){.addon-grid{grid-template-columns:1fr}.creator-hero{grid-template-columns:1fr 1fr}.creator-item-top{grid-template-columns:46px 1fr 1fr}.creator-field-row{grid-template-columns:1fr 1fr}.creator-event-grid{grid-template-columns:1fr 1fr}.top-action.addons-action{width:58px}.top-action.addons-action strong{display:none}}
+.creator-link-item{display:block}.creator-link-main{display:grid;grid-template-columns:1.25fr 1fr 1fr auto auto auto;gap:8px;align-items:center}.creator-link-rule{display:grid;grid-template-columns:1fr 1fr 1.2fr .8fr;gap:7px;margin-top:8px;padding-top:8px;border-top:1px solid #223146}.creator-link-rule label{display:flex;flex-direction:column;gap:5px;font-size:10px;color:#93a4bb}.creator-link-rule small{grid-column:1/-1;color:#7487a3}
+
+/* v25.1 creator categories + pathogen genome */
+.creator-category-item{display:grid;grid-template-columns:1.2fr 1fr 90px auto;gap:8px;align-items:center}
+.creator-category-item input[type=color]{height:34px;padding:3px}
+.creator-link-style{display:grid;grid-template-columns:1fr .8fr .8fr .8fr;gap:7px;margin-top:7px}
+.creator-link-style label{display:flex;flex-direction:column;gap:5px;font-size:10px;color:#93a4bb}
+.pathogen-genome-editor{border:1px solid #2f425f;border-radius:10px;background:#080f18;padding:10px;display:flex;flex-direction:column;gap:9px}
+.pathogen-genome-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.pathogen-genome-head small{display:block;color:#8396b0;margin-top:2px}.pathogen-genome-actions{display:flex;gap:6px}
+.pathogen-genome-view{font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:1.5px;padding:10px;border:1px solid #24364e;border-radius:8px;background:#050a10;word-break:break-all;max-height:130px;overflow:auto}
+.pathogen-genome-view span{display:inline-block;margin-right:7px;margin-bottom:2px}.pathogen-genome-stats{display:flex;gap:14px;flex-wrap:wrap;color:#90a4bf;font-size:10px}.pathogen-genome-editor textarea{width:100%;min-height:88px;resize:vertical;font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;text-transform:uppercase}
+@media(max-width:900px){.creator-category-item,.creator-link-style{grid-template-columns:1fr 1fr}}
+
+
+/* v25.2 genetics, crafting, and material textures */
+.dna-helix-view{display:flex;flex-direction:column;gap:8px;max-height:260px;padding:10px}
+.dna-gene-block{position:relative;border:1px solid #263b57;border-radius:8px;padding:18px 8px 8px;background:linear-gradient(180deg,rgba(54,91,130,.08),rgba(8,15,24,.6));cursor:pointer}
+.dna-gene-block.selected{border-color:#8cc8ff;box-shadow:0 0 0 1px rgba(120,195,255,.2) inset}.dna-gene-label{position:absolute;left:8px;top:4px;font:8px/1.2 ui-monospace,monospace;color:#7992b1;letter-spacing:1px}
+.dna-strand,.dna-rungs{display:grid;grid-template-columns:repeat(12,minmax(13px,1fr));gap:3px;align-items:center;text-align:center}.dna-strand i{font-style:normal;font:10px/1 ui-monospace,monospace;padding:3px 0;border-radius:4px;background:#101c2b;border:1px solid #253b56}.dna-rungs i{height:7px;border-left:1px solid #4e7399;border-right:1px solid #4e7399;opacity:.7}.dna-strand.bottom{transform:scaleX(-1)}.dna-strand.bottom i{transform:scaleX(-1)}
+.pathogen-gene-tools{display:flex;gap:7px;flex-wrap:wrap;align-items:center}.pathogen-gene-tools select{min-width:120px}.danger-soft{border-color:#765f36!important;color:#ffd98a!important;background:rgba(128,90,24,.12)!important}.pathogen-safety-note{color:#7f91a9}
+.material-texture-editor,.crafting-editor-shell{border:1px solid #2f425f;border-radius:10px;background:#080f18;padding:10px}.material-texture-toolbar{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.material-texture-toolbar button{font-size:8px;padding:6px 8px}.material-texture-toolbar button.active{border-color:#8bd2ff;background:#13263a;color:#e8f7ff}.material-texture-layout{display:grid;grid-template-columns:minmax(280px,384px) 1fr;gap:14px;margin-top:9px}.material-texture-layout canvas{width:100%;aspect-ratio:1;border:1px solid #334a68;border-radius:8px;background:repeating-conic-gradient(#111 0 25%,#171f28 0 50%) 50%/16px 16px;image-rendering:pixelated;touch-action:none}.material-texture-controls{display:flex;flex-direction:column;gap:9px}.material-texture-controls label{display:flex;flex-direction:column;gap:5px;color:#a9bad0;font-size:10px}.material-texture-controls input[type=color]{width:100%;height:38px}
+.crafting-open-button{width:100%;font-weight:700;font-size:13px;padding:11px}.crafting-panel{margin-top:10px;border-top:1px solid #273950;padding-top:10px}.crafting-ingredient-row{display:grid;grid-template-columns:1fr 90px 38px;gap:7px;margin:7px 0}.crafting-ingredient-row select,.crafting-ingredient-row input{min-width:0}
+@media(max-width:700px){.material-texture-layout{grid-template-columns:1fr}.crafting-ingredient-row{grid-template-columns:1fr 75px 36px}}
+
+.material-texture-mini{display:grid;grid-template-columns:repeat(16,1fr);width:128px;aspect-ratio:1;border:1px solid #334a68;border-radius:6px;overflow:hidden;background:#0b1119;margin:8px 0}.material-texture-mini i{display:block;min-width:0}
+
+/* v25.3 — right-side Crafting Graph + DNA gene workbench */
+.crafting-open-status{min-height:15px;margin-top:6px;color:#ff9fae;font-size:9px}.crafting-inline-help{display:block;margin-top:5px;color:#788ba4;line-height:1.45}
+.crafting-graph-panel{width:660px;flex:0 0 660px;max-height:90vh;overflow:hidden;border:1px solid #33445f;border-radius:15px;background:#081019;box-shadow:0 18px 50px rgba(0,0,0,.42);padding:13px;display:flex;flex-direction:column;gap:9px}.crafting-graph-panel.hidden{display:none}.crafting-graph-head{display:flex;align-items:center;justify-content:space-between}.crafting-graph-head h3{margin:2px 0 0;font-size:15px}.crafting-graph-help{margin:0;color:#8295ad;font-size:9px;line-height:1.5}.crafting-graph-toolbar{display:grid;grid-template-columns:minmax(145px,1fr) auto auto auto;gap:6px}.crafting-graph-toolbar select,.crafting-graph-toolbar button{min-width:0;font-size:9px}.crafting-graph-toolbar button.active{border-color:#73c9ff;background:#14283b;color:#dff5ff;box-shadow:0 0 0 1px rgba(115,201,255,.15) inset}.crafting-link-hint{padding:6px 8px;border-radius:7px;background:#0c1622;border:1px solid #22364d;color:#8da7c4;font:9px ui-monospace,monospace}.crafting-graph-canvas{position:relative;min-height:430px;flex:1;overflow:hidden;border:1px solid #2b405b;border-radius:11px;background-color:#060c13;background-image:linear-gradient(rgba(90,130,170,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(90,130,170,.08) 1px,transparent 1px);background-size:24px 24px}.crafting-graph-canvas svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.crafting-graph-canvas svg line{stroke:#6b8eb3;stroke-width:1.6;opacity:.72}.craft-node{position:absolute;transform:translate(-50%,-50%);min-width:92px;max-width:145px;padding:8px 10px;border:1px solid #35506e;border-radius:9px;background:#0d1825;box-shadow:0 7px 18px rgba(0,0,0,.3);cursor:grab;user-select:none;z-index:2}.craft-node b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e9f2ff;font-size:10px}.craft-node small{display:block;margin-top:3px;color:#7089a4;font-size:7px;letter-spacing:.1em}.craft-node em{position:absolute;right:5px;top:4px;color:#9ccfff;font:8px ui-monospace,monospace}.craft-node.product{min-width:120px;border-color:#7bb9e8;background:#10283a;box-shadow:0 0 25px rgba(93,180,240,.16);cursor:default}.craft-node.process{min-width:0;max-width:none;width:18px;height:18px;padding:0;border:0;background:transparent;box-shadow:none;cursor:grab;overflow:visible}.craft-process-dot{display:block;width:12px;height:12px;border-radius:50%;background:#ffd84d;border:2px solid #fff0a6;box-shadow:0 0 12px rgba(255,216,77,.55)}.craft-process-label{position:absolute;display:block;width:max-content;max-width:150px;padding:2px 5px;border-radius:5px;background:rgba(12,13,9,.9);border:1px solid rgba(255,216,77,.3);color:#ffd84d!important;font-size:9px!important;line-height:1.2;white-space:nowrap;pointer-events:none;z-index:5}.craft-process-label.top{left:50%;bottom:18px;transform:translateX(-50%)}.craft-process-label.bottom{left:50%;top:18px;transform:translateX(-50%)}.craft-process-label.right{left:19px;top:50%;transform:translateY(-50%)}.craft-process-label.left{right:19px;top:50%;transform:translateY(-50%)}.craft-node.link-start{outline:2px solid #78d8ff;outline-offset:3px}.craft-node.selected{box-shadow:0 0 0 2px #d5ecff,0 8px 20px rgba(0,0,0,.4)}.crafting-graph-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#74879f;font-size:8px}.crafting-graph-foot .danger{color:#ff9ba9;border-color:#6d3542}
+#editorModal:has(.crafting-graph-panel:not(.hidden)) .editor-shell{width:min(1460px,calc(100% - 22px));align-items:flex-start}#editorModal:has(.crafting-graph-panel:not(.hidden)) .editor-main-card{flex-basis:660px;max-height:88vh}#editorModal:has(.crafting-graph-panel:not(.hidden)) #editorBody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}#editorModal:has(.crafting-graph-panel:not(.hidden)) #editorBody>.full{grid-column:1/-1}
+
+.dna-helix-view{max-height:none!important;padding:0!important;overflow:visible!important}.dna-workbench{border:1px solid #2a3d55;border-radius:12px;background:radial-gradient(circle at 45% 25%,rgba(62,108,150,.09),transparent 35%),#060c13;overflow:hidden}.dna-base-palette{display:flex;align-items:center;gap:7px;padding:9px 11px;border-bottom:1px solid #22344a;background:#09121d}.dna-base-palette>span{margin-right:auto;color:#7288a1;font:8px ui-monospace,monospace;letter-spacing:.1em}.dna-palette-base{display:grid;place-items:center;width:29px;height:29px;border:1px solid #385372;border-radius:8px;background:#101e2c;color:#cbe6ff;font:700 11px ui-monospace,monospace;cursor:grab}.dna-palette-base.corrupt,.dna-gene-chip.corrupt,.dna-mini-helix i.corrupt{border-color:#9d4d7c!important;background:#291222!important;color:#ff9bd2!important;box-shadow:0 0 12px rgba(244,78,165,.14)}.dna-strand-field{min-height:270px;max-height:360px;overflow:auto;padding:22px;display:grid;grid-template-columns:repeat(2,minmax(230px,1fr));gap:14px;align-content:start}.dna-strand-field.dna-drop-ready{box-shadow:inset 0 0 0 2px rgba(110,208,255,.28)}.dna-strand-card{position:relative;text-align:left;padding:26px 12px 12px;border:1px solid #253d57;border-radius:11px;background:linear-gradient(145deg,rgba(27,53,77,.75),rgba(7,14,22,.88));color:#dceaff;min-height:98px;overflow:hidden}.dna-strand-card:hover{border-color:#527ca3}.dna-strand-card.selected{border-color:#84ceff;box-shadow:0 0 0 1px rgba(132,206,255,.2) inset,0 0 25px rgba(73,155,210,.1)}.dna-strand-card.has-corruption:after{content:'FLAW';position:absolute;right:8px;top:7px;color:#ff8fc9;font:8px ui-monospace,monospace}.dna-strand-index{position:absolute;left:10px;top:8px;color:#7090ad;font:8px ui-monospace,monospace;letter-spacing:.13em}.dna-mini-helix{display:flex;flex-direction:column;gap:7px}.dna-mini-helix>span{display:grid;grid-template-columns:repeat(12,1fr);gap:2px}.dna-mini-helix i{display:grid;place-items:center;height:19px;border:1px solid #29445f;border-radius:4px;background:#0c1723;color:#a9c8e3;font:8px ui-monospace,monospace;font-style:normal}.dna-mini-helix em{height:5px;background:repeating-linear-gradient(90deg,transparent 0 5px,#426784 5px 6px,transparent 6px 10px);opacity:.5}.dna-empty-state{grid-column:1/-1;display:grid;place-items:center;min-height:200px;border:1px dashed #294057;border-radius:10px;color:#70869d;font:10px ui-monospace,monospace;text-align:center}.dna-selected-detail{border-top:1px solid #22344a;background:#08111b;padding:12px}.dna-selected-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}.dna-selected-head small{display:block;color:#688198;font:7px ui-monospace,monospace;letter-spacing:.12em}.dna-selected-head b{font-size:11px}.dna-selected-head code{color:#8fc8ef;font-size:10px}.dna-gene-chip-row{display:flex;flex-wrap:wrap;gap:6px;min-height:54px;margin-top:10px;padding:10px;border:1px dashed #2d4760;border-radius:9px}.dna-gene-chip-row.dna-drop-ready{background:rgba(85,170,225,.08);border-color:#5d9bc8}.dna-gene-chip{position:relative;display:grid;place-items:center;width:34px;height:34px;border:1px solid #355574;border-radius:7px;background:#0e1b29;color:#d4eaff;font:700 11px ui-monospace,monospace;cursor:grab}.dna-gene-chip small{position:absolute;right:2px;bottom:1px;color:#58728b;font:6px ui-monospace,monospace}.dna-detail-note{margin-top:8px;color:#71869d;font-size:8px;line-height:1.45}.dna-stat-warn{color:#ff8fc9}
+@media(max-width:1050px){.crafting-graph-panel{width:100%;flex:0 0 auto;max-height:650px}.crafting-graph-canvas{min-height:380px}#editorModal:has(.crafting-graph-panel:not(.hidden)) .editor-shell{flex-direction:column;overflow:auto}.dna-strand-field{grid-template-columns:1fr}}
+
+@media(max-width:780px){.symbol-workbench{grid-template-columns:1fr}.symbol-library-card{width:96vw}}
+
+/* v25.3b — painter placement, graph-style crafting nodes, and helix DNA */
+.symbol-library-card{width:min(860px,94vw)}
+.symbol-workbench{grid-template-columns:280px minmax(260px,1fr);gap:18px;padding:10px}
+#symbolCanvas{width:256px;height:256px;aspect-ratio:1;background:#070b12;border:1px solid #53617a;border-radius:12px;touch-action:none;image-rendering:pixelated}
+
+.material-texture-launcher{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #2f425f;border-radius:10px;background:#080f18;padding:11px 12px}
+.material-texture-launcher>div:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}.material-texture-launcher small{color:#7f94ad;line-height:1.4}
+.material-texture-launch-actions{display:flex;align-items:center;gap:10px}.material-texture-launch-actions .material-texture-mini{width:62px;margin:0;flex:0 0 62px}
+.material-texture-panel{width:650px;flex:0 0 650px;max-height:90vh;overflow:hidden;border:1px solid #33445f;border-radius:15px;background:#081019;box-shadow:0 18px 50px rgba(0,0,0,.42);padding:13px;display:flex;flex-direction:column;gap:9px}
+.material-texture-panel.hidden{display:none}.material-texture-panel-head{display:flex;align-items:center;justify-content:space-between}.material-texture-panel-head h3{margin:2px 0 0;font-size:15px}.material-texture-panel-help{margin:0;color:#8295ad;font-size:9px;line-height:1.5}
+.material-texture-panel-body{display:grid;grid-template-columns:minmax(420px,512px) 1fr;gap:14px;min-height:0}.material-texture-panel-body canvas{width:100%;aspect-ratio:1;border:1px solid #334a68;border-radius:10px;background:repeating-conic-gradient(#111 0 25%,#171f28 0 50%) 50%/24px 24px;image-rendering:pixelated;touch-action:none}
+#editorModal:has(.material-texture-panel:not(.hidden)) .editor-shell{width:min(1440px,calc(100% - 22px));align-items:flex-start}
+#editorModal:has(.material-texture-panel:not(.hidden)) .editor-main-card{flex-basis:650px;max-height:88vh}
+
+.craft-node.graph-style{width:76px;height:76px;min-width:76px;max-width:76px;padding:7px;border-radius:50%;border:1.4px solid var(--craft-node-color,#aab4c7);background:#111725;box-shadow:none;display:grid;place-items:center;text-align:center;color:#edf3ff}
+.craft-node.graph-style b{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;font:600 9px/1.08 system-ui;color:#edf3ff;max-width:61px}
+.craft-node.graph-style em{position:absolute;right:-3px;top:-4px;min-width:20px;height:20px;padding:0 4px;display:grid;place-items:center;border-radius:999px;background:#0b111b;border:1px solid var(--craft-node-color,#aab4c7);color:#eef7ff;font:700 8px ui-monospace,monospace}
+.craft-node.graph-style.selected{border-color:#fff;box-shadow:0 0 16px color-mix(in srgb,var(--craft-node-color,#aab4c7) 65%,transparent),0 0 0 2px rgba(255,255,255,.12)}
+.craft-node.graph-style.link-start{outline:2px solid #78d8ff;outline-offset:4px}
+.craft-node.process{width:22px;height:22px;min-width:22px;max-width:22px;display:grid;place-items:center;overflow:visible}
+.craft-process-dot{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:block;width:12px;height:12px;border-radius:50%;background:#ffd84d;border:2px solid #fff0a6;box-shadow:0 0 12px rgba(255,216,77,.55)}
+
+.dna-strand-field{grid-template-columns:repeat(3,minmax(170px,1fr));gap:16px;padding:20px}
+.dna-strand-card{min-height:210px;padding:34px 16px 14px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.dna-mini-double-helix{position:relative;width:105px;height:155px;display:flex;flex-direction:column;justify-content:space-between;align-items:center}
+.dna-mini-double-helix:before,.dna-mini-double-helix:after{content:'';position:absolute;top:3px;bottom:3px;width:3px;border-radius:999px;background:linear-gradient(#78bfff,#b8d8ff,#78bfff);opacity:.48;filter:drop-shadow(0 0 5px rgba(110,190,255,.25))}
+.dna-mini-double-helix:before{left:31px;transform:skewY(28deg)}.dna-mini-double-helix:after{right:31px;transform:skewY(-28deg)}
+.dna-mini-pair{--helix-x:0px;position:relative;width:100%;height:10px;display:flex;align-items:center;justify-content:center;transform:translateX(var(--helix-x));z-index:1}
+.dna-mini-pair i{position:absolute;width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:#0e1d2b;border:1px solid #467092;color:#c9eaff;font:700 7px ui-monospace,monospace;font-style:normal}.dna-mini-pair i:first-child{left:10px}.dna-mini-pair i:last-child{right:10px}.dna-mini-pair em{width:54px;height:1px;background:linear-gradient(90deg,#5c8fb5,#b9d8ec,#5c8fb5);opacity:.72}
+.dna-mini-pair i.corrupt,.dna-complement-base.corrupt{border-color:#a74d7e!important;background:#2b1023!important;color:#ff9bd2!important;box-shadow:0 0 10px rgba(244,78,165,.25)}
+.dna-selected-detail{padding:16px 18px 18px}.dna-large-helix{position:relative;margin:14px auto 4px;width:min(100%,360px);min-height:410px;padding:18px 76px;display:flex;flex-direction:column;justify-content:space-between;align-items:center;border:1px dashed #29465f;border-radius:14px;background:radial-gradient(circle at 50% 50%,rgba(64,137,190,.09),transparent 65%)}
+.dna-large-helix:before,.dna-large-helix:after{content:'';position:absolute;top:22px;bottom:22px;width:5px;border-radius:999px;background:linear-gradient(180deg,#66b7e9,#c1e7ff 45%,#66b7e9);opacity:.35;box-shadow:0 0 12px rgba(96,185,235,.18)}
+.dna-large-helix:before{left:102px;transform:skewY(20deg)}.dna-large-helix:after{right:102px;transform:skewY(-20deg)}
+.dna-large-pair{--helix-x:0px;position:relative;width:210px;height:30px;display:flex;align-items:center;justify-content:space-between;transform:translateX(var(--helix-x));z-index:2}
+.dna-large-pair .helix-base,.dna-complement-base{position:relative;width:34px;height:34px;display:grid;place-items:center;border:1px solid #3c6687;border-radius:50%;background:#0d1a27;color:#d7eeff;font:700 11px ui-monospace,monospace;z-index:2}.dna-large-pair .helix-base{cursor:grab}.dna-large-pair .helix-base small{position:absolute;right:-2px;bottom:-3px;font-size:6px;color:#7895ae}
+.dna-base-bridge{height:2px;flex:1;margin:0 -3px;background:repeating-linear-gradient(90deg,#547e9d 0 8px,#b8d9eb 8px 12px);opacity:.75}
+.dna-large-helix.dna-drop-ready{background:rgba(85,170,225,.09);border-color:#68b7e9}
+
+@media(max-width:1050px){.material-texture-panel{width:100%;flex:0 0 auto;max-height:760px}.material-texture-panel-body{grid-template-columns:minmax(300px,512px) 1fr}#editorModal:has(.material-texture-panel:not(.hidden)) .editor-shell{flex-direction:column;overflow:auto}.dna-strand-field{grid-template-columns:repeat(2,minmax(180px,1fr))}}
+@media(max-width:700px){.material-texture-launcher{align-items:stretch;flex-direction:column}.material-texture-launch-actions{justify-content:space-between}.material-texture-panel-body{grid-template-columns:1fr}.dna-strand-field{grid-template-columns:1fr}.dna-large-helix{transform:scale(.88);transform-origin:top center;margin-bottom:-40px}}
+
+.craft-node.process.selected{box-shadow:none;outline:none}.craft-node.process.selected .craft-process-dot{box-shadow:0 0 0 2px #fff,0 0 15px rgba(255,216,77,.75)}.craft-node.process.link-start{outline:none}.craft-node.process.link-start .craft-process-dot{box-shadow:0 0 0 2px #78d8ff,0 0 15px rgba(120,216,255,.65)}
+
+/* v25.3c — DNA geometry: backbone curves outside, colored draggable genes as rungs */
+.dna-mini-double-helix,.dna-mini-pair,.dna-large-pair,.dna-base-bridge,.dna-complement-base{display:none!important}
+.dna-helix-stage{position:relative;display:block;margin:auto;isolation:isolate}
+.dna-helix-stage.mini{width:118px;height:158px}
+.dna-helix-stage.large{width:min(100%,300px);height:390px}
+.dna-backbones{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:1}
+.dna-backbone{fill:none;stroke:#87c9ef;stroke-width:2.3;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round;opacity:.68;filter:drop-shadow(0 0 3px rgba(92,187,238,.18))}
+.dna-backbone.right{stroke:#c3e6fb;opacity:.56}
+.dna-rung{position:absolute;top:var(--rung-top);left:var(--rung-left);width:var(--rung-width);height:5px;transform:translateY(-50%);border-radius:999px;background:currentColor;box-shadow:0 0 7px color-mix(in srgb,currentColor 45%,transparent);z-index:2;transition:height .12s,filter .12s;cursor:default}
+.dna-rung:before,.dna-rung:after{content:'';position:absolute;top:50%;width:7px;height:7px;border-radius:50%;background:currentColor;transform:translateY(-50%)}
+.dna-rung:before{left:-2px}.dna-rung:after{right:-2px}
+.dna-rung i,.dna-rung em{position:absolute;top:50%;transform:translateY(-50%);font:700 7px ui-monospace,monospace;font-style:normal;color:#071019;background:currentColor;border-radius:4px;padding:1px 3px;line-height:1.1;box-shadow:0 0 0 1px rgba(5,13,20,.35)}
+.dna-rung i{left:4px}.dna-rung em{right:4px}
+.dna-base-A{color:#71df9d}.dna-base-T{color:#66bfff}.dna-base-C{color:#ffd36a}.dna-base-G{color:#b995ff}.dna-base-U,.dna-rung.corrupt{color:#ff74bc!important;filter:drop-shadow(0 0 5px rgba(255,78,165,.45))}
+.dna-helix-stage.large .dna-rung{height:7px;cursor:grab}.dna-helix-stage.large .dna-rung:hover{height:10px;filter:brightness(1.18)}.dna-helix-stage.large .dna-rung:active{cursor:grabbing}
+.dna-helix-stage.large .dna-rung i,.dna-helix-stage.large .dna-rung em{font-size:9px;padding:2px 4px}
+.dna-large-helix{min-height:430px;padding:18px 20px;display:grid;place-items:center}
+.dna-large-helix:before,.dna-large-helix:after{display:none!important}
+.dna-large-helix.dna-drop-ready .dna-helix-stage{filter:drop-shadow(0 0 10px rgba(104,183,233,.35))}
+
+/* v25.3d — fixed six-strand genome viewer/editor and persistent missing-gene flaws */
+.dna-strand-field{
+  display:grid!important;
+  grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  gap:8px!important;
+  padding:12px!important;
+  min-height:190px!important;
+  max-height:none!important;
+  overflow:visible!important;
+  align-items:stretch!important;
+}
+.dna-strand-card{
+  min-width:0!important;
+  min-height:178px!important;
+  height:178px!important;
+  padding:27px 4px 17px!important;
+  border-radius:9px!important;
+}
+.dna-strand-card .dna-helix-stage.mini{
+  width:min(100%,88px)!important;
+  height:132px!important;
+}
+.dna-strand-index{left:7px!important;top:7px!important;font-size:7px!important;white-space:nowrap}
+.dna-strand-flaws{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);font:700 6px ui-monospace,monospace;letter-spacing:.06em;color:#ff8fc9;white-space:nowrap}
+.dna-strand-card.has-corruption:after{display:none!important}
+.dna-large-helix{
+  min-height:470px!important;
+  width:100%!important;
+  display:grid!important;
+  place-items:center!important;
+  padding:20px!important;
+  overflow:hidden!important;
+}
+.dna-helix-stage.large{
+  width:min(100%,380px)!important;
+  height:430px!important;
+  margin:0 auto!important;
+}
+.dna-backbone{stroke-width:3!important}
+.dna-helix-stage.large .dna-backbone{stroke-width:4!important}
+.dna-rung.dna-base-missing{
+  color:#9b5f75!important;
+  height:3px!important;
+  opacity:.58;
+  background:repeating-linear-gradient(90deg,currentColor 0 6px,transparent 6px 10px)!important;
+  box-shadow:none!important;
+}
+.dna-rung.dna-base-missing:before,.dna-rung.dna-base-missing:after{background:transparent!important;border:1px dashed currentColor;width:7px;height:7px}
+.dna-rung.dna-base-missing i{left:50%!important;right:auto!important;transform:translate(-50%,-50%)!important;color:#f4bfd0!important;background:#2b1720!important;border:1px dashed #9b5f75!important}
+.dna-rung.dna-base-missing em{display:none!important}
+.dna-selected-head{max-width:720px;margin:0 auto;width:100%}
+.dna-detail-note{max-width:720px;margin:9px auto 0!important;text-align:center}
+
+/* Selection viewer uses the same six-strand helix geometry as the editor. */
+.dna-viewer-six{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;width:100%;margin:7px 0 5px;padding:7px;border:1px solid #24364e;border-radius:8px;background:#050a10;overflow:hidden}
+.dna-viewer-strand{position:relative;display:grid;place-items:center;min-width:0;height:92px;border:1px solid rgba(80,120,155,.18);border-radius:6px;background:rgba(15,28,42,.5)}
+.dna-viewer-strand>small{position:absolute;left:4px;top:3px;color:#68839b;font:6px ui-monospace,monospace;z-index:3}
+.dna-viewer-strand .dna-helix-stage.viewer{width:50px!important;height:78px!important;margin:auto!important}
+.dna-viewer-strand .dna-rung{height:2px!important}.dna-viewer-strand .dna-rung i,.dna-viewer-strand .dna-rung em{display:none!important}
+.dna-viewer-flaws{font-size:9px!important;color:#91a4b8}.dna-viewer-flaws b{color:#ff8fc9}
+
+@media(max-width:900px){
+  .dna-strand-field{gap:4px!important;padding:8px!important}
+  .dna-strand-card{height:160px!important;min-height:160px!important;padding-left:2px!important;padding-right:2px!important}
+  .dna-strand-card .dna-helix-stage.mini{width:min(100%,64px)!important;height:116px!important}
+  .dna-strand-index{font-size:6px!important;letter-spacing:.04em!important}
+}
+\n\n/* v25.3e — robust compact DNA viewer: all geometry is one SVG */
+.dna-viewer-strand .dna-helix-stage.viewer{display:none!important}
+.dna-viewer-svg{display:block;width:min(100%,58px);height:80px;margin:auto;overflow:visible}
+.dna-viewer-backbone{fill:none;stroke:#87c9ef;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;opacity:.72}
+.dna-viewer-backbone.right{stroke:#c3e6fb;opacity:.6}
+.dna-viewer-svg line{vector-effect:non-scaling-stroke}
+.dna-viewer-six{grid-template-columns:repeat(6,minmax(0,1fr))!important;overflow:hidden!important}
+.dna-viewer-strand{overflow:hidden!important;min-width:0!important}
+
+/* v25.3f — selected DNA editor rebuilt from the visual target */
+.dna-helix-stage .dna-backbones,
+.dna-helix-stage .dna-rung{display:none!important}
+.dna-editor-svg{display:block;width:100%;height:100%;overflow:visible}
+.dna-svg-backbone{fill:none;stroke:#93bce1;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;opacity:.78;filter:drop-shadow(0 0 4px rgba(92,173,235,.22))}
+.dna-svg-backbone.right{stroke:#d1e8ff;opacity:.66}
+.dna-svg-rung{stroke-width:5;stroke-linecap:round;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 3px color-mix(in srgb,currentColor 35%,transparent))}
+.dna-svg-rung.missing{stroke-width:2.2;opacity:.55}
+.dna-svg-rung.corrupt{filter:drop-shadow(0 0 5px rgba(255,94,104,.6))}
+
+/* six overview cards like the mockup */
+.dna-workbench{background:#07111c;border-color:#28445e}
+.dna-workbench:before{content:'GENOME OVERVIEW (6 STRANDS)';display:block;padding:12px 14px 2px;color:#5ea8ff;font:700 8px ui-monospace,monospace;letter-spacing:.08em}
+.dna-base-palette{display:none!important}
+.dna-strand-field{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:10px!important;padding:10px 12px 14px!important;min-height:188px!important}
+.dna-strand-card{height:176px!important;min-height:176px!important;padding:28px 7px 26px!important;border:1px solid #29465e!important;border-radius:10px!important;background:linear-gradient(180deg,#0a1724,#071019)!important;text-align:center!important}
+.dna-strand-card.selected{border-color:#38a9ff!important;box-shadow:0 0 0 1px rgba(56,169,255,.28) inset,0 0 18px rgba(56,169,255,.16)!important}
+.dna-strand-card .dna-helix-stage.mini{width:88px!important;height:116px!important;margin:0 auto!important}
+.dna-strand-index{left:50%!important;top:8px!important;transform:translateX(-50%);font-size:7px!important;color:#d5e6f5!important;letter-spacing:.04em!important}
+.dna-strand-flaws{bottom:6px!important;color:#ffc94f!important;font-size:6px!important}
+
+/* selected section: wide horizontal helix */
+.dna-selected-detail{padding:14px 16px 16px!important;background:#07111b!important;border-top:1px solid #28445e!important}
+.dna-selected-head{max-width:none!important;align-items:center!important;padding:0 4px 8px!important}
+.dna-selected-head small{color:#5ea8ff!important;font-size:7px!important}.dna-selected-head b{display:block;margin-top:4px;font-size:16px!important;letter-spacing:.04em}.dna-selected-head code{font-size:10px!important;color:#9fd4ff!important;letter-spacing:.12em}
+.dna-large-helix{min-height:350px!important;height:350px!important;width:100%!important;max-width:none!important;margin:0!important;padding:18px 22px!important;border:1px solid #29465f!important;border-radius:12px!important;background:radial-gradient(circle at 50% 50%,rgba(36,106,161,.12),transparent 62%),#06101a!important;overflow:hidden!important;display:grid!important;place-items:center!important}
+.dna-helix-stage.large{position:relative;width:min(100%,920px)!important;height:270px!important;margin:auto!important}
+.dna-editor-svg.large{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.dna-editor-svg.large .dna-svg-backbone{stroke-width:5.5}
+.dna-editor-svg.large .dna-svg-rung{stroke-width:8}
+.dna-editor-svg.large .dna-svg-rung.missing{stroke-width:3}
+
+/* draggable hit areas precisely over the visible SVG rungs */
+.dna-rung-hit{position:absolute;left:var(--hit-x);top:var(--hit-y);height:var(--hit-h);width:20px;transform:translateX(-50%);cursor:grab;z-index:5;border-radius:8px;background:transparent;display:grid;place-items:center}
+.dna-rung-hit:hover{background:rgba(120,190,255,.08);box-shadow:0 0 0 1px rgba(100,190,255,.22) inset}
+.dna-rung-hit:active{cursor:grabbing}.dna-rung-hit i{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:18px;height:18px;border-radius:5px;background:#07111b;border:1px solid #355774;color:#cfe7fb;font:700 8px ui-monospace,monospace;font-style:normal;opacity:0;transition:opacity .12s}.dna-rung-hit:hover i{opacity:1}.dna-rung-hit.corrupt i{color:#ff7d86;border-color:#8d3a43}
+.dna-rung-missing-label{position:absolute;left:var(--hit-x);top:var(--hit-y);transform:translate(-50%,-50%);z-index:4;color:#8ea0b3;font:700 14px ui-monospace,monospace;pointer-events:none}
+.dna-large-helix.dna-drop-ready{border-color:#4bb8ff!important;box-shadow:inset 0 0 0 2px rgba(75,184,255,.15)}
+
+/* palette and stats under/alongside the selected helix, inspired by the mockup */
+.dna-selected-detail:after{content:'Drag colored rungs to move/remove them. Drop A / C / G / T / U onto the helix to fill a missing slot.';display:block;margin:10px auto 0;max-width:900px;color:#7891a8;font:8px ui-monospace,monospace;text-align:center;line-height:1.45}
+.dna-detail-note{display:none!important}
+
+/* Re-insert the palette as a compact dock at the bottom of the workbench through CSS layout. */
+.dna-workbench>.dna-base-palette{display:flex!important;order:3;border-top:1px solid #28445e;border-bottom:0!important;background:#081522!important;padding:10px 12px!important}
+.dna-workbench{display:flex;flex-direction:column}.dna-workbench>.dna-strand-field{order:1}.dna-workbench>.dna-selected-detail{order:2}.dna-workbench>.dna-base-palette{order:3}
+.dna-base-palette>span{color:#5ea8ff!important}.dna-palette-base{width:42px!important;height:30px!important;border-radius:6px!important;background:#0b1927!important}.dna-palette-base[data-palette-base="A"]{color:#8f6cff}.dna-palette-base[data-palette-base="C"]{color:#ffc94f}.dna-palette-base[data-palette-base="G"]{color:#5fe0a0}.dna-palette-base[data-palette-base="T"]{color:#4eb6ff}.dna-palette-base[data-palette-base="U"]{color:#ff5e68!important;border-color:#6e3137!important}
+
+@media(max-width:1050px){
+  .dna-strand-field{gap:5px!important;padding-left:6px!important;padding-right:6px!important}
+  .dna-strand-card{height:160px!important;min-height:160px!important;padding-left:2px!important;padding-right:2px!important}
+  .dna-strand-card .dna-helix-stage.mini{width:64px!important;height:105px!important}
+  .dna-large-helix{height:320px!important;min-height:320px!important}.dna-helix-stage.large{height:235px!important}
+}
+
+/* v25.3f mockup-aligned disease genetics layout */
+.dna-workbench:before{display:none!important}
+.dna-overview-title{padding:12px 14px 2px;color:#5ea8ff;font:700 8px ui-monospace,monospace;letter-spacing:.08em}
+.dna-strand-card{padding-bottom:34px!important}
+.dna-strand-count{position:absolute;left:50%;bottom:17px;transform:translateX(-50%);color:#c8d8e7;font:700 7px ui-monospace,monospace;white-space:nowrap}
+.dna-strand-flaws{bottom:5px!important}.dna-strand-flaws.good{color:#59dc92!important}.dna-strand-flaws.bad{color:#ffc94f!important}
+.dna-selected-grid{display:grid;grid-template-columns:minmax(0,1fr) 190px;border-top:1px solid #28445e;min-width:0}
+.dna-selected-grid .dna-selected-detail{border-top:0!important;min-width:0}
+.dna-palette-panel{border-left:1px solid #28445e;background:#08131f;padding:12px;min-width:0}
+.dna-palette-title{margin-bottom:10px;color:#5ea8ff;font:700 8px ui-monospace,monospace;letter-spacing:.06em}
+.dna-palette-panel .dna-base-palette{display:grid!important;grid-template-columns:1fr;gap:8px;padding:0!important;border:0!important;background:transparent!important}
+.dna-palette-panel .dna-base-palette>span{display:none!important}
+.dna-palette-panel .dna-palette-base{width:100%!important;height:42px!important;display:flex!important;align-items:center!important;justify-content:center!important;font-size:13px!important}
+.dna-palette-help{margin-top:12px;padding-top:12px;border-top:1px solid #23384d;color:#7891a8;font:8px/1.55 ui-monospace,monospace}.dna-palette-help b{color:#c9dced}.dna-palette-help span{display:block;margin-top:8px;color:#d9a7b7}
+.dna-strand-information{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.dna-strand-information>div{padding:8px 10px;border:1px solid #223a50;border-radius:8px;background:#091522}.dna-strand-information small{display:block;color:#6f899f;font:7px ui-monospace,monospace}.dna-strand-information b{display:block;margin-top:4px;color:#d5e7f6;font:700 11px ui-monospace,monospace}.dna-strand-information b.warn{color:#ff6b73}
+/* undo earlier bottom-dock palette rule */
+.dna-workbench>.dna-base-palette{display:none!important}.dna-workbench{display:block!important}
+@media(max-width:900px){.dna-selected-grid{grid-template-columns:1fr 150px}.dna-palette-panel{padding:8px}.dna-large-helix{height:290px!important;min-height:290px!important}.dna-helix-stage.large{height:215px!important}.dna-strand-information{gap:4px}.dna-strand-information>div{padding:6px}}
+
+/* Disease genetics needs real horizontal room; keep other editors at their original size. */
+#editorModal:has(#eDiseaseGenome) .editor-shell{
+  width:900px!important;
+  min-width:900px!important;
+  max-width:900px!important;
+}
+#editorModal:has(#eDiseaseGenome) .editor-main-card{
+  width:900px!important;
+  max-width:900px!important;
+  min-width:900px!important;
+  flex:0 0 900px!important;
+}
+@media(max-width:940px){
+  #editorModal:has(#eDiseaseGenome) .editor-shell{
+    width:calc(100vw - 24px)!important;
+    min-width:calc(100vw - 24px)!important;
+    max-width:calc(100vw - 24px)!important;
+  }
+  #editorModal:has(#eDiseaseGenome) .editor-main-card{
+    width:calc(100vw - 24px)!important;
+    max-width:calc(100vw - 24px)!important;
+    min-width:0!important;
+    flex:0 0 calc(100vw - 24px)!important;
+  }
+}
+
+/* ==========================================================
+   v25.3k — stable enlarged Gene Block layout
+   One layout, one canvas, no inherited SVG/helix sizing rules.
+   ========================================================== */
+.dna-selected-grid{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 180px!important;
+  align-items:stretch!important;
+  min-width:0!important;
+  width:100%!important;
+  overflow:hidden!important;
+}
+.dna-selected-grid .dna-selected-detail{
+  min-width:0!important;
+  width:100%!important;
+  padding:14px 16px 16px!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+}
+.dna-palette-panel{
+  width:180px!important;
+  min-width:180px!important;
+  max-width:180px!important;
+  box-sizing:border-box!important;
+}
+.dna-large-helix{
+  display:block!important;
+  position:relative!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  height:300px!important;
+  min-height:300px!important;
+  max-height:300px!important;
+  margin:0!important;
+  padding:14px!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+  border:1px solid #29465f!important;
+  border-radius:12px!important;
+  background:radial-gradient(circle at 50% 50%,rgba(36,106,161,.12),transparent 62%),#06101a!important;
+}
+.dna-large-helix .dna-enlarged-stage,
+.dna-large-helix .dna-canvas-stage{
+  position:relative!important;
+  display:block!important;
+  width:100%!important;
+  max-width:none!important;
+  height:270px!important;
+  min-height:270px!important;
+  max-height:270px!important;
+  margin:0 auto!important;
+  padding:0!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+  aspect-ratio:auto!important;
+  transform:none!important;
+  isolation:isolate!important;
+}
+.dna-large-helix .dna-enlarged-canvas{
+  position:absolute!important;
+  inset:0!important;
+  display:block!important;
+  width:100%!important;
+  height:270px!important;
+  max-width:100%!important;
+  margin:0!important;
+  padding:0!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:none!important;
+  z-index:2!important;
+}
+.dna-large-helix .dna-canvas-stage .dna-enlarged-hit,
+.dna-large-helix .dna-canvas-stage .dna-enlarged-missing{
+  z-index:4!important;
+}
+.dna-strand-information{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  min-width:0!important;
+}
+@media(max-width:1120px){
+  .dna-selected-grid{grid-template-columns:minmax(0,1fr) 160px!important}
+  .dna-palette-panel{width:160px!important;min-width:160px!important;max-width:160px!important}
+}
+@media(max-width:860px){
+  .dna-selected-grid{grid-template-columns:1fr!important;overflow:visible!important}
+  .dna-palette-panel{
+    width:100%!important;min-width:0!important;max-width:none!important;
+    border-left:0!important;border-top:1px solid #28445e!important;
+  }
+  .dna-palette-panel .dna-base-palette{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+  .dna-large-helix{height:280px!important;min-height:280px!important;max-height:280px!important}
+  .dna-large-helix .dna-enlarged-stage,
+  .dna-large-helix .dna-canvas-stage,
+  .dna-large-helix .dna-enlarged-canvas{height:250px!important;min-height:250px!important;max-height:250px!important}
+}
+@media(max-width:600px){
+  .dna-large-helix{height:250px!important;min-height:250px!important;max-height:250px!important;padding:10px!important}
+  .dna-large-helix .dna-enlarged-stage,
+  .dna-large-helix .dna-canvas-stage,
+  .dna-large-helix .dna-enlarged-canvas{height:228px!important;min-height:228px!important;max-height:228px!important}
+  .dna-strand-information{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+
+/* ===================== V25.3L PAINTER SYSTEM ===================== */
+.tool-option-hidden{display:none!important}
+.painter-rail-divider{display:block;height:1px;width:100%;background:#26364b;margin:4px 0}
+.painter-options-title{display:flex;flex-direction:column;gap:2px;padding-bottom:8px;border-bottom:1px solid #26364b;margin-bottom:4px}
+.painter-options-title span{font:700 7px/1.2 ui-monospace,monospace;letter-spacing:.14em;color:#6f829d}
+.painter-options-title b{font-size:11px;color:#e3edfb}
+.painter-option-note{display:flex;flex-direction:column;gap:3px;padding:8px;border:1px solid #26384f;border-radius:8px;background:#09131e}
+.painter-option-note b{font-size:9px;color:#dcecff}.painter-option-note small{font-size:7px;color:#7f93ad;line-height:1.45}
+
+/* Material rarity */
+.material-rarity-card{padding:12px 13px;border:1px solid #34465f;border-radius:11px;background:linear-gradient(135deg,#0b121d,#101522);display:flex;flex-direction:column;gap:8px}
+.material-rarity-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.material-rarity-head>div{display:flex;flex-direction:column;gap:2px}.material-rarity-head b{font-size:10px;color:#e8f1ff}.material-rarity-head small{font-size:7px;color:#8295af}.material-rarity-head strong{font:800 10px/1 ui-monospace,monospace;letter-spacing:.08em;padding:6px 8px;border:1px solid #40516b;border-radius:7px;color:#dbe9ff;background:#0a111b}
+.material-rarity-head strong[data-tier="divine"]{color:#fff1ad;border-color:#8e792c}.material-rarity-head strong[data-tier="mythic"]{color:#e8b8ff;border-color:#74448c}.material-rarity-head strong[data-tier="legendary"]{color:#ffc88b;border-color:#86582b}.material-rarity-head strong[data-tier="epic"]{color:#c9adff;border-color:#624b8a}.material-rarity-head strong[data-tier="rare"]{color:#91d5ff;border-color:#32678b}.material-rarity-head strong[data-tier="uncommon"]{color:#9ae0b3;border-color:#367452}.material-rarity-head strong[data-tier="common"]{color:#d2d8e1;border-color:#536175}
+.material-rarity-slider{width:100%;accent-color:#8fb9ff;direction:ltr}.material-rarity-axis{display:flex;justify-content:space-between;font:700 6.5px/1 ui-monospace,monospace;letter-spacing:.08em;color:#61738d}.material-rarity-comparison{min-height:32px;padding:8px 10px;border-left:2px solid #6f98d2;background:#08111b;color:#9fb3cc;font-size:8px;line-height:1.5}.material-rarity-inspect{padding:7px 8px;border-left:2px solid #6f98d2;background:#09111a;color:#9db2cc}
+
+/* 32×32 preview */
+.material-texture-mini{grid-template-columns:repeat(var(--material-preview-size,32),1fr)!important}
+
+/* Shared left tool rail */
+.painter-tool-rail{background:#08111b;border:1px solid #2d4059;border-radius:12px;padding:6px;display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;gap:5px!important;align-items:stretch!important}
+.painter-tool-rail button{width:40px!important;height:38px!important;min-width:40px!important;border-radius:8px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:4px!important;padding:0!important}
+.painter-tool-rail button span{display:none}
+.painter-tool-rail button.active{box-shadow:inset 0 0 0 1px currentColor,0 0 12px rgba(103,169,255,.12)}
+
+/* Symbol painter: original 256 canvas, new rails */
+.symbol-painter{display:grid!important;grid-template-columns:52px 256px minmax(150px,1fr)!important;grid-template-areas:"tools canvas options" "tools actions options"!important;gap:10px!important;align-items:start!important}
+.symbol-toolbar{grid-area:tools!important}.symbol-settings{grid-area:options!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:7px!important;padding:9px!important;border:1px solid #2b3d55!important;border-radius:11px!important;background:#08111b!important;min-width:0!important}
+.symbol-settings label{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:5px!important;padding:7px!important;border:1px solid #23354b!important;border-radius:7px!important;background:#0a131e!important}.symbol-settings .symbol-toggle{flex-direction:row!important;align-items:center!important}.symbol-settings input[type="range"]{width:100%!important}.symbol-settings output{color:#a9c8f5;font:700 8px ui-monospace,monospace}
+#symbolCanvas{grid-area:canvas!important;width:256px!important;height:256px!important;image-rendering:pixelated;border-radius:10px}.symbol-actions{grid-area:actions!important}.symbol-actions button{width:100%}
+
+/* Material painter: 32×32, roomy center canvas, contextual rail */
+.material-texture-panel{width:min(980px,calc(100vw - 420px))!important;flex:0 1 980px!important;max-width:980px!important}
+.painter-three-column.material-painter-layout{display:grid;grid-template-columns:52px minmax(360px,640px) 180px;gap:12px;align-items:start;min-height:0}
+.material-texture-canvas-wrap{min-width:0;display:flex;align-items:center;justify-content:center;border:1px solid #263b56;border-radius:12px;padding:8px;background:#060c13}
+.material-texture-canvas-wrap canvas{width:min(100%,640px)!important;height:auto!important;aspect-ratio:1!important;border:1px solid #334a68;border-radius:8px;background:repeating-conic-gradient(#111 0 25%,#171f28 0 50%) 50%/20px 20px;image-rendering:pixelated;touch-action:none}
+.material-texture-controls{display:flex!important;flex-direction:column;gap:8px;padding:9px;border:1px solid #2c3f58;border-radius:11px;background:#08111b;min-width:0}
+.material-texture-controls>label{display:flex;flex-direction:column;gap:5px;padding:7px;border:1px solid #23354b;border-radius:7px;background:#0a131e;color:#9fb0c7;font-size:8px}.material-texture-controls>label.life-check{flex-direction:row}.material-texture-controls input[type="range"]{width:100%}.material-texture-controls output{font:700 8px ui-monospace,monospace;color:#a8c8f5}
+
+/* Megastructure painter: same left / canvas / contextual right language */
+.mega-painter:not(.expanded){display:grid!important;grid-template-columns:52px minmax(0,1fr) 188px;grid-template-areas:"title title title" "tools workspace options" "tools note options";column-gap:10px;row-gap:8px;align-items:start}
+.mega-painter:not(.expanded)>.section-title-row{grid-area:title}.mega-painter:not(.expanded)>.mega-paint-toolbar{grid-area:tools!important}.mega-painter:not(.expanded)>.mega-paint-settings{grid-area:options!important}.mega-painter:not(.expanded)>.mega-paint-workspace{grid-area:workspace!important}.mega-painter:not(.expanded)>.side-note{grid-area:note!important}
+.mega-painter:not(.expanded)>.mega-height-settings{grid-column:3;grid-row:3;align-self:start;z-index:2}
+.mega-paint-settings.painter-options-rail{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:7px!important;padding:9px!important;border:1px solid #2c4059!important;border-radius:11px!important;background:#08111b!important}
+.mega-paint-settings.painter-options-rail label{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:5px!important;min-width:0!important;padding:7px!important;border:1px solid #23354b!important;border-radius:7px!important;background:#0a131e!important}.mega-paint-settings.painter-options-rail .mega-inline-toggle{flex-direction:row!important;align-items:center!important}.mega-paint-settings.painter-options-rail input[type="range"]{width:100%!important}.mega-paint-settings.painter-options-rail input[type="color"]{width:100%!important;height:28px!important}
+
+/* Expanded megastructure painter gets the same rail concept without changing canonical canvas geometry. */
+html body>.mega-painter.expanded{display:grid!important;grid-template-columns:52px minmax(0,1fr) 210px!important;grid-template-rows:auto minmax(0,1fr) auto!important;grid-template-areas:"title title title" "tools workspace options" "tools workspace note"!important;gap:12px!important;padding:16px!important;align-items:start!important}
+html body>.mega-painter.expanded>.section-title-row{grid-area:title!important}html body>.mega-painter.expanded>.mega-paint-toolbar{grid-area:tools!important;position:static!important;width:auto!important;max-width:none!important}html body>.mega-painter.expanded>.mega-paint-workspace{grid-area:workspace!important;position:static!important;min-width:0!important}html body>.mega-painter.expanded>.mega-paint-settings{grid-area:options!important;position:static!important;width:auto!important;max-width:none!important}html body>.mega-painter.expanded>.side-note{grid-area:note!important}html body>.mega-painter.expanded>.mega-height-settings{grid-column:3!important;grid-row:3!important;position:static!important;width:auto!important}
+
+@media(max-width:1100px){
+  .material-texture-panel{width:100%!important;max-width:none!important}.painter-three-column.material-painter-layout{grid-template-columns:52px minmax(300px,1fr) 165px}
+  .symbol-painter{grid-template-columns:52px 256px 150px!important}
+}
+@media(max-width:760px){
+  .painter-three-column.material-painter-layout{grid-template-columns:48px minmax(0,1fr);grid-template-areas:"tools canvas" "options options"}.material-texture-toolbar{grid-area:tools}.material-texture-canvas-wrap{grid-area:canvas}.material-texture-controls{grid-area:options;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .symbol-painter{grid-template-columns:48px minmax(0,256px)!important;grid-template-areas:"tools canvas" "options options" "actions actions"!important}.symbol-settings{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+
+/* Keep the expanded Material painter inside the editor instead of allowing its flex item to collapse. */
+#editorModal:has(.material-texture-panel:not(.hidden)) .editor-shell{
+  width:min(1380px,calc(100% - 24px))!important;
+  display:grid!important;
+  grid-template-columns:minmax(440px,560px) minmax(0,1fr)!important;
+  gap:12px!important;
+  align-items:start!important;
+}
+#editorModal:has(.material-texture-panel:not(.hidden)) .editor-main-card{width:auto!important;max-width:none!important;min-width:0!important}
+#editorModal:has(.material-texture-panel:not(.hidden)) .material-texture-panel{width:auto!important;max-width:none!important;min-width:0!important;flex:none!important}
+@media(max-width:1120px){
+  #editorModal:has(.material-texture-panel:not(.hidden)) .editor-shell{display:flex!important;flex-direction:column!important;width:min(760px,calc(100% - 20px))!important;overflow:auto!important}
+  #editorModal:has(.material-texture-panel:not(.hidden)) .material-texture-panel{width:100%!important;max-height:none!important}
+}
+
+/* Explicit state class avoids flex collapse and keeps the painter modal stable. */
+#editorModal .editor-shell.material-painter-open{
+  width:min(1380px,calc(100% - 24px))!important;
+  max-width:1380px!important;
+  display:grid!important;
+  grid-template-columns:minmax(430px,550px) minmax(0,1fr)!important;
+  gap:12px!important;
+  align-items:start!important;
+  max-height:calc(100vh - 24px)!important;
+  overflow:hidden!important;
+}
+#editorModal .editor-shell.material-painter-open>.editor-main-card{width:auto!important;max-width:none!important;min-width:0!important;height:100%!important;max-height:calc(100vh - 24px)!important}
+#editorModal .editor-shell.material-painter-open>.material-texture-panel{width:auto!important;max-width:none!important;min-width:0!important;max-height:calc(100vh - 24px)!important;overflow:auto!important}
+@media(max-width:1120px){
+ #editorModal .editor-shell.material-painter-open{display:flex!important;flex-direction:column!important;width:min(760px,calc(100% - 20px))!important;max-width:760px!important;max-height:calc(100vh - 20px)!important;overflow:auto!important;align-items:stretch!important}
+ #editorModal .editor-shell.material-painter-open>.editor-main-card{width:100%!important;max-height:none!important;height:auto!important;flex:0 0 auto!important}
+ #editorModal .editor-shell.material-painter-open>.material-texture-panel{width:100%!important;max-height:none!important;overflow:visible!important;flex:0 0 auto!important}
+}
+
+/* ==========================================================
+   V26 — detached painter/crafting panels + stable menu dragging
+   ========================================================== */
+
+/* Generic drag transform for modal cards and detached viewport panels. */
+.draggable-ui-panel{
+  --panel-drag-x:0px;
+  --panel-drag-y:0px;
+}
+.modal .modal-card.draggable-ui-panel{
+  transform:translate(var(--panel-drag-x),var(--panel-drag-y)) !important;
+}
+
+/* Detached side workspaces are viewport-level entities. They never
+   participate in .editor-shell sizing, so opening one cannot squash the
+   normal node editor. */
+body > .detached-editor-panel{
+  position:fixed !important;
+  right:18px !important;
+  top:66px !important;
+  left:auto !important;
+  bottom:auto !important;
+  margin:0 !important;
+  transform:translate(var(--panel-drag-x,0px),var(--panel-drag-y,0px)) !important;
+  z-index:2147482500 !important;
+  box-sizing:border-box !important;
+  max-width:calc(100vw - 36px) !important;
+  max-height:calc(100dvh - 84px) !important;
+  overflow:auto !important;
+  pointer-events:auto !important;
+}
+body > .detached-editor-panel.ui-panel-dragging{
+  z-index:2147483100 !important;
+}
+body > #materialTexturePanel{
+  width:min(980px,calc(100vw - 36px)) !important;
+  min-width:min(720px,calc(100vw - 36px)) !important;
+}
+body > #craftingGraphPanel{
+  width:min(760px,calc(100vw - 36px)) !important;
+  min-width:min(620px,calc(100vw - 36px)) !important;
+}
+body > #materialTexturePanel .material-texture-panel-head,
+body > #craftingGraphPanel .crafting-graph-head{
+  position:sticky;
+  top:0;
+  z-index:20;
+  padding:4px 2px 8px;
+  background:linear-gradient(180deg,#081019 82%,rgba(8,16,25,0));
+}
+
+/* Old :has() shell-expansion rules are intentionally neutralized. */
+#editorModal:has(.material-texture-panel:not(.hidden)) .editor-shell,
+#editorModal:has(.crafting-graph-panel:not(.hidden)) .editor-shell,
+#editorModal .editor-shell.material-painter-open,
+#editorModal .editor-shell.crafting-panel-open{
+  width:650px !important;
+  min-width:650px !important;
+  max-width:650px !important;
+  display:block !important;
+  overflow:visible !important;
+}
+#editorModal:has(.material-texture-panel:not(.hidden)) .editor-main-card,
+#editorModal:has(.crafting-graph-panel:not(.hidden)) .editor-main-card{
+  width:650px !important;
+  max-width:650px !important;
+  flex-basis:auto !important;
+}
+#editorModal:has(.crafting-graph-panel:not(.hidden)) #editorBody{
+  display:block !important;
+}
+#editorModal:has(.crafting-graph-panel:not(.hidden)) #editorBody > .full{
+  grid-column:auto !important;
+}
+
+/* Material Painter: roomy/full-featured panel, never a clipped child. */
+body > #materialTexturePanel .painter-three-column.material-painter-layout{
+  grid-template-columns:58px minmax(420px,1fr) 196px !important;
+  gap:12px !important;
+  width:100% !important;
+}
+body > #materialTexturePanel .material-texture-canvas-wrap{
+  min-width:0 !important;
+  overflow:hidden !important;
+}
+body > #materialTexturePanel #materialTextureCanvas{
+  width:min(100%,680px) !important;
+  max-width:680px !important;
+}
+
+/* Compact painters stay compact. Full side rails belong in expanded views. */
+.mega-painter:not(.expanded){
+  display:flex !important;
+  flex-direction:column !important;
+  gap:8px !important;
+}
+.mega-painter:not(.expanded) > .mega-paint-toolbar.painter-tool-rail{
+  order:2;
+  width:100% !important;
+  display:flex !important;
+  flex-direction:row !important;
+  flex-wrap:wrap !important;
+  padding:5px !important;
+}
+.mega-painter:not(.expanded) > .mega-paint-toolbar.painter-tool-rail button{
+  width:34px !important;
+  min-width:34px !important;
+  height:32px !important;
+}
+.mega-painter:not(.expanded) > .mega-paint-workspace{order:3;width:100% !important}
+.mega-painter:not(.expanded) > .mega-paint-settings.painter-options-rail,
+.mega-painter:not(.expanded) > .mega-height-settings{
+  order:4;
+  width:100% !important;
+  display:flex !important;
+  flex-direction:row !important;
+  flex-wrap:wrap !important;
+  gap:5px !important;
+  padding:6px !important;
+}
+.mega-painter:not(.expanded) > .mega-paint-settings.painter-options-rail label{
+  flex:1 1 120px !important;
+  min-width:110px !important;
+  padding:5px 6px !important;
+}
+.mega-painter:not(.expanded) > .side-note{order:5}
+
+/* Symbol editor: keep the classic compact footprint; tools do not force a
+   permanently wide three-column layout. */
+.symbol-painter{
+  display:grid !important;
+  grid-template-columns:256px minmax(0,1fr) !important;
+  grid-template-areas:
+    "canvas options"
+    "tools options"
+    "actions actions" !important;
+  gap:8px !important;
+}
+.symbol-toolbar.painter-tool-rail{
+  grid-area:tools !important;
+  display:flex !important;
+  flex-direction:row !important;
+  flex-wrap:wrap !important;
+  width:256px !important;
+}
+.symbol-toolbar.painter-tool-rail button{
+  width:32px !important;
+  min-width:32px !important;
+  height:30px !important;
+}
+.symbol-settings{grid-area:options !important;min-width:145px !important}
+
+/* Make drag affordance visible on all conventional modals, not just editorModal. */
+.modal .modal-head.drag-handle::before,
+body > .detached-editor-panel .drag-handle::before{
+  content:"⋮⋮";
+  display:inline-block;
+  margin-right:7px;
+  color:#7188a4;
+  letter-spacing:-2px;
+  font-size:11px;
+}
+
+@media(max-width:900px){
+  body > .detached-editor-panel{
+    left:10px !important;
+    right:10px !important;
+    top:54px !important;
+    width:auto !important;
+    min-width:0 !important;
+    max-width:none !important;
+    max-height:calc(100dvh - 64px) !important;
+  }
+  body > #materialTexturePanel .painter-three-column.material-painter-layout{
+    grid-template-columns:52px minmax(280px,1fr) 170px !important;
+  }
+}
+@media(max-width:680px){
+  #editorModal:has(.material-texture-panel:not(.hidden)) .editor-shell,
+  #editorModal:has(.crafting-graph-panel:not(.hidden)) .editor-shell,
+  #editorModal .editor-shell.material-painter-open,
+  #editorModal .editor-shell.crafting-panel-open{
+    width:calc(100vw - 20px) !important;
+    min-width:0 !important;
+    max-width:650px !important;
+  }
+  #editorModal:has(.material-texture-panel:not(.hidden)) .editor-main-card,
+  #editorModal:has(.crafting-graph-panel:not(.hidden)) .editor-main-card{
+    width:100% !important;
+    max-width:none !important;
+  }
+  body > #materialTexturePanel .painter-three-column.material-painter-layout{
+    grid-template-columns:48px minmax(0,1fr) !important;
+    grid-template-areas:"tools canvas" "options options" !important;
+  }
+  body > #materialTexturePanel .material-texture-toolbar{grid-area:tools}
+  body > #materialTexturePanel .material-texture-canvas-wrap{grid-area:canvas}
+  body > #materialTexturePanel .material-texture-controls{grid-area:options}
+  .symbol-painter{
+    grid-template-columns:256px !important;
+    grid-template-areas:"canvas" "tools" "options" "actions" !important;
+  }
+}
+
+/* V26 drag completion: create picker + fullscreen megastructure painter. */
+#createMenu.draggable-ui-panel{
+  transform:translateX(-50%) translate(var(--panel-drag-x,0px),var(--panel-drag-y,0px)) !important;
+}
+#createMenu > .eyebrow.drag-handle{
+  cursor:grab !important;
+  padding:3px 0 7px;
+}
+#createMenu > .eyebrow.drag-handle::before{
+  content:"⋮⋮";
+  margin-right:7px;
+  color:#7188a4;
+  letter-spacing:-2px;
+}
+html body > .mega-painter.expanded.draggable-ui-panel{
+  transform:translate(-50%,-50%) translate(var(--panel-drag-x,0px),var(--panel-drag-y,0px)) !important;
+}
+
+/* ===== V26 ===== */
+#minimizedEditorsTray{position:fixed;left:10px;top:54px;z-index:10050;display:flex;flex-direction:column;gap:6px;max-width:260px}
+.minimized-editor-chip{background:#101927;border:1px solid #4f6785;color:#dbe9ff;border-radius:8px;padding:7px 10px;text-align:left;box-shadow:0 6px 20px #0008}
+.craft-direct-toggle{display:flex;align-items:center;gap:6px;font-size:11px}
+.crafting-failure{padding:8px 12px;border-top:1px solid #27384b}.crafting-failure label{display:grid;gap:5px;font-size:11px}.crafting-failure input{min-width:260px}
+.craft-link-label{fill:#f6d66c;font-size:10px;text-anchor:middle;paint-order:stroke;stroke:#07111d;stroke-width:3px}
+.craft-node.temporary{border-style:dashed!important}
+.v26-brush-preview{position:absolute;width:12px;height:12px;border:1px solid #fff;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);z-index:50;box-shadow:0 0 0 1px #0008}
+[data-hub-disabled="true"]{opacity:.55}
+
+/* ===== V26.1 feature-complete pass ===== */
+.editor-window-actions{display:flex;gap:6px;align-items:center}
+#minimizedEditorsTray{position:fixed;left:10px;top:54px;z-index:2147483600;display:flex;flex-direction:column;gap:6px;max-width:260px;pointer-events:none}
+.minimized-editor-chip{pointer-events:auto;display:flex;flex-direction:column;gap:2px;text-align:left;background:#0d1724;border:1px solid #425c79;color:#e9f3ff;border-radius:9px;padding:8px 10px;box-shadow:0 8px 24px #0008}.minimized-editor-chip small{font-size:9px;color:#8da1ba}
+.fail-output-control{border:1px solid #4d2228;border-radius:10px;background:#130b0f;padding:8px}.fail-output-plus{display:inline-flex;align-items:center;gap:7px;border-color:#9d3543!important;color:#ff8d9d!important;background:#240e14!important;font-weight:800}.fail-output-plus span{font-size:18px;line-height:1}.fail-output-plus.open,.fail-output-control.open .fail-output-plus{box-shadow:0 0 0 1px #d94a5c66 inset}.fail-output-body{margin-top:8px}.fail-output-body textarea{width:100%;border-color:#6f2b35!important;background:#170d11!important}.fail-output-body small{display:block;color:#b67b85;margin-top:4px}
+.category-branch-field small{display:block;color:#7890aa;margin-top:4px}
+.creator-category-item{grid-template-columns:minmax(120px,1fr) minmax(100px,.8fr) minmax(120px,1fr) 44px auto!important}.creator-category-item .cc-parent{min-width:120px}
+.crafting-insert-bar{display:grid;grid-template-columns:minmax(170px,1fr) auto minmax(210px,1fr) auto;gap:7px;padding:8px 10px;border-bottom:1px solid #24374c}.crafting-link-mode{display:flex;border:1px solid #30465f;border-radius:8px;overflow:hidden}.crafting-link-mode button{border:0!important;border-radius:0!important}.crafting-link-mode button.active{background:#183b52!important;color:#aee9ff!important}.crafting-graph-toolbar{flex-wrap:wrap!important}.crafting-graph-toolbar #craftingProcessName{min-width:190px;flex:1}.craft-node.link-picked{box-shadow:0 0 0 3px #7de4ff,0 0 22px #54cfff88!important}.craft-node.temporary{border-style:dashed!important}.craft-node.temporary em{background:#725c1b!important;color:#ffe69a!important}.crafting-fail-control{padding:9px 12px;border-top:1px solid #27394d}.craft-link-label{fill:#ffd966;font:700 10px ui-monospace,monospace;text-anchor:middle;paint-order:stroke;stroke:#07111d;stroke-width:4px;stroke-linejoin:round}
+.symbol-canvas-stack{grid-area:canvas;position:relative;width:256px;height:256px}.symbol-canvas-stack canvas{position:absolute;inset:0;width:256px;height:256px}.symbol-canvas-stack #symbolOverlayCanvas{pointer-events:none;z-index:2}.symbol-painter>#symbolCanvas{grid-area:unset!important}
+.painter-options-rail button[data-symbol-tools],.painter-options-rail button[data-material-tools],.mega-paint-settings button[data-mega-tools]{width:100%}
+@media(max-width:900px){.crafting-insert-bar{grid-template-columns:1fr auto}.creator-category-item{grid-template-columns:1fr 1fr!important}.creator-category-item .cc-parent{grid-column:1/-1}}
+
+/* ===== v26.2 Family Trees + Material Variants ===== */
+.life-family-wrap{border:1px solid #33465d;background:#0a1420;border-radius:10px;padding:10px;display:grid;gap:9px}
+.life-family-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.life-family-head>div{display:grid;gap:2px}.life-family-head small{color:#8292a8}
+.life-family-enable{display:flex!important;align-items:center;gap:6px!important;width:auto!important}
+.life-family-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.life-family-fields>label{display:grid;gap:5px}
+.life-family-children{grid-column:1/-1;border-top:1px solid #26374b;padding-top:8px;display:grid;gap:5px}
+#eFamilyChildrenPreview{display:flex;gap:5px;flex-wrap:wrap}
+#eFamilyChildrenPreview span{border:1px solid #435b76;background:#111e2d;border-radius:999px;padding:3px 7px;font-size:11px}
+.material-variant-note{border-left:2px solid #7c8fff;padding:6px 9px;background:#101827;border-radius:5px}
+.selection-family{border-left:2px solid #7c8fff;padding-left:9px;margin:7px 0}
+@media(max-width:720px){.life-family-fields{grid-template-columns:1fr}}
+
+/* ===== v26.3 ===== */
+#editorModal .editor-main-card{padding-left:72px!important}
+#editorModal .hub-role-rail{left:10px!important;top:118px!important;transform:none!important;position:absolute!important}
+@media(max-width:760px){#editorModal .editor-main-card{padding-left:58px!important}#editorModal .hub-role-rail{left:4px!important;top:110px!important}}
+.crafting-insert-bar{grid-template-columns:minmax(180px,1fr) 74px auto minmax(220px,1.2fr) auto!important}
+.crafting-qty{display:flex!important;align-items:center!important;gap:4px!important;font-size:12px!important}.crafting-qty input{width:54px!important}
+.special-editor-launcher{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid #334a66;border-radius:10px;padding:10px;background:#0b1522}.special-editor-launcher>div{display:grid;gap:3px}.special-editor-launcher small{color:#8294aa}
+.language-graph-panel{position:fixed;z-index:10020;right:18px;top:22px;width:min(880px,calc(100vw - 36px));height:min(720px,calc(100vh - 44px));background:#07111c;border:1px solid #36506e;border-radius:14px;box-shadow:0 22px 70px #000b;display:flex;flex-direction:column;overflow:hidden}
+.language-graph-head{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid #26394e;cursor:move}.language-graph-head h3{margin:2px 0 0}.special-editor-window-actions{display:flex;gap:6px}
+.language-graph-help{margin:8px 12px;color:#8fa2b8;font-size:12px}.language-graph-toolbar{display:grid;grid-template-columns:110px minmax(130px,1fr) auto auto auto minmax(120px,1fr) auto;gap:6px;padding:8px 12px;align-items:center}
+.language-graph-toolbar input,.language-graph-toolbar select{min-width:0}
+.language-graph-canvas{position:relative;flex:1;min-height:340px;margin:0 12px 8px;border:1px solid #263c55;border-radius:12px;overflow:hidden;background:radial-gradient(circle at 50% 50%,#12243b 0,#09131f 42%,#050b12 100%)}
+#languageGraphSvg,#languageGraphNodes{position:absolute;inset:0;width:100%;height:100%}#languageGraphSvg{pointer-events:none}#languageGraphSvg line{stroke:#7188a8;stroke-width:1.5}#languageGraphSvg text{fill:#aabbd1;font:10px system-ui;text-anchor:middle;paint-order:stroke;stroke:#07111c;stroke-width:3px}
+.language-graph-node{position:absolute;transform:translate(-50%,-50%);width:82px;height:82px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:7px;background:#101d2d;border:1px solid #587294;box-shadow:0 5px 18px #0007;cursor:pointer}.language-graph-node small{font-size:8px;color:#7e94af}.language-graph-node b{font-size:11px;max-width:70px;overflow:hidden;text-overflow:ellipsis}.language-graph-node.main-orb{width:150px;height:150px;border:2px solid #a9c9ff;background:radial-gradient(circle,#416da9 0,#1c3d69 45%,#0a1727 75%);box-shadow:0 0 26px #5e9cff66,0 0 70px #3d7bd533}.language-graph-node.main-orb b{font-size:17px;max-width:120px}.language-graph-node.link-picked{outline:3px solid #ffd76b}.language-graph-node.selected{box-shadow:0 0 0 3px #fff4,0 5px 18px #0007}
+.language-graph-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid #26394e;font-size:11px;color:#8294aa}
+@media(max-width:900px){.language-graph-toolbar{grid-template-columns:1fr 1fr auto}.crafting-insert-bar{grid-template-columns:1fr 70px auto!important}.crafting-insert-bar #craftingTemporaryInput{grid-column:1/3}}
+
+/* ===== v26.4 floating role controller + focusable editors ===== */
+#editorModal .editor-main-card{padding-left:18px!important}
+#editorModal .hub-role-rail{position:relative!important;left:auto!important;top:auto!important;transform:none!important}
+.hub-role-panel{position:fixed;z-index:10045;left:18px;top:118px;width:176px;padding:0;background:#07111c;border:1px solid #3b5878;border-radius:13px;box-shadow:0 16px 50px #000a;overflow:visible}
+.hub-role-panel-head{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-bottom:1px solid #263c53;cursor:move}.hub-role-panel-head>div{display:grid;gap:1px}.hub-role-panel-head b{font-size:12px}
+.hub-role-panel .hub-role-rail{position:relative!important;left:auto!important;top:auto!important;width:150px!important;height:192px!important;margin:10px auto 4px!important;transform:none!important}
+.hub-role-panel-help{display:block;padding:0 10px 10px;color:#7890a8;line-height:1.35}
+.detached-editor-maximized{position:fixed!important;left:10px!important;right:auto!important;top:10px!important;width:calc(100vw - 20px)!important;height:calc(100vh - 20px)!important;max-width:none!important;max-height:none!important;z-index:10120!important;border-radius:12px!important;transform:none!important}
+.detached-editor-maximized .language-graph-canvas,.detached-editor-maximized .crafting-graph-canvas{min-height:0!important;flex:1!important}
+.detached-focus-btn{font-size:15px!important}
+@media(max-width:700px){.hub-role-panel{left:8px;top:78px;width:158px}.hub-role-panel .hub-role-rail{width:138px!important}}
+
+/* ============================ V27 ============================ */
+.place-model-launcher{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1px solid #39516c;border-radius:10px;background:#0a1521;padding:10px}.place-model-launcher>div{display:grid;gap:4px}.place-model-launcher>div:last-child{justify-items:end}.place-model-launcher small,.place-model-launcher span{color:#8296ae}
+.place-model-panel{position:fixed;z-index:10050;right:18px;top:18px;width:min(1040px,calc(100vw - 36px));height:min(720px,calc(100vh - 36px));background:#07111c;border:1px solid #3a5879;border-radius:14px;box-shadow:0 24px 80px #000c;display:flex;flex-direction:column;overflow:hidden}.place-model-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #263b52;cursor:move}.place-model-head h3{margin:2px 0}.place-model-toolbar{display:flex;gap:7px;align-items:center;padding:8px 12px;border-bottom:1px solid #24384d}.place-model-main{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:10px;min-height:0;flex:1;padding:10px}.place-model-main canvas{width:100%;height:100%;min-height:380px;border:1px solid #29445e;border-radius:10px}.place-part-inspector{display:grid;align-content:start;gap:8px;border-left:1px solid #263b52;padding-left:10px}.place-part-inspector label{display:grid;gap:4px;font-size:11px}.special-editor-savebar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 12px;border-top:1px solid #263b52;color:#8397ad;font-size:11px}
+.surface-view-panel{position:fixed;inset:0;z-index:12000;background:#03070c;display:flex;flex-direction:column}.surface-view-head{height:70px;display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid #26394e;background:#07111c}.surface-view-head h2{margin:1px 0}.surface-view-head>div:last-child{display:flex;gap:8px}.surface-view-stage{position:relative;flex:1;min-height:0}.surface-view-stage canvas{display:block;width:100%;height:100%;cursor:grab}.surface-help{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);padding:7px 12px;border:1px solid #ffffff20;border-radius:999px;background:#07111ccc;color:#dceaff;font-size:11px;pointer-events:none}
+.disease-strand-side-panel{position:fixed;z-index:10055;right:16px;top:90px;width:min(430px,calc(100vw - 32px));max-height:calc(100vh - 110px);overflow:auto;background:#07111c;border:1px solid #425b76;border-radius:13px;box-shadow:0 18px 60px #000b}.disease-strand-side-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:9px 10px;background:#091521;border-bottom:1px solid #2b4057;cursor:move}.disease-strand-side-head>div{display:grid}.disease-strand-side-panel #diseaseStrandSideBody{padding:10px}.dna-base-palette-inline{margin-top:8px}
+@media(max-width:800px){.place-model-main{grid-template-columns:1fr}.place-part-inspector{border-left:0;border-top:1px solid #263b52;padding-left:0;padding-top:8px}.place-model-toolbar{flex-wrap:wrap}.disease-strand-side-panel{width:calc(100vw - 20px);right:10px}}
+
+/* v27.1: Surface is part of the existing map, never a separate overlay. */
+#surfaceViewPanel{display:none!important}
+
+/* ===== v27.1 corrections ===== */
+.creator-category-hierarchy-tools{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;margin-bottom:8px;border:1px solid #334d69;border-radius:10px;background:#091521}.creator-category-hierarchy-tools>div{display:grid;gap:3px}.creator-category-hierarchy-tools small{color:#8295ac}
+.category-hierarchy-panel{position:fixed;z-index:10100;right:20px;top:28px;width:min(720px,calc(100vw - 40px));max-height:calc(100vh - 56px);display:flex;flex-direction:column;background:#07111c;border:1px solid #3a5878;border-radius:14px;box-shadow:0 24px 80px #000c;overflow:hidden}.category-hierarchy-head{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #263b52;cursor:move}.category-hierarchy-head h3{margin:2px 0}.category-hierarchy-panel>p{padding:0 12px;color:#8ba0b8}.category-hierarchy-rows{overflow:auto;padding:8px 12px;display:grid;gap:7px}.category-hierarchy-row{display:grid;grid-template-columns:18px minmax(120px,1fr) auto minmax(180px,1fr);gap:8px;align-items:center;border:1px solid #263b52;border-radius:8px;padding:8px;background:#0a1521}.category-hierarchy-swatch{width:14px;height:14px;border-radius:50%;box-shadow:0 0 8px currentColor}.category-hierarchy-row>span:nth-child(3){color:#8294aa;font-size:11px}
+.place-model-canvas-wrap{position:relative;min-height:0}.place-model-camera-help{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);padding:5px 9px;border:1px solid #ffffff20;border-radius:999px;background:#07111cce;color:#dce9f8;font-size:10px;pointer-events:none;white-space:nowrap}.place-part-size-readout{border:1px solid #314962;border-radius:8px;padding:8px;background:#0b1724;color:#a9bfd7}.place-part-size-readout b{color:#fff}
+@media(max-width:720px){.category-hierarchy-row{grid-template-columns:18px 1fr}.category-hierarchy-row>span:nth-child(3),.category-hierarchy-row select{grid-column:2}.place-model-camera-help{white-space:normal;width:85%;text-align:center}}
+
+
+/* ============================ V28 REAL 3D MODELLER ============================ */
+.scene3d-panel{
+  position:fixed; z-index:10160; left:18px; top:18px;
+  width:min(1220px,calc(100vw - 36px)); height:min(820px,calc(100vh - 36px));
+  background:#070c12; border:1px solid #34465a; border-radius:14px;
+  box-shadow:0 26px 90px #000d; display:flex; flex-direction:column; overflow:hidden;
+}
+.scene3d-head{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid #263646;background:#0a1119;cursor:move}
+.scene3d-head h3{margin:2px 0}.scene3d-head-actions{display:flex;align-items:center;gap:6px}.scene3d-head-actions>span{font-size:10px;color:#91a4ba;border:1px solid #2d4055;padding:4px 7px;border-radius:999px}
+.scene3d-toolbar{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid #223446;background:#0b131c;flex-wrap:wrap}
+.scene3d-toolbar label{display:flex;align-items:center;gap:5px;font-size:11px}.scene3d-toolbar select{min-width:110px}.scene3d-sep{width:1px;height:26px;background:#2a3c4e;margin:0 3px}
+.scene3d-main{min-height:0;flex:1;display:grid;grid-template-columns:minmax(0,1fr) 250px}
+.scene3d-viewport{position:relative;min-width:0;min-height:0;background:#111;overflow:hidden}
+#scene3DCanvas,#scene3DGizmo{position:absolute;inset:0;width:100%;height:100%;display:block}
+#scene3DCanvas{cursor:default;outline:none}
+#scene3DGizmo{pointer-events:none}
+.scene3d-corner-help{position:absolute;left:10px;bottom:10px;display:grid;gap:1px;background:#07101bcf;border:1px solid #ffffff1c;border-radius:8px;padding:7px 9px;color:#9fb2c7;font-size:9px;pointer-events:none}.scene3d-corner-help b{color:#eef7ff;font-size:10px}
+.scene3d-inspector{overflow:auto;background:#09111a;border-left:1px solid #26394d;padding:8px;display:grid;align-content:start;gap:8px}
+.scene3d-inspector section{border:1px solid #27394b;border-radius:9px;background:#0b1520;padding:8px;display:grid;gap:6px}
+.scene3d-section-title{display:flex;justify-content:space-between;gap:8px;align-items:center;font-weight:700;font-size:11px;color:#e5eff9}.scene3d-section-title span{font-weight:500;color:#8fa4bb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scene3d-inspector label{display:grid;gap:3px;font-size:10px;color:#8fa2b8}.scene3d-inspector input,.scene3d-inspector select{min-width:0}
+.scene3d-xyz{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.scene3d-xyz label{min-width:0}.scene3d-xyz input{width:100%;box-sizing:border-box}
+.scene3d-dimensions{border:1px solid #30465d;background:#07101a;border-radius:7px;padding:7px;color:#9eb0c3;font-size:10px}.scene3d-dimensions b{color:#fff}
+.scene3d-button-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}.scene3d-button-grid .danger{grid-column:1/-1}
+.inline-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:4px!important}.inline-check input{width:auto!important}
+#sceneRepeatControls.disabled{opacity:.38;pointer-events:none}
+.scene3d-panel .special-editor-savebar{background:#09121c}
+.scene3d-panel.detached-editor-maximized{width:calc(100vw - 20px)!important;height:calc(100vh - 20px)!important}
+
+/* Always-on category sidebar */
+.universal-category-panel{
+  position:fixed;z-index:10048;right:14px;top:88px;width:min(310px,calc(100vw - 28px));
+  max-height:calc(100vh - 108px);background:#07111c;border:1px solid #3a5674;border-radius:12px;
+  box-shadow:0 16px 55px #000a;overflow:hidden;display:flex;flex-direction:column;
+}
+.universal-category-head{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-bottom:1px solid #2a4057;cursor:move;background:#091521}.universal-category-head>div{display:grid}.universal-category-head>span{color:#88a0ba;font-size:10px}
+.universal-category-body{padding:9px;overflow:auto;display:grid;gap:8px}.universal-category-body>label{display:grid;gap:4px;font-size:10px;color:#91a5ba}.universal-category-body>small{color:#7890a8;line-height:1.4}
+.universal-category-path{padding:7px 8px;border-radius:7px;background:#0d1b2a;border:1px solid #304a64;color:#cde6ff;font-size:11px;word-break:break-word}
+.universal-category-all{border-top:1px solid #263b50;padding-top:7px;display:grid;gap:5px}.universal-category-all>div:first-child{display:flex;justify-content:space-between;color:#a9bdd2;font-size:10px}
+#universalCategoryAllRows{display:grid;gap:4px;max-height:250px;overflow:auto}.universal-category-row{display:grid!important;grid-template-columns:minmax(80px,1fr) minmax(105px,1.2fr)!important;gap:5px!important;align-items:center;border:1px solid #24384c;border-radius:6px;padding:5px!important;background:#091522}.universal-category-row b{font-size:10px;overflow:hidden;text-overflow:ellipsis}.universal-category-row select{min-width:0;font-size:9px;padding:4px}
+.place-model-launcher .primary{white-space:nowrap}
+
+@media(max-width:900px){
+  .scene3d-main{grid-template-columns:1fr}
+  .scene3d-inspector{position:absolute;right:8px;top:8px;bottom:8px;width:225px;z-index:4;background:#09111aee;border:1px solid #334b64;border-radius:10px}
+  .scene3d-corner-help{max-width:220px}
+}
+@media(max-width:650px){
+  .scene3d-inspector{display:none}
+  .scene3d-panel{left:6px;top:6px;width:calc(100vw - 12px);height:calc(100vh - 12px)}
+  .universal-category-panel{right:6px;top:70px;width:250px}
+}
+
+.scene3d-outliner{display:grid;gap:3px;max-height:150px;overflow:auto}
+.scene3d-outliner-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:5px;align-items:center;border:1px solid #26394b;border-radius:6px;padding:4px;background:#08121c;cursor:pointer}
+.scene3d-outliner-row.active{border-color:#769ac0;background:#102033}
+.scene3d-outliner-row span{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.scene3d-outliner-row small{font-size:8px;color:#75889d}.scene3d-eye{width:22px!important;height:20px!important;padding:0!important;font-size:10px!important}
+
+
+/* ============================ V28.1 WEBGL SURFACE VIEW ============================ */
+.planet-stage{position:relative!important;overflow:hidden}
+.surface-webgl-layer,.surface-webgl-hud{
+  position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none
+}
+.surface-webgl-layer{z-index:2;background:#7aa9cd}
+.surface-webgl-hud{z-index:3;background:transparent}
+.planet-stage .planet-hint,.planet-stage .planet-tooltip{z-index:5}
+
+/* ============================ V28.2 PLACE / REPETITION ============================ */
+.scene-repeat-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:5px}
+#sceneRepeatBake{font-weight:750}
+#sceneRepeatAgain{border-style:dashed}
+
+.place-icon-hint{display:flex!important;justify-content:space-between;align-items:center;gap:10px}
+.place-icon-hint button{white-space:nowrap}
+
+#sceneRepeatControls.repeat-off>label,#sceneRepeatControls.repeat-off>[data-repeat-mode]{opacity:.42}
+#sceneRepeatControls.repeat-off .scene-repeat-actions{opacity:1;pointer-events:auto}
+
+/* ============================ V28.3 PHYSICAL PLACE VIEW ============================ */
+#togglePlaceCaptions.active{box-shadow:inset 0 0 0 1px rgba(135,211,255,.55);background:rgba(90,170,225,.14)}
+.place-population-card{border:1px solid rgba(120,170,220,.22);border-radius:12px;padding:12px;background:rgba(7,14,24,.34);display:grid;gap:9px}
+.place-population-head small{display:block;color:#8fa7bd;margin-top:3px}
+.place-structure-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:5px;max-height:180px;overflow:auto;padding:6px;border:1px solid rgba(120,170,220,.15);border-radius:9px}
+.place-structure-choice{display:flex!important;align-items:center;gap:6px!important;padding:5px 7px!important;background:rgba(255,255,255,.025);border-radius:7px}
+.place-structure-choice input{width:auto!important}
+
+/* ============================ V28.4 MODELLER QOL / TEXTURES ============================ */
+.scene3d-align-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px}
+.scene3d-align-grid select{min-width:0;font-size:9px}
+.scene3d-texture-box{display:grid;gap:6px;margin-top:9px;padding:8px;border:1px solid rgba(115,170,220,.2);border-radius:9px;background:rgba(5,12,20,.32)}
+.scene3d-texture-box small{display:block;color:#8299ae;margin-top:2px}
+.scene-texture-drop{border:1px dashed rgba(130,190,235,.42);border-radius:8px;padding:12px 7px;text-align:center;color:#9bb2c7;background:rgba(40,100,145,.06);transition:.12s}
+.scene-texture-drop.dragover,#scene3DCanvas.texture-dragover{outline:2px solid rgba(100,205,255,.78);outline-offset:-3px}
+.scene-texture-status{font-size:9px;color:#8fa7bb;overflow-wrap:anywhere}
+.place-population-card input[type=number]{max-width:100%}
+
+/* ============================ V28.7 PLACE EDITOR SIDE MENU ============================ */
+/* Place editing is no longer a modal workspace. It is a persistent world-control side menu. */
+#editorModal.place-side-editor{
+  background:transparent!important;
+  pointer-events:none;
+  align-items:stretch!important;
+  justify-content:flex-end!important;
+  padding:0!important;
+}
+#editorModal.place-side-editor .editor-shell{
+  pointer-events:auto;
+  position:fixed!important;
+  top:10px!important;
+  right:10px!important;
+  bottom:10px!important;
+  left:auto!important;
+  width:min(410px,calc(100vw - 20px))!important;
+  max-width:410px!important;
+  height:auto!important;
+  max-height:none!important;
+  margin:0!important;
+  border-radius:14px!important;
+  box-shadow:-18px 0 50px rgba(0,0,0,.42)!important;
+  transform:none!important;
+}
+#editorModal.place-side-editor .editor-main-card{
+  height:100%;
+  max-height:none!important;
+  display:flex;
+  flex-direction:column;
+}
+#editorModal.place-side-editor .editor-body{
+  flex:1;
+  overflow:auto!important;
+  min-height:0;
+}
+#editorModal.place-side-editor .editor-grid{
+  grid-template-columns:1fr!important;
+}
+#editorModal.place-side-editor .editor-grid>label,
+#editorModal.place-side-editor .editor-grid>.full{
+  grid-column:1!important;
+}
+#editorModal.place-side-editor #editorKindLabel{
+  letter-spacing:.12em;
+}
+.place-side-editor-note{
+  display:grid;
+  gap:3px;
+  padding:9px 10px;
+  border:1px solid rgba(100,190,235,.24);
+  border-radius:9px;
+  background:rgba(45,120,165,.08);
+}
+.place-side-editor-note small{color:#8fa9bd;line-height:1.35}
+#editorModal.place-side-editor .place-population-card{
+  grid-template-columns:1fr!important;
+}
+@media(max-width:620px){
+  #editorModal.place-side-editor .editor-shell{
+    top:6px!important;right:6px!important;bottom:6px!important;
+    width:calc(100vw - 12px)!important;max-width:none!important;
+  }
+}
+
+/* ============================ V28.7A PLACE CONTROLS SIDE MENU ============================ */
+/* The Place editor itself is normal again. Only Place-specific world controls are docked. */
+#editorModal.place-side-editor{background:rgba(0,0,0,.48)!important;pointer-events:auto!important;padding:18px!important}
+#editorModal.place-side-editor .editor-shell{position:relative!important;inset:auto!important;width:auto!important;max-width:none!important;height:auto!important;margin:auto!important;transform:none!important}
+
+.place-controls-side-panel{
+  position:fixed;right:10px;top:74px;bottom:12px;width:min(350px,calc(100vw - 20px));
+  z-index:10040;display:flex;flex-direction:column;border:1px solid rgba(115,175,220,.28);
+  border-radius:13px;background:rgba(10,18,27,.97);box-shadow:-16px 0 42px rgba(0,0,0,.4);
+  overflow:hidden;
+}
+.place-controls-side-panel.hidden{display:none!important}
+.place-controls-side-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border-bottom:1px solid rgba(115,175,220,.18)}
+.place-controls-side-head>div{display:grid;gap:2px}.place-controls-side-head small{color:#8299ae}
+.place-controls-side-body{padding:10px;overflow:auto;display:grid;gap:9px;min-height:0}
+.place-controls-side-body>label,.place-controls-side-body>.editor-hint,.place-controls-side-body>.place-population-card{width:100%;margin:0}
+.place-controls-side-body .place-population-card{grid-template-columns:1fr!important}
+.place-controls-side-body .place-structure-choices{max-height:220px;overflow:auto}
+@media(max-width:900px){.place-controls-side-panel{width:min(320px,calc(100vw - 20px));top:64px}}
+
+/* V28.7b */
+.place-controls-side-head{cursor:move;user-select:none}
+
+/* v28.7d: planet wilderness permission is impossible to display unless JS marks it as Planet. */
+.planet-wilderness-control.hidden{display:none!important}
+
+.surface-tool-bar{position:absolute;left:14px;bottom:14px;z-index:32;display:flex;align-items:center;gap:7px;padding:7px;border:1px solid rgba(180,220,245,.20);border-radius:12px;background:rgba(7,14,24,.88);box-shadow:0 10px 28px rgba(0,0,0,.32);backdrop-filter:blur(10px);pointer-events:auto}
+.surface-tool-bar.hidden{display:none!important}.surface-tool-bar button{min-width:67px;height:42px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:9px;border:1px solid rgba(170,215,245,.16);background:rgba(255,255,255,.045);color:#dcefff;font:700 11px system-ui;cursor:pointer}
+.surface-tool-bar button b{font-size:15px}.surface-tool-bar button.active{background:rgba(80,190,235,.18);border-color:rgba(95,225,255,.66);box-shadow:inset 0 0 0 1px rgba(110,225,255,.12)}.surface-tool-bar small{max-width:300px;margin-left:4px;color:#8fa9bd;font:600 9px/1.25 system-ui}
+@media (max-width:760px){.surface-tool-bar small{display:none}.surface-tool-bar button{min-width:52px}}
+
+.scene3d-texture-box #sceneTextureTileControls{padding:7px 8px;border:1px solid rgba(130,190,235,.16);border-radius:7px;background:rgba(65,130,175,.05)}
+.scene3d-texture-box #sceneTextureTileControls small{display:block;margin-top:3px;color:#8099ad}
+
+/* v28.7w country borders + country editor */
+.country-editor-fields{border:1px solid #344560;border-radius:12px;background:#09111b;padding:10px}
+.country-editor-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.country-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.country-editor-grid .full{grid-column:1/-1}
+.country-border-painter{position:fixed;z-index:170;right:22px;top:76px;width:min(820px,calc(100vw - 44px));max-height:calc(100vh - 100px);overflow:auto;padding:14px;border:1px solid #405477;border-radius:16px;background:#0a1019;box-shadow:0 26px 90px rgba(0,0,0,.7)}
+.country-border-head{display:flex;justify-content:space-between;align-items:flex-start}.country-border-painter p,.country-border-painter small{color:#96a5ba;line-height:1.45}.country-border-tools{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.country-border-tools button{border:1px solid #31415d;background:#101927;color:#dce7f8;border-radius:8px;padding:7px 10px}.country-border-tools button.active{border-color:#9fb7ec;background:#263a60}
+#countryBorderCanvas{display:block;width:100%;height:auto;aspect-ratio:2/1;border:1px solid #34435f;border-radius:10px;background:#080d14;touch-action:none;cursor:crosshair}
+.planet-border-controls{margin-top:12px;padding-top:10px;border-top:1px solid #27364c}.planet-everywhere-control{border:1px solid #3b5277;border-radius:9px;padding:8px;background:#0d1725}
+@media(max-width:700px){.country-editor-grid{grid-template-columns:1fr}}
+
+
+/* v28.7x country-control integration */
+.place-controls-side-panel{bottom:auto!important;max-height:calc(100vh - 28px);height:auto;min-height:180px;transform:translate3d(var(--panel-drag-x,0px),var(--panel-drag-y,0px),0)}
+.place-controls-side-head{cursor:move!important;touch-action:none;user-select:none}
+.place-controls-side-panel.country-controls-mode{width:min(390px,calc(100vw - 20px));border-color:rgba(188,210,255,.38)}
+.country-controls-mode .place-controls-side-body{gap:10px}
+.country-implicit-planet-note{margin-bottom:8px!important}
+#eCountryContainedPlaces{min-height:126px}
+.country-border-painter{width:min(700px,calc(100vw - 30px));overflow:auto}
+.country-border-head{cursor:move;touch-action:none;user-select:none}
+#countryBorderCanvas{width:min(100%,640px);aspect-ratio:1/1;margin:8px auto;border-radius:50%;background:#07101a;cursor:crosshair}
+#togglePoliticalMap.active{border-color:#e8efff;background:rgba(210,225,255,.14);color:#fff}
+
+
+/* v28.7y shared globe / tile authoring / landscape editor */
+#eCountryContainedPlaces{min-height:72px!important;height:78px!important;font-size:10px}
+.planet-tile-authoring-controls{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0;padding:8px;border:1px solid #30435f;border-radius:10px;background:#0a1420}.planet-tile-authoring-controls small{grid-column:1/-1;color:#8595aa}
+.planet-authoring-panel{position:fixed;z-index:180;left:50%;top:54px;transform:translateX(-50%);width:min(850px,calc(100vw - 30px));max-height:calc(100vh - 80px);overflow:auto;padding:14px;border:1px solid #405477;border-radius:16px;background:#09111a;box-shadow:0 28px 90px rgba(0,0,0,.72)}
+.planet-authoring-head{display:flex;justify-content:space-between;align-items:flex-start;cursor:move;touch-action:none;user-select:none}.planet-authoring-panel p{color:#94a4ba;font-size:11px;line-height:1.45}.planet-authoring-tools{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:9px 0}.planet-authoring-tools label{min-width:130px}.planet-authoring-tools input[type=color]{height:38px;padding:3px}.planet-authoring-tools input[type=range]{width:150px}
+#planetTileCanvas{display:block;width:100%;height:auto;aspect-ratio:2/1;border:1px solid #33445f;border-radius:10px;cursor:crosshair;background:#0b1119;image-rendering:pixelated}
+#landscapeCanvas{display:block;width:100%;height:auto;border:1px solid #33445f;border-radius:10px;cursor:crosshair;background:#07101a}
+@media(max-width:700px){.planet-tile-authoring-controls{grid-template-columns:1fr}}
+
+
+/* v28.7z — sampled-color landscape modeller + reliable border painting */
+.country-border-status{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;color:#dbe8f7}.country-border-status small{color:#91a2ba;text-align:right}.country-border-tools button.active{border-color:#eaf3ff;background:#263b59;color:#fff}
+.landscape-color-editor{width:min(790px,calc(100vw - 24px));max-height:94vh;overflow:auto}.landscape-planet-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}.landscape-planet-row label{margin:0}.landscape-color-editor #landscapePlanetCanvas{display:block;width:min(100%,650px);height:auto;aspect-ratio:1/1;margin:10px auto;border:1px solid #34445e;border-radius:50%;background:#07101a;cursor:crosshair;touch-action:none}.landscape-sample-card{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px;border:1px solid #2f405a;border-radius:11px;background:#09111b;margin:9px 0 12px}.landscape-sample-card>span{width:38px;height:38px;border-radius:9px;border:1px solid #53637a;background:transparent}.landscape-sample-card b,.landscape-sample-card small{display:block}.landscape-sample-card small{color:#8fa0b6;margin-top:3px}.landscape-rule-list{display:flex;flex-direction:column;gap:7px}.landscape-rule-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px;border:1px solid #29394f;border-radius:10px;background:#091019}.landscape-rule-row>span{width:30px;height:30px;border-radius:7px;border:1px solid rgba(255,255,255,.28)}.landscape-rule-row b,.landscape-rule-row small{display:block}.landscape-rule-row small{color:#8fa0b6;margin-top:2px}.scene-landscape-extras{border-color:#496488!important;background:rgba(24,42,65,.52)!important}.scene-landscape-extras .inline-check{margin-top:8px}
+
+
+/* v28.7aa — restore explicit Planet Color Palette launcher */
+.planet-palette-launcher{
+  display:grid;gap:6px;padding:9px;border:1px solid #31516a;border-radius:11px;
+  background:linear-gradient(180deg,rgba(20,39,54,.78),rgba(10,20,30,.82));
+}
+.planet-palette-launcher .planet-palette-open{width:100%;font-weight:700;border-color:#507aa0;background:#17304a}
+.planet-palette-launcher small{color:#8fa7bc;line-height:1.35}
+#planetPalettePanel[style*="position: fixed"]{z-index:125!important}
+
+/* v28.7ad — explicit palette save + retired legacy Place scatter toggles */
+.planet-palette-savebar{display:flex;align-items:center;gap:9px;margin:8px 0 12px;padding:8px;border:1px solid #2d3b54;border-radius:10px;background:#09111b}
+.planet-palette-savebar .primary{flex:0 0 auto;padding:7px 10px}
+.planet-palette-savebar small{color:#91a1b8;font-size:9px;line-height:1.35}
+#placeControlsSidePanel #ePlaceRandomStructures,
+#placeControlsSidePanel #ePlaceRandomStructureVariants{display:none!important}
+#placeControlsSidePanel label:has(>#ePlaceRandomStructures),
+#placeControlsSidePanel label:has(>#ePlaceRandomStructureVariants){display:none!important}
+#landscapeEditor #landscapeModelColor{display:none!important}
+
+
+/* v28.7ag — explicit Landscape palette sampling */
+.landscape-palette-swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:7px;margin:7px 0 12px}
+.landscape-palette-swatch{display:grid;grid-template-columns:30px 1fr;grid-template-rows:auto auto;gap:1px 8px;align-items:center;text-align:left;padding:7px 9px;border:1px solid #2d4058;border-radius:9px;background:#0b1520;color:#e8f0fb;min-width:0}
+.landscape-palette-swatch:hover{border-color:#6f8eb5;background:#111f2d}.landscape-palette-swatch i{grid-row:1/3;width:30px;height:30px;border-radius:7px;border:1px solid #ffffff44;box-shadow:inset 0 0 0 1px #0005}.landscape-palette-swatch span{font-size:10px;font-weight:700}.landscape-palette-swatch small{font-size:9px;color:#8397ad}
+
+
+/* v28.7ak — authored Landscape modeller */
+.planet-sky-controls{margin-top:10px;padding-top:10px;border-top:1px solid #26364d}
+.scene-landscape-extras label{margin-top:8px}
+.scene3d-panel:has(#sceneLandscapeExtras:not(.hidden)) .scene3d-toolbar{align-items:center}
+
+/* v28.7al — exact Surface footprint + Landscape weather side editor */
+.scene-landscape-weather-panel{
+  position:fixed;right:22px;top:86px;z-index:2147482800;width:min(300px,calc(100vw - 28px));
+  max-height:calc(100vh - 108px);overflow:auto;padding:11px;border:1px solid #42617e;border-radius:13px;
+  background:#08131e;box-shadow:0 22px 70px rgba(0,0,0,.72);display:grid;gap:8px;
+  transform:translate(var(--panel-drag-x,0px),var(--panel-drag-y,0px));
+}
+.scene-landscape-weather-panel.hidden{display:none!important}
+.scene-landscape-weather-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;cursor:move;touch-action:none;user-select:none;padding-bottom:7px;border-bottom:1px solid #2a4055}
+.scene-landscape-weather-head h3{margin:2px 0}.scene-landscape-weather-panel p,.scene-landscape-weather-panel small{font-size:10px;line-height:1.45;color:#8fa4ba;margin:0}
+.scene-landscape-weather-panel label{display:grid;gap:4px;font-size:10px;color:#a9bdd2}.scene-landscape-weather-panel input[type=color]{height:36px;padding:3px}.scene-landscape-weather-panel output{float:right;color:#e9f5ff}
+#sceneLandscapeFootprintHint{color:#9fdcff!important;font-weight:700}
+
+/* ===== v28.7an Merge Variants ===== */
+.scene-variant-merge-box{margin-top:8px;padding:9px;border:1px solid rgba(130,160,210,.3);border-radius:8px;background:rgba(10,17,29,.7);display:grid;gap:7px}.scene-variant-merge-box.hidden{display:none!important}.scene-variant-merge-box>small{opacity:.78;line-height:1.35}.scene-variant-merge-box label{display:grid;gap:4px}.scene-variant-merge-box select,.scene-variant-merge-box input{width:100%}
+
+/* v28.7ar — explicit Grid / Scatter population mode */
+.place-placement-mode{display:grid;grid-template-columns:auto auto auto;gap:8px 12px;align-items:center;padding:10px 12px;border:1px solid rgba(112,153,202,.28);border-radius:12px;background:rgba(8,17,29,.35)}
+.place-placement-mode>span{font-weight:650;color:#c9d8ea}.place-placement-mode .inline-check{margin:0}.place-placement-mode small{grid-column:1/-1;color:#8fa7bf}
+
+/* v28.7as — restored Structure variant population */
+#ePlaceStructureVariantMode{display:grid;gap:6px}#ePlaceStructureVariantMode small{color:#8fa7bf;line-height:1.4}
+/* v28.7at Crafting Editor overhaul */
+.crafting-v287at{width:min(900px,94vw)!important;padding:0!important;gap:0!important}.crafting-v287at .crafting-graph-head{padding:14px 16px;border-bottom:1px solid #26394e}.crafting-workspace{display:grid;grid-template-columns:92px 1fr;min-height:540px;min-width:0}.crafting-side-tools{padding:10px 8px;border-right:1px solid #26394e;background:#070d15;display:flex;flex-direction:column;gap:7px}.crafting-side-tools button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:58px;padding:7px 4px;border:1px solid #26394e;border-radius:10px;background:#0b1420;color:#9bb0c8;font-size:18px}.crafting-side-tools button span{font-size:9px}.crafting-side-tools button.active{border-color:#62caff;background:#10283a;color:#dff7ff;box-shadow:inset 0 0 0 1px #62caff33}.crafting-main-area{display:flex;flex-direction:column;min-width:0;padding:10px;gap:8px}.crafting-tool-options{min-height:62px;border:1px solid #26394e;border-radius:10px;background:#09121d;padding:8px}.crafting-tool-pane{display:flex;align-items:center;gap:8px;min-height:44px}.crafting-tool-pane>span{color:#8398b0;font-size:9px}.crafting-tool-pane input,.crafting-tool-pane select{min-width:0}.crafting-tool-pane[data-craft-pane="insert"]{flex-wrap:wrap}.crafting-tool-pane[data-craft-pane="insert"]>#craftingInsertKind{flex:1 1 100%}.crafting-tool-pane #craftingPermanentInsert,.crafting-tool-pane #craftingTemporaryInsert{display:flex;gap:7px;align-items:center;flex:1 1 100%}.crafting-tool-pane #craftingPermanentInsert.hidden,.crafting-tool-pane #craftingTemporaryInsert.hidden{display:none}.crafting-v287at .crafting-graph-canvas{min-height:410px}.crafting-convert-popover{position:fixed;z-index:30000;left:50%;top:50%;transform:translate(-50%,-50%);width:min(430px,90vw);padding:16px;border:1px solid #41617e;border-radius:14px;background:#08121d;box-shadow:0 24px 80px #000b;display:flex;flex-direction:column;gap:10px}.crafting-convert-popover span{font-size:10px;color:#8da3bb}.crafting-convert-popover>div{display:flex;justify-content:flex-end;gap:8px}.craft-node.temporary{border-color:#b69a43!important}.craft-node.temporary em{font-size:6px!important;max-width:82px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.crafting-v287at .crafting-fail-control,.crafting-v287at .crafting-graph-foot{padding:10px 14px}@media(max-width:760px){.crafting-workspace{grid-template-columns:66px 1fr}.crafting-side-tools button{min-height:52px}.crafting-side-tools button span{font-size:8px}}
+
+
+/* v28.7au — 2D object drawer + material upgrade tree */
+.material-upgrade-card{display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:12px;border:1px solid rgba(120,190,255,.22);border-radius:14px;background:rgba(9,17,29,.62)}
+.material-upgrade-card>div:first-child{flex:1 1 100%}.material-upgrade-card small{display:block;opacity:.72;margin-top:3px}.material-upgrade-fields{display:grid!important;grid-template-columns:minmax(180px,1fr) 140px;gap:10px;flex:1 1 420px}.material-upgrade-fields label{display:grid;gap:5px;font-size:12px}.material-upgrade-tree-panel{position:fixed;z-index:10320;left:8vw;top:8vh;width:min(84vw,1080px);height:min(80vh,720px);padding:14px;background:#08111d;border:1px solid rgba(120,205,255,.34);border-radius:18px;box-shadow:0 28px 80px #000b;overflow:auto}.material-upgrade-tree-head{display:flex;align-items:center;justify-content:space-between;cursor:move;user-select:none;position:sticky;top:-14px;background:#08111d;padding:12px 4px 10px;z-index:4}.material-upgrade-tree-head h3{margin:0}.material-upgrade-tree-panel>p{opacity:.72;margin:4px 4px 12px}.material-upgrade-tree-canvas{position:relative;min-width:620px;min-height:300px;border-radius:14px;background:radial-gradient(circle at 20% 0%,rgba(70,160,255,.08),transparent 42%),#050b13;overflow:auto}.material-upgrade-tree-canvas svg{position:absolute;inset:0;pointer-events:none}.material-upgrade-tree-canvas path{fill:none;stroke:rgba(97,205,255,.65);stroke-width:2}.material-upgrade-tree-canvas text{fill:#c7efff;font-size:12px;font-weight:700;paint-order:stroke;stroke:#050b13;stroke-width:4px}.material-upgrade-node{position:absolute;box-sizing:border-box;padding:10px 12px;border:1px solid rgba(110,208,255,.35);border-radius:13px;background:linear-gradient(180deg,rgba(27,48,69,.96),rgba(12,25,39,.98));display:flex;flex-direction:column;justify-content:center;box-shadow:0 8px 22px #0007}.material-upgrade-node b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.material-upgrade-node span{font-size:11px;opacity:.65;margin-top:4px;letter-spacing:.08em}.magical-object-drawer-launcher{border-color:rgba(190,120,255,.25)}
+
+/* v28.7ax — repaired global Upgrade launcher / mixed item comparison */
+.top-upgrade-button{position:fixed;z-index:10400;top:112px;left:50%;transform:translateX(-50%);width:38px;height:38px;border-radius:50%;display:grid;place-items:center;padding:0;border:1px solid rgba(126,211,255,.4);background:rgba(7,18,31,.94);color:#d9f5ff;font-size:20px;font-weight:900;line-height:1;cursor:pointer;box-shadow:0 10px 28px #0008,0 0 0 1px rgba(255,255,255,.035) inset;backdrop-filter:blur(12px);transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.top-upgrade-button:hover{transform:translateX(-50%) translateY(-1px) scale(1.06);border-color:rgba(156,230,255,.75);box-shadow:0 13px 34px #0009,0 0 18px rgba(100,210,255,.16)}
+.top-upgrade-button:active{transform:translateX(-50%) scale(.97)}
+.material-upgrade-compare-panel{position:fixed;z-index:10330;left:12vw;top:12vh;width:min(720px,76vw);padding:16px;background:#08111d;border:1px solid rgba(120,205,255,.34);border-radius:18px;box-shadow:0 28px 80px #000b}.material-upgrade-compare-head{display:flex;align-items:center;justify-content:space-between;cursor:move;user-select:none}.material-upgrade-compare-head h3{margin:0}.material-upgrade-compare-panel>p{opacity:.72}.material-upgrade-compare-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:end}.material-upgrade-compare-grid label,.material-upgrade-author label{display:grid;gap:5px;font-size:12px}.material-vs{font-weight:900;opacity:.55;padding-bottom:10px}.material-upgrade-compare-result{margin:14px 0;padding:16px;border:1px solid rgba(100,190,255,.22);border-radius:14px;background:rgba(7,16,27,.72);display:grid;gap:6px}.material-upgrade-compare-result strong{font-size:17px}.material-upgrade-compare-result small{opacity:.72}.upgrade-chain{margin-top:5px;font-size:12px;opacity:.82}.material-upgrade-author{display:grid;gap:10px;padding-top:4px}.material-upgrade-author input{max-width:180px}.material-upgrade-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* v28.7ay — simplified successor-based Upgrade linking */
+.upgrade-successor-picker{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 4px;padding:10px 12px;border:1px solid rgba(100,190,255,.2);border-radius:12px;background:rgba(7,16,27,.48)}
+.upgrade-successor-picker>span{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.68;margin-right:2px}.upgrade-successor-picker label{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}.upgrade-successor-picker input{accent-color:currentColor}
+
+/* v28.7ba — typed successor relationships */
+.upgrade-relation-kind{display:grid;gap:6px;margin:10px 0}.upgrade-relation-kind select{width:100%}
+\n\n/* v28.7bb — multi-input progression links + dual endpoint messages */\n.upgrade-multi-grid{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center;margin:12px 0}.upgrade-multi-grid label{display:grid;gap:6px;font-size:12px;font-weight:700}.upgrade-multi-grid label>small{font-weight:400;opacity:.62}.upgrade-multi-grid select{width:100%;min-height:150px;padding:5px;background:#07101b;border:1px solid rgba(105,190,255,.25);border-radius:10px}.upgrade-multi-grid option{padding:7px 8px;border-radius:6px}.upgrade-flow-mark{font-size:23px;font-weight:900;opacity:.58}.upgrade-message-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}.upgrade-message-grid label{display:grid;gap:5px;font-size:12px}.upgrade-message-grid input{width:100%;box-sizing:border-box}@media(max-width:660px){.upgrade-multi-grid{grid-template-columns:1fr}.upgrade-flow-mark{text-align:center;transform:rotate(90deg)}.upgrade-message-grid{grid-template-columns:1fr}}\n
+
+/* v28.7bc — single-message 1:1 progression links */
+.upgrade-single-message{margin:10px 0}.upgrade-single-message label{display:grid;gap:5px;font-size:12px}.upgrade-single-message input{width:100%;box-sizing:border-box}
